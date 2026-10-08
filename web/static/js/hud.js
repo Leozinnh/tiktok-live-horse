@@ -1,0 +1,359 @@
+class BroadcastHUD {
+  constructor(audio) {
+    this.audio = audio;
+    this.lastState = null;
+    this.activeNotifications = new Set();
+    
+    // Elementos DOM
+    this.raceNumberEl = document.getElementById("hudRaceNumber");
+    this.statePillEl = document.getElementById("hudStatePill");
+    this.stateTextEl = document.getElementById("hudStateText");
+    this.timerEl = document.getElementById("hudTimer");
+    this.notificationContainer = document.getElementById("notification-container");
+    this.centerModal = document.getElementById("center-modal");
+    this.leaderboardEl = document.getElementById("hudLeaderboard");
+    this.audioToggleBtn = document.getElementById("audioToggleBtn");
+
+    if (this.audioToggleBtn) {
+      this.audioToggleBtn.addEventListener("click", () => {
+        this.audio.init();
+        const muted = this.audio.toggleMute();
+        this.audioToggleBtn.innerText = muted ? "🔇" : "🔊";
+      });
+    }
+  }
+
+  applyConfig(config) {
+    if (!config) return;
+    if (this.leaderboardEl) {
+      if (config.scale !== undefined) {
+        this.leaderboardEl.style.transform = `scale(${config.scale})`;
+        this.leaderboardEl.style.transformOrigin = "top left";
+      }
+      if (config.top !== undefined) {
+        this.leaderboardEl.style.top = `${config.top}px`;
+      }
+      if (config.left !== undefined) {
+        this.leaderboardEl.style.left = `${config.left}px`;
+      }
+    }
+    const progressContainer = document.getElementById("trackProgressContainer");
+    if (progressContainer && config.showProgress !== undefined) {
+      this.hideProgressSetting = !config.showProgress;
+    }
+  }
+
+  update(stateData) {
+    if (!stateData) return;
+
+    if (stateData.hud_config) {
+      this.applyConfig(stateData.hud_config);
+    }
+
+    // 1. Atualizar Header
+    if (this.raceNumberEl) {
+      this.raceNumberEl.innerText = `CORRIDA #${stateData.race_number || 1}`;
+    }
+
+    const state = stateData.director_state || "READY";
+    if (this.stateTextEl) {
+      this.stateTextEl.innerText = this.translateState(state);
+    }
+
+    if (this.timerEl) {
+      this.timerEl.innerText = Math.ceil(stateData.remaining_seconds || 0);
+    }
+
+    // 2. Notificações Flutuantes (Fila sem repetição)
+    if (stateData.notifications && Array.isArray(stateData.notifications)) {
+      stateData.notifications.forEach((n) => {
+        const key = n.text;
+        if (!this.activeNotifications.has(key)) {
+          this.activeNotifications.add(key);
+          this.showToast(n);
+        }
+      });
+    }
+
+    // 3. Modais Centrais conforme a Fase
+    this.renderCenterModal(state, stateData);
+
+    // 4. Leaderboard Inferior (Durante a Corrida)
+    this.renderBottomLeaderboard(state, stateData);
+
+    this.lastState = state;
+  }
+
+  translateState(state) {
+    switch (state) {
+      case "VOTING": return "ESCOLHA SEU CAVALO";
+      case "COUNTDOWN": return "LARGADA EM...";
+      case "RACING": return "AO VIVO";
+      case "PODIUM": return "VENCEDORES";
+      case "XP_REWARDS": return "DISTRIBUIÇÃO DE XP";
+      case "LEADERBOARD": return "TOP APOIADORES";
+      default: return state;
+    }
+  }
+
+  showToast(notification) {
+    if (notification.is_legendary) {
+      this.showMythicAnnouncement(notification);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast ${notification.type === "GIFT" ? "gift" : ""}`;
+    toast.innerHTML = `<span>${notification.badge || "🏇"}</span> <span>${notification.text}</span>`;
+    this.notificationContainer.appendChild(toast);
+
+    if (notification.type === "GIFT" && !notification.is_legendary) {
+      this.audio.playTurbo();
+    }
+
+    setTimeout(() => {
+      toast.style.transition = "opacity 0.4s ease, transform 0.4s ease";
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(-30px)";
+      setTimeout(() => toast.remove(), 400);
+    }, 4500);
+  }
+
+  showMythicAnnouncement(n) {
+    const isLion = n.legendary_kind === "LION";
+    const kindClass = isLion ? "lion" : "galaxy";
+    const icon = isLion ? "🦁" : "🌌";
+
+    // 1. Som Épico Lendário
+    this.audio.playLegendaryGiftAudio(n.legendary_kind);
+
+    // 2. Dispara Efeitos no 3D (Pilar de Luz, Shockwave, Brasas e Screen Shake)
+    if (window.gameClient && window.gameClient.horseManager) {
+      const pos = window.gameClient.horseManager.getHorsePosition(n.horse_id);
+      window.gameClient.particles.triggerLegendaryImpact(pos, n.legendary_kind);
+    }
+
+    // 3. Efeito de borda incandescente no Viewport
+    const viewport = document.getElementById("viewport");
+    if (viewport) {
+      viewport.classList.add("viewport-mythic-glow");
+      setTimeout(() => viewport.classList.remove("viewport-mythic-glow"), 5000);
+    }
+
+    // 4. Banner Colossal Central Superior
+    const banner = document.createElement("div");
+    banner.className = `mythic-gift-banner ${kindClass}`;
+    banner.innerHTML = `
+      <div class="mythic-header">
+        <span>👑</span>
+        <span>ACONTECIMENTO LENDÁRIO NA LIVE!</span>
+        <span>👑</span>
+      </div>
+      <div class="mythic-sender">${icon} @${n.sender_name || "Apoiador"} ${icon}</div>
+      <div class="mythic-gift-info">ENVIOU ${n.gift_name.toUpperCase()}!</div>
+      <div class="mythic-boost-tag">⚡ ${n.boost_label || "OVERDRIVE MÍSTICO"} ATIVADO NO ${n.horse_name}! ⚡</div>
+    `;
+
+    const hudOverlay = document.getElementById("hud-overlay");
+    if (hudOverlay) {
+      hudOverlay.appendChild(banner);
+      setTimeout(() => {
+        banner.style.transition = "opacity 0.6s ease, transform 0.6s ease";
+        banner.style.opacity = "0";
+        banner.style.transform = "translateY(-40px) scale(0.9)";
+        setTimeout(() => banner.remove(), 600);
+      }, 5200);
+    }
+  }
+
+  renderCenterModal(state, stateData) {
+    if (state === "VOTING") {
+      const summary = stateData.voting_summary || {};
+      let cardsHtml = "";
+
+      Object.values(summary).forEach((h) => {
+        cardsHtml += `
+          <div class="horse-vote-card" style="border-color: ${h.color_hex};">
+            <div class="num-badge" style="background: ${h.color_hex};">#${h.horse_id}</div>
+            <div class="info">
+              <div class="name">${h.horse_name}</div>
+              <div class="supporters">👥 ${h.supporters_count} apoiadores</div>
+            </div>
+          </div>
+        `;
+      });
+
+      this.centerModal.innerHTML = `
+        <div class="voting-overlay">
+          <div class="voting-header">
+            <h2>ESCOLHA SEU CAVALO!</h2>
+            <p>Comente o número (1 a 8) ou o nome do cavalo no chat da LIVE!</p>
+          </div>
+          <div class="horses-vote-grid">
+            ${cardsHtml}
+          </div>
+        </div>
+      `;
+    } else if (state === "COUNTDOWN") {
+      const count = Math.ceil(stateData.remaining_seconds || 5);
+      this.centerModal.innerHTML = `
+        <div class="countdown-big">${count > 0 ? count : "LARGADA!"}</div>
+      `;
+    } else if (state === "PODIUM") {
+      const podium = stateData.podium || [];
+      const first = podium[0] || {};
+      const second = podium[1] || {};
+      const third = podium[2] || {};
+
+      this.centerModal.innerHTML = `
+        <div class="podium-card">
+          <div class="podium-title">🏆 PÓDIO DA CORRIDA 🏆</div>
+          <div class="podium-stands">
+            ${second.name ? `
+              <div class="podium-place second">
+                <div class="trophy-icon">🥈</div>
+                <div class="horse-name" style="color: ${second.color_hex};">${second.name}</div>
+                <div class="time">2º Lugar</div>
+              </div>
+            ` : ""}
+            ${first.name ? `
+              <div class="podium-place first">
+                <div class="trophy-icon">🥇</div>
+                <div class="horse-name" style="color: ${first.color_hex};">${first.name}</div>
+                <div class="time">CAMPEÃO</div>
+              </div>
+            ` : ""}
+            ${third.name ? `
+              <div class="podium-place third">
+                <div class="trophy-icon">🥉</div>
+                <div class="horse-name" style="color: ${third.color_hex};">${third.name}</div>
+                <div class="time">3º Lugar</div>
+              </div>
+            ` : ""}
+          </div>
+          <p style="color: var(--text-sub); font-size: 16px;">Parabéns a todos os apoiadores virtuais!</p>
+        </div>
+      `;
+    } else if (state === "XP_REWARDS") {
+      const rewards = stateData.rewards || [];
+      let listHtml = "";
+
+      if (rewards.length === 0) {
+        listHtml = "<p style='color: var(--text-sub); padding: 12px;'>Nenhum espectador votou nesta rodada.</p>";
+      } else {
+        rewards.forEach((r) => {
+          listHtml += `
+            <div class="reward-item">
+              <div class="user">
+                <span>👤</span>
+                <span>${r.display_name} (Lv. ${r.level})</span>
+                ${r.level_up ? '<span style="color: #fbbf24; font-size: 13px;">⭐ LEVEL UP!</span>' : ""}
+              </div>
+              <div class="xp-gain">+${r.earned_xp} XP</div>
+            </div>
+          `;
+        });
+      }
+
+      this.centerModal.innerHTML = `
+        <div class="podium-card" style="border-color: var(--accent-green);">
+          <div class="podium-title" style="color: var(--accent-green);">⭐ RECOMPENSAS DE XP ⭐</div>
+          <p style="color: var(--text-sub); font-size: 15px;">Pontos 100% virtuais para progressão e níveis</p>
+          <div class="rewards-list">
+            ${listHtml}
+          </div>
+        </div>
+      `;
+    } else if (state === "LEADERBOARD") {
+      const top = stateData.leaderboard || [];
+      let topHtml = "";
+
+      top.slice(0, 6).forEach((p, idx) => {
+        topHtml += `
+          <div class="reward-item">
+            <div class="user">
+              <span style="font-weight: 900; color: #fbbf24; width: 24px;">#${idx + 1}</span>
+              <span>${p.display_name}</span>
+              <span style="color: var(--text-sub); font-size: 13px;">(Lv. ${p.level})</span>
+            </div>
+            <div class="xp-gain" style="color: #38bdf8;">${p.xp} XP</div>
+          </div>
+        `;
+      });
+
+      this.centerModal.innerHTML = `
+        <div class="podium-card" style="border-color: #38bdf8;">
+          <div class="podium-title" style="color: #38bdf8;">👑 TOP JOGADORES DA LIVE</div>
+          <div class="rewards-list">
+            ${topHtml}
+          </div>
+        </div>
+      `;
+    } else {
+      // RACING: limpa modal central para visão completa 3D
+      this.centerModal.innerHTML = "";
+    }
+  }
+
+  renderBottomLeaderboard(state, stateData) {
+    if (!this.leaderboardEl) return;
+
+    const progressContainer = document.getElementById("trackProgressContainer");
+    const progressBar = document.getElementById("trackProgressBar");
+
+    if (state !== "RACING" && state !== "COUNTDOWN") {
+      this.leaderboardEl.style.display = "none";
+      if (progressContainer) progressContainer.style.display = "none";
+      return;
+    }
+
+    this.leaderboardEl.style.display = "block";
+    if (progressContainer) progressContainer.style.display = "flex";
+
+    const leaderboard = (stateData.engine && stateData.engine.leaderboard) || [];
+    const horses = (stateData.engine && stateData.engine.horses) || [];
+    const trackLength = (stateData.engine && stateData.engine.track_length) || 1000;
+
+    // 1. Atualiza Torre Lateral Esquerda (Compacta estilo F1 - não tampa os cavalos)
+    let rowsHtml = "";
+    leaderboard.forEach((h) => {
+      const isP1 = (h.position === 1);
+      rowsHtml += `
+        <div class="tower-row ${isP1 ? 'p1' : ''}" style="border-left-color: ${h.color_hex};">
+          <div class="left">
+            <span class="tower-pos">${h.position}</span>
+            <span class="tower-badge" style="background: ${h.color_hex};">#${h.horse_id}</span>
+            <span class="tower-name">${h.name}</span>
+          </div>
+          <div class="right">
+            ${h.boost_active ? '<span class="tower-turbo-icon">⚡</span>' : ''}
+            <span class="tower-dist">${Math.round(h.distance)}m</span>
+          </div>
+        </div>
+      `;
+    });
+
+    this.leaderboardEl.innerHTML = `
+      <div class="tower-header">
+        <span>🏁 POSIÇÕES</span>
+        <span>1000m</span>
+      </div>
+      <div class="tower-list">
+        ${rowsHtml}
+      </div>
+    `;
+
+    // 2. Atualiza Régua de Progresso Horizontal no Topo
+    if (progressBar) {
+      let dotsHtml = "";
+      horses.forEach((h) => {
+        const pct = Math.min(98, Math.max(1, (h.distance / trackLength) * 100));
+        dotsHtml += `
+          <div class="horse-progress-dot" style="left: ${pct}%; background: ${h.color_hex};" title="#${h.number} ${h.name}">
+            ${h.number}
+          </div>
+        `;
+      });
+      progressBar.innerHTML = dotsHtml;
+    }
+  }
+}

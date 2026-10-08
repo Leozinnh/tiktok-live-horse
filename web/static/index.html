@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok LIVE Horse Racing - OBS Display</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+  <div id="viewport">
+    <!-- Camada de Renderização 3D Three.js -->
+    <div id="canvas-container"></div>
+
+    <!-- Camada de Transmissão Esportiva / HUD 9:16 -->
+    <div id="hud-overlay">
+      <!-- 1. Top Bar de Transmissão -->
+      <div class="top-broadcast-bar">
+        <div class="race-badge">
+          <span class="trophy">🏇</span>
+          <span class="title" id="hudRaceNumber">CORRIDA #1</span>
+        </div>
+
+        <div class="status-pill" id="hudStatePill">
+          <span class="pulse-dot"></span>
+          <span id="hudStateText">AO VIVO</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div class="timer-box">
+            <span class="num" id="hudTimer">30</span>
+            <span class="unit">s</span>
+          </div>
+          <button class="audio-toggle-btn" id="audioToggleBtn" title="Ativar/Desativar Som">🔊</button>
+        </div>
+      </div>
+
+      <!-- 2. Régua de Progresso da Pista (Track Progress) -->
+      <div class="track-progress-container" id="trackProgressContainer" style="display: none;">
+        <div class="track-progress-bar" id="trackProgressBar"></div>
+        <div class="track-finish-flag">🏁</div>
+      </div>
+
+      <!-- 3. Torre Lateral Esquerda de Classificação (Estilo F1 / TV - Não tampa a tela!) -->
+      <div class="live-leaderboard-tower" id="hudLeaderboard" style="display: none;"></div>
+
+      <!-- 4. Fila de Notificações / Toasts (Canto Superior Direito) -->
+      <div id="notification-container"></div>
+
+      <!-- 5. Centro / Modais: Cartela de Votação, Contagem, Pódio, XP -->
+      <div id="center-modal"></div>
+    </div>
+  </div>
+
+  <!-- Scripts Three.js local e componentes da transmissão -->
+  <script src="/static/js/three.min.js"></script>
+  <script src="/static/js/scene.js"></script>
+  <script src="/static/js/particles.js"></script>
+  <script src="/static/js/horses_view.js"></script>
+  <script src="/static/js/camera.js"></script>
+  <script src="/static/js/audio.js"></script>
+  <script src="/static/js/hud.js"></script>
+  <script src="/static/js/client.js"></script>
+</body>
+</html>

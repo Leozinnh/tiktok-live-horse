@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok LIVE Horse Racing - Painel de Testes</title>
+  <link rel="stylesheet" href="/static/css/test_panel.css">
+</head>
+<body>
+
+  <div class="header">
+    <h1>🏇 TikTok LIVE - Painel de Controle e Testes</h1>
+    <div id="connectionStatus" class="status-badge disconnected">
+      <span class="status-indicator"></span> CONECTANDO...
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Card 1: Monitor de Estado -->
+    <div class="card">
+      <div class="card-title">📊 Estado da Transmissão</div>
+      <div class="live-stats">
+        <div class="stat-box">
+          <div class="val" id="statRaceNum">#1</div>
+          <div class="lbl">Corrida Atual</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="statState">VOTING</div>
+          <div class="lbl">Fase do Loop</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="statTimer">30s</div>
+          <div class="lbl">Tempo Restante</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="statWeather">CLEAR</div>
+          <div class="lbl">Clima da Pista</div>
+        </div>
+      </div>
+      <label>Atalhos de Clima:</label>
+      <div class="quick-buttons" style="grid-template-columns: repeat(3, 1fr);">
+        <button class="quick-btn" onclick="setWeather('CLEAR')">☀️ Sol</button>
+        <button class="quick-btn" onclick="setWeather('SUNSET')">🌅 Pôr do Sol</button>
+        <button class="quick-btn" onclick="setWeather('NIGHT_LIGHTS')">🌃 Refletores</button>
+        <button class="quick-btn" onclick="setWeather('RAIN')">🌧️ Chuva</button>
+        <button class="quick-btn" onclick="setWeather('STORM')">⚡ Tempestade</button>
+        <button class="quick-btn" onclick="setWeather('WIND')">💨 Vento</button>
+      </div>
+
+      <label style="margin-top: 16px;">🎮 Controles Diretos da Corrida (Admin):</label>
+      <div class="quick-buttons" style="grid-template-columns: repeat(3, 1fr); margin-top: 6px;">
+        <button class="btn btn-primary" style="padding: 10px 6px; font-size: 13px;" onclick="skipToRace()">⏩ Iniciar Corrida Logo</button>
+        <button class="btn btn-gold" style="padding: 10px 6px; font-size: 13px;" onclick="forceFinish()">🏁 Finalizar Corrida</button>
+        <button class="btn btn-secondary" style="padding: 10px 6px; font-size: 13px;" onclick="nextRace()">🔄 Próxima Corrida</button>
+      </div>
+    </div>
+
+    <!-- Card 2: Simular Comentários -->
+    <div class="card">
+      <div class="card-title">💬 Simulação de Comentários / Votos</div>
+      <div class="form-group">
+        <label>Nome do Espectador:</label>
+        <input type="text" id="commentUser" value="Leonardo" placeholder="Nome do usuário">
+      </div>
+      <div class="form-group">
+        <label>Mensagem / Comando:</label>
+        <input type="text" id="commentText" value="1" placeholder="Ex: 1, relampago, /turbo, vai!">
+      </div>
+      <button class="btn btn-primary" onclick="sendComment()">Enviar Comentário</button>
+      
+      <label style="margin-top: 14px;">Escolha Rápida de Cavalo:</label>
+      <div class="quick-buttons">
+        <button class="quick-btn" onclick="sendComment('1')">#1 Relâmpago</button>
+        <button class="quick-btn" onclick="sendComment('2')">#2 Trovão</button>
+        <button class="quick-btn" onclick="sendComment('3')">#3 Furacão</button>
+        <button class="quick-btn" onclick="sendComment('4')">#4 Raio</button>
+        <button class="quick-btn" onclick="sendComment('5')">#5 Pantera</button>
+        <button class="quick-btn" onclick="sendComment('6')">#6 Titã</button>
+        <button class="quick-btn" onclick="sendComment('7')">#7 Nevasca</button>
+        <button class="quick-btn" onclick="sendComment('8')">#8 Fantasma</button>
+      </div>
+      <div class="quick-buttons" style="grid-template-columns: repeat(2, 1fr); margin-top: 8px;">
+        <button class="quick-btn" onclick="sendComment('/turbo')">⚡ /turbo</button>
+        <button class="quick-btn" onclick="sendComment('vai bora!')">📣 Bora torcida!</button>
+      </div>
+    </div>
+
+    <!-- Card 3: Simular Presentes e Rajadas -->
+    <div class="card">
+      <div class="card-title">🎁 Simulação de Presentes e Boosts</div>
+      <div class="form-group">
+        <label>Nome do Doador:</label>
+        <input type="text" id="giftUser" value="João_Silva" placeholder="Nome do usuário">
+      </div>
+      <div class="form-group">
+        <label>Presente do TikTok:</label>
+        <select id="giftSelect">
+          <option value="Rose">🌹 Rose (Turbo Básico +100 XP)</option>
+          <option value="Coffee">☕ Coffee (Turbo Ágil +100 XP)</option>
+          <option value="Cap">🧢 Cap (Super Boost +250 XP)</option>
+          <option value="Donut">🍩 Donut (Super Boost +250 XP)</option>
+          <option value="Galaxy">🌌 Galaxy (Overdrive Místico +500 XP)</option>
+          <option value="Lion">🦁 Lion (Overdrive Místico +500 XP)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Quantidade:</label>
+        <input type="number" id="giftCount" value="1" min="1" max="100">
+      </div>
+      <button class="btn btn-gold" onclick="sendGift()">Enviar Presente e Disparar Turbo</button>
+
+      <label style="margin-top: 14px;">👑 Disparo Rápido de Presentes Lendários:</label>
+      <div class="quick-buttons" style="grid-template-columns: repeat(3, 1fr);">
+        <button class="quick-btn" style="background: linear-gradient(135deg, #d97706, #ef4444); font-weight: 800;" onclick="sendGift('Lion')">🦁 LEÃO (+2000 XP)</button>
+        <button class="quick-btn" style="background: linear-gradient(135deg, #7c3aed, #06b6d4); font-weight: 800;" onclick="sendGift('Galaxy')">🌌 GALÁXIA (+1500 XP)</button>
+        <button class="quick-btn" style="background: linear-gradient(135deg, #b91c1c, #f59e0b); font-weight: 800;" onclick="sendGift('Dragon')">🐉 DRAGÃO (+1800 XP)</button>
+      </div>
+      
+      <label style="margin-top: 14px;">Simulação de Público em Massa:</label>
+      <div class="quick-buttons" style="grid-template-columns: repeat(2, 1fr);">
+        <button class="btn btn-green" onclick="simulateBurst(20)">👥 +20 Votos Rápidos</button>
+        <button class="btn btn-green" onclick="simulateBurst(50)">🔥 +50 Votos Massivos</button>
+      </div>
+    </div>
+
+    <!-- Card 4: Ajuste do Tamanho e Posição do Placar (HUD) -->
+    <div class="card">
+      <div class="card-title">📐 Ajuste do Placar no OBS (Tempo Real)</div>
+      
+      <div class="form-group">
+        <label>Tamanho do Placar (Escala): <strong id="hudScaleVal" style="color: #38bdf8;">100%</strong></label>
+        <div class="quick-buttons" style="grid-template-columns: repeat(3, 1fr);">
+          <button class="quick-btn" onclick="changeHudScale(-0.1)">➖ Menor (-10%)</button>
+          <button class="quick-btn" onclick="resetHudScale()">🔄 Padrão (100%)</button>
+          <button class="quick-btn" onclick="changeHudScale(0.1)">➕ Maior (+10%)</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 14px;">
+        <label>Posição Vertical (Altura): <strong id="hudTopVal" style="color: #38bdf8;">195px</strong></label>
+        <div class="quick-buttons" style="grid-template-columns: repeat(2, 1fr);">
+          <button class="quick-btn" onclick="changeHudTop(-25)">▲ Subir (-25px)</button>
+          <button class="quick-btn" onclick="changeHudTop(25)">▼ Descer (+25px)</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 14px;">
+        <label>Elementos da Transmissão:</label>
+        <button class="btn btn-secondary" onclick="toggleProgressHud()">🏁 Ocultar / Mostrar Régua do Topo</button>
+      </div>
+    </div>
+
+    <!-- Card 5: Console de Logs & Histórico -->
+    <div class="card" style="grid-column: 1 / -1;">
+      <div class="card-title" style="justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span>📜 Console de Eventos da Transmissão</span>
+          <span style="font-size: 12px; background: rgba(59, 130, 246, 0.2); color: #38bdf8; padding: 3px 10px; border-radius: 9999px; border: 1px solid rgba(59, 130, 246, 0.4);">
+            🎁 <span id="logTotalGifts">0</span> Presentes | 💬 <span id="logTotalVotes">0</span> Votos
+          </span>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <button class="quick-btn log-filter-btn active" data-filter="all" onclick="setLogFilter('all')">Todos</button>
+          <button class="quick-btn log-filter-btn" data-filter="gift" onclick="setLogFilter('gift')">🎁 Presentes</button>
+          <button class="quick-btn log-filter-btn" data-filter="vote" onclick="setLogFilter('vote')">💬 Votos</button>
+          <button class="quick-btn log-filter-btn" data-filter="race" onclick="setLogFilter('race')">🏁 Fases</button>
+          <button class="quick-btn" style="background: #991b1b; border-color: #ef4444;" onclick="clearLogs()">🗑️ Limpar</button>
+          <button class="quick-btn" style="background: #1e40af; border-color: #3b82f6;" onclick="copyLogs()">📋 Copiar</button>
+        </div>
+      </div>
+      <div class="console-log" id="logContainer">
+        <div class="log-entry" style="color: #64748b;">Console inicializado. Aguardando eventos ao vivo...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/test_panel.js"></script>
+</body>
+</html>
