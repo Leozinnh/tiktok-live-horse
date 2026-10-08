@@ -1,296 +1,386 @@
 # 📚 Documentação Técnica Completa - TikTok LIVE Corrida de Cavalos 3D
 
-Bem-vindo à documentação oficial do projeto. Este documento foi elaborado para que qualquer desenvolvedor ou criador de conteúdo possa entender, manter, customizar e expandir qualquer parte do sistema com facilidade.
+Bem-vindo à documentação técnica e de desenvolvimento do jogo **TikTok LIVE Corrida de Cavalos 3D**. Este manual foi elaborado com riqueza de detalhes para que você (ou qualquer desenvolvedor) possa entender a arquitetura completa, customizar atributos, adicionar novos cavalos, criar novos presentes e eventos climáticos, alterar a câmera, estilizar o HUD e operar transmissões profissionais no OBS Studio.
 
 ---
 
-## 1. Visão Geral da Arquitetura
+## 1. Visão Geral e Princípios Fundamentais
 
-O sistema é dividido em duas metades perfeitamente desacopladas:
-1. **Backend em Python (FastAPI + WebSockets + SQLite):** Executa a física matemática da corrida a 60 ticks/s, orquestra a máquina de estados contínua (`EventDirector`), sanitiza comandos do chat do TikTok e persiste XP, níveis e estatísticas em banco SQLite.
-2. **Frontend 3D em Three.js (OBS Browser Source / WebGL):** Renderiza o hipódromo 3D, cavalos com rigging procedural de galope, iluminação dinâmica, partículas, diretor de câmeras de TV e interface esportiva vertical (1080x1920, 9:16).
+### 1.1 Compliance Rigoroso (100% Virtual)
+- **Sem Dinheiro Real:** O sistema não possui apostas, saques, conversão de pontos para moeda fiduciária, prêmios em dinheiro ou qualquer mecânica de jogo de azar.
+- **Pontuação e Progressão:** Todos os pontos distribuídos são estritamente **XP e Níveis Virtuais** para engajamento dos espectadores da LIVE, desbloqueio de títulos honoríficos, distintivos (*badges*) e ranking global.
+- **Presentes:** Presentes enviados no TikTok LIVE funcionam exclusivamente como suporte de torcida, gerando efeitos visuais na tela (faíscas, ondas de choque, chamas nos cascos) e aceleradores temporários de velocidade (*boosts* de 2 a 6 segundos).
 
+### 1.2 Fluxo de Dados Desacoplado
 ```text
-TikTok LIVE / Painel de Testes (/test)
-           ↓
-   TikTokEventAdapter / MockAdapter
-           ↓ (Sanitização e Anti-Spam)
-     EventBus (asyncio.Queue)
-           ↓
-   EventDirector (Loop Infinito)
-    ├── Simulação Física (RaceEngine a 60 ticks/s)
-    └── Banco SQLite (Viewers, XP, Rankings)
-           ↓
-    FastAPI WebSocket Broadcast (ws://localhost:8000/ws)
-           ↓
-   OBS Browser Source (Three.js 3D + Câmeras + HUD 9:16 + Web Audio)
+           [ TikTok LIVE Real ]                   [ Painel Streamer (/test) ]
+                    │                                          │
+                    └───────────────────┬──────────────────────┘
+                                        │
+                                        ▼
+                             [ TikTokEventAdapter ]
+                      (Sanitização, Anti-Flood, Rate Limit)
+                                        │
+                                        ▼
+                             [ EventBus Assíncrono ]
+                               (asyncio.Queue)
+                                        │
+                                        ▼
+                             [ EventDirector (Loop) ]
+                ┌───────────────────────┴───────────────────────┐
+                ▼                                               ▼
+      [ RaceEngine (60 ticks/s) ]                     [ Banco SQLite Assíncrono ]
+   - Física contínua em pista oval                 - Tabela viewers (XP, Níveis)
+   - Personalidade dos 8 cavalos                   - Tabela races (Histórico de Provas)
+   - Boosts, Fadiga e Clima                        - Tabela race_results (Pódios)
+                │                                               │
+                └───────────────────────┬───────────────────────┘
+                                        │
+                                        ▼
+                          [ FastAPI WebSocket Broadcast ]
+                             (ws://localhost:8000/ws)
+                                        │
+                                        ▼
+                          [ OBS Studio (Browser Source) ]
+                         Three.js 3D + HUD 9:16 + Web Audio
 ```
 
 ---
 
-## 2. Estrutura de Pastas e Arquivos
+## 2. Mapa Completo de Arquivos do Projeto
 
 ```text
 tiktok_live_cavalo/
 ├── config/
-│   ├── config.json              # Configurações gerais (tempos, XP, cavalos e regras)
-│   └── settings.py              # Validação tipada via Pydantic dos dados do JSON
+│   ├── config.json              # Configurações de tempo, XP, regras e os 8 cavalos
+│   └── settings.py              # Validação de tipos e schema Pydantic
 ├── backend/
 │   ├── database/
-│   │   ├── connection.py        # Pool e conexão assíncrona ao SQLite com aiosqlite
-│   │   ├── models.py            # DDL das tabelas (viewers, races, choices, results)
-│   │   └── repository.py        # Métodos de consulta e gravação de XP e estatísticas
-│   ├── event_bus.py             # Barramento pub/sub assíncrono interno
-│   ├── security.py              # Rate limiting em janela de 1s e proteção contra spam
-│   └── progression.py           # Fórmula matemática de curva de níveis e títulos
+│   │   ├── connection.py        # Pool e conexão aiosqlite em modo WAL de alta performance
+│   │   ├── models.py            # DDL SQL das tabelas (viewers, races, choices, results)
+│   │   └── repository.py        # Queries assíncronas de gravação/leitura de XP e ranking
+│   ├── event_bus.py             # Barramento assíncrono pub/sub
+│   ├── security.py              # Rate limiting em janela de 1s e sanitização de texto
+│   └── progression.py           # Fórmula matemática de curva de níveis (Lv 1 ao 100)
 ├── game/
-│   ├── engine.py                # Loop principal da física da corrida e rankings
-│   ├── director.py              # Máquina de estados autônoma (VOTING -> PODIUM -> etc)
-│   ├── horses.py                # Estado dinâmico dos cavalos, fadiga e boosts
-│   ├── physics.py               # Trajetória oval, derivadas tangenciais e raias
-│   └── weather_events.py        # Sistema de clima (Sol, Chuva, Tempestade, Vento)
+│   ├── engine.py                # Motor físico a 60 ticks/s, foto-finish e líderes
+│   ├── director.py              # Máquina de estados contínua (VOTING -> PODIUM -> LEADERBOARD)
+│   ├── horses.py                # Modelagem do estado de cada cavalo, fadiga e boosts
+│   ├── physics.py               # Trajetória oval, derivadas tangenciais e raias 3D
+│   └── weather_events.py        # Modificadores climáticos (Sol, Chuva, Tempestade, Vento)
 ├── tiktok/
-│   ├── adapter.py               # Conector TikTokLive com reconexão exponencial
+│   ├── adapter.py               # Conector TikTokLiveClient com auto-reconnect
 │   ├── mock_adapter.py          # Emulador de eventos para o Modo de Teste
-│   └── parser.py                # Parser semântico de comentários, nomes e presentes
+│   └── parser.py                # Parser de comentários ("1", "relampago", presentes, /turbo)
 ├── web/
-│   ├── server.py                # Servidor FastAPI, rotas REST e WebSocket
+│   ├── server.py                # Servidor FastAPI, rotas REST e WebSocket broadcast
 │   └── static/
 │       ├── css/
-│       │   ├── styles.css       # Estilos do HUD 9:16 do OBS (torre, placar, pódio)
+│       │   ├── styles.css       # Estilos da transmissão OBS (1080x1920 vertical 9:16)
 │       │   └── test_panel.css   # Estilos do painel de controle do streamer (/test)
 │       ├── js/
-│       │   ├── three.min.js     # Engine Three.js r128 (local e offline)
-│       │   ├── scene.js         # Cenário 3D (pista, gramado, arquibancadas, lago)
-│       │   ├── horses_view.js   # Modelagem 3D procedural dos cavalos e galope
-│       │   ├── particles.js     # Poeira, faíscas, ondas de choque, luz celeste
-│       │   ├── camera.js        # Diretor de câmeras dinâmicas de transmissão
-│       │   ├── audio.js         # Sintetizador procedural Web Audio (galope, torcida)
-│       │   ├── hud.js           # Gerenciador dos elementos da interface na tela
-│       │   ├── client.js        # Orquestrador do loop de renderização a 60 FPS
-│       │   └── test_panel.js    # Lógica interativa do painel admin do streamer
-│       ├── index.html           # Tela de transmissão capturada pelo OBS
-│       └── test.html            # Painel do streamer aberto no navegador (/test)
-├── tests/                       # 16 testes automatizados cobrindo todo o sistema
-├── main.py                      # Ponto de partida único do projeto
-├── requirements.txt             # Dependências Python
-└── README.md                    # Guia rápido de inicialização
+│       │   ├── three.min.js     # Three.js r128 local (independente de internet)
+│       │   ├── scene.js         # Cenário 3D: pista, gramado, arquibancadas, árvores, lago
+│       │   ├── horses_view.js   # Modelagem 3D procedural dos cavalos, galope e emblemas
+│       │   ├── particles.js     # Poeira de cascos, faíscas, ondas de choque e confetes
+│       │   ├── camera.js        # Diretor de câmeras dinâmicas de transmissão de TV
+│       │   ├── audio.js         # Sintetizador procedural Web Audio API (galope, torcida)
+│       │   ├── hud.js           # Gerenciador da interface, placar, régua e pódio
+│       │   ├── client.js        # Loop principal de renderização a 60 FPS
+│       │   └── test_panel.js    # Lógica interativa do painel admin com WebSocket
+│       ├── index.html           # Página capturada pelo OBS Studio (Browser Source)
+│       └── test.html            # Interface de controle do streamer no navegador (/test)
+├── tests/                       # 16 testes automatizados (pytest) com 100% de aprovação
+├── main.py                      # Ponto de entrada do sistema (`python main.py`)
+├── requirements.txt             # Dependências Python (fastapi, uvicorn, aiosqlite, etc.)
+├── README.md                    # Guia rápido de inicialização
+└── DOCUMENTACAO.md              # Este manual técnico completo
 ```
 
 ---
 
-## 3. Como Customizar Regras do Jogo (`config/config.json`)
+## 3. Configurações Globais (`config/config.json`)
 
-Toda a calibração de tempos, regras de pontuação e atributos dos cavalos fica centralizada em `config/config.json`:
+Para calibrar o ritmo da transmissão sem encostar em código Python, edite `config/config.json`:
 
 ```json
 {
-  "race_duration_seconds": 35.0,        // Duração máxima da corrida em segundos
-  "voting_duration_seconds": 30.0,      // Tempo para o chat escolher os cavalos
-  "countdown_duration_seconds": 5.0,    // Contagem regressiva antes da largada
-  "podium_duration_seconds": 8.0,       // Duração da tela de pódio do vencedor
+  "race_duration_seconds": 35.0,        // Duração máxima da corrida (segundos)
+  "voting_duration_seconds": 30.0,      // Tempo para os espectadores escolherem os cavalos
+  "countdown_duration_seconds": 5.0,    // Contagem regressiva antes da largada (5.. 4.. 3..)
+  "podium_duration_seconds": 8.0,       // Duração da tela de pódio dos vencedores
   "xp_duration_seconds": 6.0,           // Duração da tela de distribuição de XP
   "leaderboard_duration_seconds": 10.0, // Duração da tela de TOP jogadores da LIVE
-  "track_length_meters": 1000.0,        // Metros virtuais da pista oval
-  "tick_rate": 60,                      // Taxa de atualização da simulação por segundo
+  "track_length_meters": 1000.0,        // Comprimento da pista oval em metros virtuais
+  "tick_rate": 60,                      // Taxa de atualização física por segundo (60 Hz)
   "xp": {
-    "participation": 20,                // XP ganho apenas por escolher um cavalo
-    "cheer": 5,                         // XP ganho ao mandar mensagens de torcida
-    "top_3": 50,                        // XP ganho se o cavalo terminar em 2º ou 3º
-    "win": 150,                         // XP ganho se o cavalo for o campeão (1º)
-    "gift_small": 100,                  // XP ganho por presentes pequenos (ex: Rosa)
-    "gift_medium": 250,                 // XP ganho por presentes médios (ex: Donut)
-    "gift_large": 500                   // XP ganho por presentes grandes (ex: Galáxia)
+    "participation": 20,                // XP ganho por escolher qualquer cavalo
+    "cheer": 5,                         // XP ganho por mensagens de torcida
+    "top_3": 50,                        // XP ganho se o cavalo escolhido for 2º ou 3º
+    "win": 150,                         // XP ganho se o cavalo escolhido for o campeão (1º)
+    "gift_small": 100,                  // XP virtual por presente pequeno (ex: Rosa)
+    "gift_medium": 250,                 // XP virtual por presente médio (ex: Donut)
+    "gift_large": 500                   // XP virtual por presente grande (ex: Galáxia)
   }
 }
 ```
 
 ---
 
-## 4. Como Customizar os Cavalos e Personalidades
+## 4. Cavalos, Atributos e Arquétipos de Personalidade
 
-Cada cavalo tem seus atributos definidos dentro da lista `"horses"` em `config/config.json`:
+Os 8 cavalos iniciais são configurados na lista `"horses"` em `config/config.json`:
 
-```json
-{
-  "id": 1,
-  "number": 1,
-  "name": "RELÂMPAGO",
-  "color_hex": "#F59E0B",               // Cor principal do corpo e farda
-  "secondary_color_hex": "#FEF3C7",     // Cor da manta de sela
-  "personality": "FRONT_RUNNER",        // Arquétipo comportamental
-  "base_speed": 28.5,                   // Velocidade base em m/s (~100 km/h)
-  "acceleration": 9.5,                  // Quão rápido alcança a velocidade máxima
-  "stamina": 7.0,                       // Resistência à perda de fôlego no final
-  "luck": 6.0,                          // Chance de picos orgânicos de aceleração
-  "aggressiveness": 7.5,                // Bônus ao correr disputando liderança
-  "description": "Larga em velocidade máxima, mas perde fôlego no final."
-}
-```
+| Nº | Nome | Cor Primária | Arquétipo de Personalidade | Comportamento Único na Pista |
+|:---:|:---|:---:|:---|:---|
+| **#1** | **RELÂMPAGO** | `#F59E0B` (Ouro) | `FRONT_RUNNER` | Arrancada inicial explosiva (+12% de velocidade até 40% da pista); cansaço acentuado no terço final (-10%). |
+| **#2** | **TROVÃO** | `#2563EB` (Azul) | `CLOSER` | Ritmo cadenciado no início (-6%); surto avassalador de velocidade (+15%) nos últimos 200 metros. |
+| **#3** | **FURACÃO** | `#10B981` (Verde) | `PACER` | Maratonista inabalável (+1% do início ao fim); quase imune à perda de stamina. |
+| **#4** | **RAIO** | `#EF4444` (Vermelho) | `DRAFTER` | Caçador agressivo no vácuo; ganha +7% de aceleração sempre que corre atrás de outro cavalo. |
+| **#5** | **PANTERA** | `#1E293B` (Preto) | `CORNER_SPECIALIST` | Mestre das curvas; ganha +8% de rendimento ao contornar as duas curvas ovais pelo lado interno. |
+| **#6** | **TITÃ** | `#78350F` (Bronze) | `JUGGERNAUT` | Aceleração inicial pesada (-8%), porém velocidade inabalável e ganho de rendimento na chuva e lama. |
+| **#7** | **NEVASCA** | `#06B6D4` (Ciano) | `COLD_TACTICIAN` | Frio e equilibrado; eficiência máxima quando ocorrem eventos de tempestade ou vento forte. |
+| **#8** | **FANTASMA** | `#8B5CF6` (Roxo) | `WILDCARD` | Fator de sorte extremo (9.8/10); chances de impulsos surpresa de até +18% em qualquer trecho da prova. |
 
-### Arquétipos de Personalidade Disponíveis (`game/horses.py`):
-* `FRONT_RUNNER` (*Relâmpago*): Começa com +12% de velocidade até 40% da pista, mas cai para -10% na reta final por fadiga.
-* `CLOSER` (*Trovão*): Economiza energia na primeira metade (-6%) e ganha um surto avassalador de +15% nos últimos 200m.
-* `PACER` (*Furacão*): Mantém ritmo inabalável (+1%) do primeiro ao último metro sem sofrer com fadiga.
-* `DRAFTER` (*Raio*): Ganha +7% de aceleração e vácuo quando corre atrás de qualquer outro cavalo.
-* `CORNER_SPECIALIST` (*Pantera*): Ganha +8% de rendimento ao entrar nas curvas do hipódromo.
-* `JUGGERNAUT` (*Titã*): Lento na arrancada inicial (-8%), mas velocidade constante e ganha vantagem quando a pista está molhada (chuva).
-* `COLD_TACTICIAN` (*Nevasca*): Ganha bônus de eficiência máxima em climas adversos (chuva e vento).
-* `WILDCARD` (*Fantasma*): Fator de sorte alto (até +18% de pico aleatório surpresa a qualquer momento).
+### Como Adicionar um Novo Cavalo (ex: #9 TITÂNIO):
+1. Adicione um novo objeto na lista `"horses"` em `config/config.json` com `id: 9, number: 9, name: "TITÂNIO"`.
+2. Adicione o nome no dicionário `HORSE_NAME_MAP` em `tiktok/parser.py`: `"titanio": 9`.
+3. Pronto! O cavalo já terá seu box, farda 3D, placa numerada e participará automaticamente do ciclo.
 
 ---
 
-## 5. Como Adicionar Novos Presentes do TikTok (`game/director.py`)
+## 5. Sistema de Presentes e Efeitos Especiais
 
-No arquivo `game/director.py`, dentro de `handle_viewer_gift()`, você pode mapear qualquer presente da plataforma para acionar turbos e efeitos visuais personalizados:
+### 5.1 Emojis Dinâmicos e Destaque ao Apoiador
+Ao receber um presente, o cavalo correspondente exibe uma **pill 3D flutuante** acima da cabeça contendo:
+1. O **Emoji oficial do presente** renderizado em alta definição (`Segoe UI Emoji`).
+2. O **`@nome_do_apoiador`** em texto branco contrastante com fundo escuro translúcido.
+
+### 5.2 Mapeamento de Presentes (`game/director.py`)
+No arquivo `game/director.py`, dentro de `handle_viewer_gift()`, todos os presentes são normalizados:
 
 ```python
 gift_emoji_map = {
-    "galaxy": "🌌",
-    "lion": "🦁",
-    "dragon": "🐉",
-    "rose": "🌹",
+    "galaxy": "🌌", "galaxia": "🌌",
+    "lion": "🦁", "leao": "🦁", "leão": "🦁",
+    "dragon": "🐉", "dragao": "🐉", "dragão": "🐉",
+    "universe": "🪐", "universo": "🪐",
+    "rose": "🌹", "rosa": "🌹",
     "donut": "🍩",
-    "cap": "🧢",
-    "coffee": "☕",
-    "coracao": "💖",
-    "whale": "🐋",      # Exemplo: Adicionar Baleia
-    "fireworks": "🎆"   # Exemplo: Adicionar Fogos de Artifício
+    "cap": "🧢", "bone": "🧢", "boné": "🧢",
+    "coffee": "☕", "cafe": "☕", "café": "☕",
+    "coracao": "💖", "coração": "💖", "heart": "💖",
+    "fire": "🔥", "fogo": "🔥"
 }
 ```
 
-### Para definir a força do turbo e XP de um presente novo:
-```python
-if any(w in gift_lower for w in ["whale", "baleia"]):
-    power = 1.30          # +30% de velocidade
-    dur = 6.0            # Duração de 6 segundos
-    xp = 1800            # 1.800 XP virtual concedido ao espectador
-    b_label = "TSUNAMI DA BALEIA AZUL"
-    is_legendary = True   # Dispara pilar de luz celeste, tremor e banner épico
-    legendary_kind = "WHALE"
+### 5.3 Presentes Míticos e Super Raros (Leão, Galáxia, Dragão)
+Quando um presente raro é enviado, os seguintes efeitos são ativados simultaneamente:
+* **Pilar de Luz Celestial de 90 Metros:** Um feixe vertical de energia translúcida desce do céu diretamente em cima do cavalo apoiado.
+* **Onda de Choque Radial no Solo:** Anel luminoso expansivo que varre a areia da pista com raio de até 35 metros.
+* **Tremor Sísmico de Câmera (*Screen Shake*):** A câmera de transmissão treme para transmitir o impacto e a potência do presente.
+* **Aura Mítica Tórica e Rastro de Chamas:** Um anel energético brilhante gira em alta velocidade ao redor do cavalo, deixando brasas e labaredas no chão.
+* **Banner Mítico no HUD:** Card monumental no topo da tela com borda dourada/violeta incandescente e pulsação em toda a moldura da live.
+* **Áudio de Trovão e Sub-Grave:** Impacto estrondoso de 140 Hz descendo até 25 Hz com o clamor da multidão do estádio a 100% de volume por 4 segundos.
+* **Turbo Massivo:** +35% de velocidade por 6.5 segundos e até +2.000 XP para o apoiador.
+
+### 5.4 Retenção de Presentes Pré-Largada
+Se um espectador enviar presentes durante a fase de **Votação (`VOTING`)** ou **Contagem Regressiva (`COUNTDOWN`)**:
+* O cavalo já recebe o turbo nos boxes e já exibe o emoji e o `@nome_do_apoiador` antes mesmo da largada!
+* O bônus de velocidade entra em ação assim que os portões se abrem, garantindo que nenhum presente enviado seja desperdiçado.
+
+---
+
+## 6. Mecânica Física, Pista Oval e Raias (`game/physics.py`)
+
+A pista é modelada como uma oval clássica de hipódromo com 1.000 metros de comprimento percorrível:
+
+```text
+               Curva 2 [800m - 1000m]          Curva 1 [300m - 500m]
+                   (Raio: 63.66m)                  (Raio: 63.66m)
+                  ┌───────────────┐               ┌───────────────┐
+                  │               │               │               │
+                  │   Reta Oposta │               │               │
+                  │   [500m - 800m, z = -63.66m]  │               │
+                  │                               │               │
+                  │   Infield (Lago, Telão LED,   │               │
+                  │   Gramado, Árvores)           │               │
+                  │                               │               │
+                  │   Reta Principal              │               │
+                  │   [0m - 300m, z = +63.66m]    │               │
+                  │   Largada: x=-150             │               │
+                  │   Chegada: x=+150             │               │
+                  └───────────────┘               └───────────────┘
 ```
 
----
+### 6.1 Distribuição Exata das Raias
+* A pista tem **22 metros de largura** (se estendendo de $z = 52.66\text{m}$ até $z = 74.66\text{m}$).
+* As 8 raias foram distribuídas simetricamente a partir da base $R_{\text{base}} = \text{radius} - 8.4\text{m}$:
+  $$\text{Raia}(i) = 55.26\text{m} + (i - 1) \times 2.4\text{m}$$
+  * Raia 1 (Interna) = **$55.26\text{m}$** $\to$ perfeitamente alinhada com o Box #1.
+  * Raia 8 (Externa) = **$72.06\text{m}$** $\to$ perfeitamente alinhada com o Box #8.
+* Margem de segurança de ~2.6m de cada lado em relação às cercas interna e externa: **zero cavalos escapam da pista ou atravessam cercas**.
 
-## 6. Mecânica Física e Coordenadas da Pista (`game/physics.py`)
-
-A pista é uma oval de 1.000 metros dividida em 4 segmentos contínuos:
-1. **Reta Principal (0 a 300m):** De $x = -150$ até $x = +150$ com $z = +63.66$.
-2. **Curva 1 (300m a 500m):** Arco de 180º com raio $R = 63.66\text{m}$ em torno do centro $(+150, 0)$.
-3. **Reta Oposta (500m a 800m):** De $x = +150$ até $x = -150$ com $z = -63.66$.
-4. **Curva 2 (800m a 1000m):** Arco de 180º com raio $R = 63.66\text{m}$ em torno do centro $(-150, 0)$.
-
-### Raias dos Cavalos:
-* A pista tem **22 metros de largura**.
-* O centro fica em $R = 63.66\text{m}$.
-* As 8 raias são calculadas simetricamente com espaçamento de 2.4m:
-  $$\text{Raia}(i) = (\text{radius} - 8.4) + (i - 1) \times 2.4$$
-  * Raia 1 (Interna) = **$55.26\text{m}$** (alinhada exatamente com o Box 1).
-  * Raia 8 (Externa) = **$72.06\text{m}$** (alinhada exatamente com o Box 8).
-* Nenhuma raia encosta nas cercas (margem de segurança de ~2.6m de cada lado).
-
-### Direção Tangencial de Rotação (`rot_y`):
-A rotação dos cavalos em cada tick é calculada pela derivada tangencial forward contínua:
+### 6.2 Rotação Tangencial Contínua em Curvas (`rot_y`)
+Em vez de ângulos estáticos que causavam giros bruscos, a orientação do cavalo é calculada através da derivada tangencial contínua da trajetória:
 ```python
-dx = x_next - x
-dz = z_next - z
-rot_y = math.atan2(dx, dz)
+x, z = self._compute_point(dist_mod, r)
+x_next, z_next = self._compute_point((dist_mod + 0.25) % self.track_length, r)
+rot_y = math.atan2(x_next - x, z_next - z)
 ```
-Isso garante que os cavalos sempre olhem e galopem perfeitamente apontados para a frente da pista em qualquer ponto da curva, sem giros bruscos.
+No cliente Three.js (`horses_view.js`), a interpolação angular normaliza as diferenças entre $-\pi$ e $+\pi$:
+```javascript
+let diffRot = targetRotY - horseObj.group.rotation.y;
+while (diffRot < -Math.PI) diffRot += Math.PI * 2;
+while (diffRot > Math.PI) diffRot -= Math.PI * 2;
+horseObj.group.rotation.y += diffRot * 0.45;
+```
+Isso faz com que os cavalos se inclinem e façam as duas curvas com naturalidade, sempre galopando para a frente da pista.
 
 ---
 
-## 7. Sistema de Câmeras Cinematográficas (`web/static/js/camera.js`)
+## 7. Cenário 3D e Cercas Paramétricas (`web/static/js/scene.js`)
 
-As câmeras funcionam como uma mesa de corte de transmissão de TV esportiva profissional:
-* **`CAM_START`:** Visão aberta frontal e elevada $(-210, 36, 140)$ dos boxes de largada e arquibancadas (ativa em `VOTING` e `COUNTDOWN`).
-* **`CAM_CHASE`:** Câmera aérea/guindaste esportivo recuada a **44m de distância** e **24m de altura** do cavalo líder. Enquadra com folga todo o pelotão de 8 cavalos sem sensação de aperto no celular.
-* **`CAM_SIDE`:** Câmera lateral aberta de helicóptero a **46m de distância lateral** e **28m de altura**, exibindo as ultrapassagens nas curvas em perspectiva ampla.
-* **`CAM_FINISH`:** Câmera angular posicionada logo após a linha de chegada $(186, 15, 87)$ focando os cavalos cruzando o portal.
-* **`CAM_PODIUM`:** Órbita contínua de 360 graus a 22m de raio ao redor do cavalo vencedor com chuva de confetes.
+### 7.1 Cercas Ovais em 360 Graus
+As cercas brancas de turfe e as sebes vivas verdes (*hedges*) são geradas através de uma malha paramétrica contínua que contorna as duas retas e os dois arcos circulares das curvas:
+* Cerca Interna: raio fixo em **$52.16\text{m}$** (rente à borda interna da pista).
+* Cerca Externa: raio fixo em **$75.16\text{m}$** (rente à borda externa da pista).
+* As cercas acompanham o hipódromo em um circuito fechado contínuo: **nenhuma grade entra na pista**.
 
-### Transição Suave Pós-Chegada:
-Quando o líder cruza a linha de chegada (1000m), o arquivo `camera.js` **não congela**: ele passa a seguir imediatamente o líder da disputa restante (2º e 3º lugares) até a transição automática para o pódio 3.5 segundos depois.
-
----
-
-## 8. Interface, HUD e OBS (`styles.css` e `hud.js`)
-
-A interface foi projetada para proporção **9:16 vertical (1080x1920)** com safe-area para transmissões no TikTok (evitando sobreposição com botões do aplicativo).
-
-### Componentes do HUD:
-1. **Top Bar:** Placa dourada com número da corrida (`CORRIDA #42`), status pulsante (`AO VIVO`), relógio regressivo e botão de mudo.
-2. **Régua de Progresso da Pista (Topo):** Linha sutil de 6px com os 8 cavalos representados por círculos coloridos numerados avançando em direção à bandeira quadriculada 🏁 (1000m).
-3. **Torre Lateral Esquerda (Posições):** Inspirada na Fórmula 1 e MotoGP, mede apenas **235px de largura** ancorada no lado esquerdo (`top: 195px; left: 28px;`), deixando mais de **85% da tela 100% livre** para a visão 3D da pista e dos cavalos.
-4. **Fila de Notificações:** Toasts animados no canto superior direito (`top: 195px; right: 28px;`) informando votos e presentes sem invadir o centro da tela.
-5. **Ajuste em Tempo Real:** No painel do streamer (`http://localhost:8000/test`), é possível calibrar o tamanho do placar (60% a 160%), subir ou descer a posição vertical e ocultar/mostrar elementos ao vivo via WebSocket.
+### 7.2 Elementos do Cenário
+* **Jumbotron LED de 34 Metros:** Telão no centro do Infield com suporte metálico treliçado exibindo o logotipo esportivo e avisos ao vivo.
+* **Lago Ornamental & Fonte:** Espelho d'água azul reflexivo com ilha central e chafariz de 6 jatos de água.
+* **Arquibancada Monumental:** 10 degraus de concreto com centenas de torcedores coloridos animados, camarotes VIP com vidros espelhados e 12 bandeiras no telhado que balançam com o vento.
+* **Floresta Periférica:** Pinheiros e carvalhos 3D posicionados exclusivamente fora da pista (raio $\ge 92\text{m}$ nas curvas e $z \le -96\text{m}$ na reta oposta).
+* **Placas de Distância Oficiais:** Marcadores verticais de turfe ao longo da pista: `800m`, `600m`, `400m`, `200m`, `100m` e `FINAL`.
 
 ---
 
-## 9. Áudio Procedural Sintetizado (`web/static/js/audio.js`)
+## 8. Câmeras Cinematográficas (`web/static/js/camera.js`)
 
-O áudio não depende de arquivos externos pesados de MP3: ele é gerado proceduralmente em tempo real via **Web Audio API**:
-* **Galope dos Cavalos (`playGallop(speed)`):** Oscilador triangular com filtro passa-baixas gerando batidas de cascos rítmicas com frequência proporcional à velocidade instantânea dos líderes.
-* **Clamor da Torcida (`setCrowdIntensity(intensity)`):** Ruído contínuo filtrado em passa-banda que sobe de intensidade automaticamente na reta final e explode em 100% quando presentes raros são enviados.
-* **Sirene e Bips de Largada:** Osciladores senoidais clássicos de largada de turfe.
-* **Efeitos de Presentes Raros:** Impacto sub-grave descendente (140 Hz $\to$ 25 Hz) simulando estrondo de trovão, sweep cósmico e fanfarra triunfal no pódio.
+A câmera alterna de modo automaticamente conforme os acontecimentos da corrida:
 
----
+1. **`CAM_START`:** Visão aberta panorâmica e elevada $(-210, 36, 140)$ focando os boxes de largada durante a votação e contagem.
+2. **`CAM_CHASE`:** Câmera aérea esportiva recuada a **44m de distância** e **24m de altura** do cavalo líder, enquadrando os 8 cavalos sem aperto no formato vertical do celular.
+3. **`CAM_SIDE`:** Câmera lateral aberta de helicóptero a **46m de distância lateral** e **28m de altura**, perfeita para acompanhar ultrapassagens nas curvas.
+4. **`CAM_FINISH`:** Câmera angular na reta final $(186, 15, 87)$ focando a aproximação em alta velocidade para cruzar a linha quadriculada.
+5. **`CAM_PODIUM`:** Órbita circular de 360 graus a 22m de raio ao redor do vencedor durante a celebração com chuva de confetes.
 
-## 10. Banco de Dados SQLite e Progressão (`backend/database/`)
-
-O banco SQLite é salvo no arquivo local `race_game.db` com modo WAL habilitado para suportar alta concorrência assíncrona.
-
-### Tabelas Principais:
-* **`viewers`:** Registro persistente de cada espectador do TikTok (`tiktok_username`, `display_name`, `xp`, `level`, `races_count`, `wins_count`).
-* **`races`:** Histórico de cada corrida (`race_number`, `status`, `winner_horse_id`, `started_at`, `finished_at`).
-* **`race_choices`:** Registro da escolha de cavalo de cada usuário por corrida.
-* **`race_results`:** Ordem final de chegada e tempos em milissegundos de cada cavalo.
-
-### Fórmula de Níveis Virtuais (`backend/progression.py`):
-$$\text{Nível}(XP) = \left\lfloor \left(\frac{XP}{100}\right)^{\frac{1}{1.35}} \right\rfloor + 1$$
-* Nível 1: 0 XP
-* Nível 2: 100 XP
-* Nível 5: 649 XP
-* Nível 10: 1.958 XP
-* Nível 25: 7.781 XP
-* Títulos honoríficos são concedidos automaticamente (ex: *Iniciante das Pistas*, *Torcedor Fervoroso*, *Lenda do Turfe*, *Campeão Supremo*).
+### Transição Contínua Pós-Chegada:
+* Quando o cavalo vencedor cruza a linha de chegada (1000m), a câmera **não congela**: ela foca automaticamente no próximo cavalo ativo disputando o 2º e 3º lugares!
+* A engine fecha a prova 3.5 segundos após a vitória e dispara imediatamente a tela de **PÓDIO** com órbita 360º.
 
 ---
 
-## 11. Painel de Controle do Streamer / Admin (`/test`)
+## 9. HUD Esportivo Vertical (1080x1920) e Ajuste em Tempo Real
 
-Acessível em qualquer navegador em:
+A interface do usuário foi desenhada no padrão das transmissões da **Fórmula 1 e turfe internacional**:
+
+```text
+┌────────────────────────────────────────────────────────┐
+│ [🏇 CORRIDA #42]      [🔴 AO VIVO]       [⏳ 28s] [🔊] │  ← Top Bar
+├────────────────────────────────────────────────────────┤
+│ [───1───2──────3─────────4──5──────6──7────8────────🏁] │  ← Régua de Progresso
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│ ┌───────────────┐                                      │
+│ │ 🏁 POSIÇÕES   │                                      │
+│ │ 1. #1 RELÂM.  │                                      │
+│ │ 2. #2 TROVÃO  │                                      │
+│ │ 3. #4 RAIO ⚡ │           ÁREA 3D LIVRE              │
+│ │ 4. #3 FURACÃO │         (Mais de 85% da tela         │
+│ │ 5. #5 PANTERA │            desobstruída)             │
+│ │ 6. #7 NEVASCA │                                      │
+│ │ 7. #6 TITÃ    │                                      │
+│ │ 8. #8 FANTAS. │                                      │
+│ └───────────────┘                                      │
+│  (Torre Lateral                                        │
+│   Compacta F1)                                         │
+│                                                        │
+│                                                        │
+│                                                        │
+│                     [ CENTRO / MODAIS ]                │
+│             (Votação, Contagem, Pódio, XP)             │
+└────────────────────────────────────────────────────────┘
+```
+
+### Controles de Calibração do HUD no Painel Admin (`/test`):
+No **Card 4** de `http://localhost:8000/test`, você ajusta a interface do OBS ao vivo:
+* **Tamanho do Placar (Escala):** Botões `➖ Menor (-10%)` e `➕ Maior (+10%)` (calibra de 60% a 160%).
+* **Posição Vertical (Altura):** Botões `▲ Subir (-25px)` e `▼ Descer (+25px)` (posicionamento milimétrico).
+* **Régua do Topo:** Botão para ocultar ou exibir a régua de progresso com um clique.
+
+---
+
+## 10. Painel do Streamer e Modo de Teste (`/test`)
+
+Acesse em qualquer navegador em:
 👉 **`http://localhost:8000/test`**
 
 ### Recursos Disponíveis:
-* **Controles Diretos de Corrida:**
-  * ⏩ **Iniciar Corrida Logo:** Pula o timer de 30s de votação e inicia a contagem regressiva de largada imediatamente.
-  * 🏁 **Finalizar Corrida:** Força o cruzamento imediato da linha de chegada e abre o pódio.
-  * 🔄 **Próxima Corrida:** Reinicia o ciclo e cria a próxima corrida limpa com um clique.
-* **Simulação de Comentários & Votos:** Digite ou clique nos botões rápidos (#1 ao #8, `/turbo`, etc.).
-* **Simulação de Presentes:** Dispare Rosa, Café, Donut, Boné, Leão (+2000 XP), Galáxia (+1500 XP) ou Dragão (+1800 XP).
-* **Rajada de Público:** Simule 20 ou 50 espectadores comentando e escolhendo cavalos simultaneamente.
-* **Controles de Clima:** Sol Claro, Pôr do Sol, Noite com Refletores, Chuva, Tempestade e Vento.
-* **Ajuste Visual do HUD:** Redimensione o placar (60% a 160%) e suba/desça a altura com sincronização imediata no OBS.
-* **Console com Filtros:** Histórico permanente com abas para `Todos`, `🎁 Presentes`, `💬 Votos`, `🏁 Fases`, além de botões para `Limpar` e `Copiar`.
+1. **Controles Diretos de Corrida:**
+   * ⏩ **Iniciar Corrida Logo:** Pula os 30s de votação e inicia a contagem e largada na hora.
+   * 🏁 **Finalizar Corrida:** Força o encerramento da corrida e avança para o pódio imediatamente.
+   * 🔄 **Próxima Corrida:** Reinicia o ciclo e prepara a próxima prova.
+2. **Simulação de Comentários & Votos:** Digite ou clique nos botões rápidos (#1 ao #8, `/turbo`, etc.).
+3. **Simulação de Presentes:** Dispare Rosa, Café, Donut, Boné, Leão (+2000 XP), Galáxia (+1500 XP) ou Dragão (+1800 XP).
+4. **Rajada de Público:** Simule 20 ou 50 espectadores comentando e votando de uma vez só.
+5. **Controles de Clima:** Sol, Pôr do Sol, Noite com Refletores, Chuva, Tempestade e Vento.
+6. **Console de Eventos Avançado:**
+   * Abas de filtro: `[Todos]`, `[🎁 Presentes]`, `[💬 Votos]`, `[🏁 Fases]`.
+   * Contadores em tempo real de presentes e votos acumulados.
+   * Botões para `🗑️ Limpar` e `📋 Copiar Histórico`.
 
 ---
 
-## 12. Como Executar e Validar
+## 11. Banco de Dados SQLite e Progressão (`race_game.db`)
 
-### Iniciar o Jogo em Modo de Teste:
-```bash
-python main.py
-```
+O banco SQLite roda de forma assíncrona com `aiosqlite` e journal mode WAL para máxima velocidade.
 
-### Iniciar Conectado à LIVE Real do TikTok:
-```bash
-python main.py --tiktok-user SEU_USUARIO_TIKTOK --test-mode=False
-```
+### Estrutura das Tabelas:
+* **`viewers`:** `id`, `tiktok_username`, `display_name`, `xp`, `level`, `races_count`, `wins_count`, `favorite_horse_id`, `created_at`, `updated_at`.
+* **`races`:** `id`, `race_number`, `status`, `winner_horse_id`, `total_participants`, `total_gifts`, `started_at`, `finished_at`.
+* **`race_choices`:** `id`, `race_id`, `viewer_id`, `horse_id`, `created_at`.
+* **`race_results`:** `id`, `race_id`, `horse_id`, `final_position`, `finish_time_ms`.
 
-### Executar a Suíte de Testes Automatizados:
+### Curva de Níveis:
+$$\text{Nível}(XP) = \left\lfloor \left(\frac{XP}{100}\right)^{\frac{1}{1.35}} \right\rfloor + 1$$
+Cada subida de nível gera uma notificação animada na tela com estrela dourada (**⭐ LEVEL UP!**).
+
+---
+
+## 12. Como Configurar e Transmitir no OBS Studio
+
+1. Abra o **OBS Studio**.
+2. No menu de Cenas, adicione uma nova fonte: **Navegador (Browser Source)**.
+3. Defina os parâmetros:
+   * **URL:** `http://localhost:8000/`
+   * **Largura:** `1080`
+   * **Altura:** `1920`
+   * **Taxa de Quadros:** `60 FPS`
+   * **Controlar áudio via OBS:** Marque para ouvir o áudio das corridas no mixer do OBS.
+4. Abra o painel de testes em um segundo monitor: `http://localhost:8000/test`.
+5. Para conectar à sua live real do TikTok quando abrir transmissão:
+   ```bash
+   python main.py --tiktok-user SEU_USUARIO_TIKTOK --test-mode=False
+   ```
+
+---
+
+## 13. Testes Automatizados e Garantia de Qualidade
+
+O projeto possui **16 testes automatizados** cobrindo todos os módulos vitais. Para executar:
+
 ```bash
 python -m pytest -v
 ```
-*(Todos os 16 testes de física, banco de dados, máquina de estados, segurança e API devem passar com 100% de sucesso).*
+
+Os testes verificam:
+* Carregamento e validação de `config.json` e atributos dos 8 cavalos.
+* Ciclo de vida completo do banco SQLite e cálculos atômicos de XP e níveis.
+* Rate limiting por usuário em janela de 1s e sanitização de strings contra ataques.
+* Simulação matemática da corrida, boosts, curvas de personalidade e linha de chegada.
+* Máquina de estados do `EventDirector` (VOTING $\to$ COUNTDOWN $\to$ RACING $\to$ PODIUM $\to$ XP $\to$ LEADERBOARD).
+* Parser semântico de comandos do TikTok (números, nomes, presentes e comandos de torcida).
+* Endpoints REST do servidor FastAPI e sincronização WebSocket.
+* Teste de integração ponta a ponta (E2E) simulando uma prova completa com espectadores reais.
