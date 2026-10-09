@@ -6,7 +6,7 @@ class TrackGeometry:
     Geometria de pista de hipódromo em formato de oval esportivo com 1.000 metros de comprimento.
     Possui duas retas principais de 300m cada e duas curvas de 200m cada (raio ~63.66m).
     """
-    def __init__(self, track_length: float = 1000.0, lane_width: float = 2.4):
+    def __init__(self, track_length: float = 1000.0, lane_width: float = 3.2):
         self.track_length = track_length
         self.lane_width = lane_width
         
@@ -15,10 +15,10 @@ class TrackGeometry:
         self.curve_len = 200.0
         self.radius = self.curve_len / math.pi  # ~63.66 metros
         # O centro da pista está em self.radius (63.66m).
-        # A largura total da pista é 22m (de 52.66m a 74.66m).
-        # Centralizamos as 8 raias (cada uma com 2.4m) a partir de radius - 8.4m
-        # Raia 1 = 55.26m, Raia 8 = 72.06m (todas 100% dentro dos limites da pista)
-        self.base_lane_r = self.radius - 8.4
+        # A largura total da pista é 28m (de 49.66m a 77.66m).
+        # Centralizamos as 8 raias (cada uma com 3.2m de largura) a partir de radius - 11.2m:
+        # Raia 1 = 52.46m, Raia 8 = 74.86m (todas 100% dentro dos limites com margem de 2.8m das cercas)
+        self.base_lane_r = self.radius - 11.2
 
     def _compute_point(self, dist_mod: float, r: float) -> Tuple[float, float]:
         # Segmento 1: Reta Principal (Largada / Chegada) [0 .. 300]

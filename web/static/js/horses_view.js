@@ -276,21 +276,32 @@ class HorseVisualManager {
       const targetZ = hData.z || 0;
       const targetRotY = hData.rotation_y || 0;
 
-      // Interpolação suave para evitar saltos visuais
-      horseObj.group.position.x += (targetX - horseObj.group.position.x) * 0.45;
-      horseObj.group.position.y = targetY;
-      horseObj.group.position.z += (targetZ - horseObj.group.position.z) * 0.45;
-
-      // Interpolação angular suave contínua em curvas sem descontinuidade
+      // Interpolação angular contínua em curvas sem descontinuidade
       let diffRot = targetRotY - horseObj.group.rotation.y;
       while (diffRot < -Math.PI) diffRot += Math.PI * 2;
       while (diffRot > Math.PI) diffRot -= Math.PI * 2;
-      horseObj.group.rotation.y += diffRot * 0.45;
+      const rotLerp = Math.min(1.0, dt * 14.0);
+      horseObj.group.rotation.y += diffRot * rotLerp;
+
+      // Avanço cinemático contínuo por frame (Dead Reckoning com velocidade vetorial):
+      // Garante movimento 60-144 FPS liso e sedoso, sem engasgos de rede
+      const speed = hData.finished ? 0.0 : (hData.speed || 0.0);
+      if (speed > 0.5) {
+        const vx = speed * Math.sin(horseObj.group.rotation.y);
+        const vz = speed * Math.cos(horseObj.group.rotation.y);
+        horseObj.group.position.x += vx * dt;
+        horseObj.group.position.z += vz * dt;
+      }
+
+      // Amortecimento suave com taxa proporcional a dt (elimina micro-stuttering)
+      const corr = Math.min(1.0, dt * 9.0);
+      horseObj.group.position.x += (targetX - horseObj.group.position.x) * corr;
+      horseObj.group.position.y = targetY;
+      horseObj.group.position.z += (targetZ - horseObj.group.position.z) * corr;
 
       // Animação Procedural de Galope sincronizada à velocidade (interrompe quando cruzar a chegada)
-      const speed = hData.finished ? 0.0 : (hData.speed || 0.0);
       if (!hData.finished && speed > 1.0) {
-        horseObj.phase += speed * dt * 0.8;
+        horseObj.phase += speed * dt * 0.72;
 
         // Movimento do tronco (sobe e desce + pitch)
         horseObj.body.position.y = 2.4 + Math.sin(horseObj.phase * 2.0) * 0.22;

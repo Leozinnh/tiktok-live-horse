@@ -76,7 +76,8 @@ class TrackScene {
     this.straightLen = 300.0;
     this.curveLen = 200.0;
     this.radius = 200.0 / Math.PI; // ~63.66m
-    this.trackWidth = 22.0;
+    this.trackWidth = 28.0; // Pista alargada para 28m (mais espaço entre os cavalos)
+    this.laneWidth = 3.2; // 3.2m por raia (total 22.4m para as 8 raias, com margens de 2.8m)
 
     // Objetos animados
     this.flags = [];
@@ -1047,44 +1048,56 @@ class TrackScene {
     this.startGateDoors = [];
     this.startSignalLights = [];
 
-    // Base zOffset das 8 raias:
-    // Raia 1 = 55.26m, Raia 8 = 72.06m
-    const zMin = (this.radius - 8.4) - 1.2; // 54.06m
-    const zMax = (this.radius - 8.4) + 7 * 2.4 + 1.2; // 73.26m
-    const totalGateWidth = zMax - zMin; // 19.2m
+    // Base zOffset das 8 raias alargadas para 3.2m de largura:
+    // Raia 1 = 52.46m, Raia 8 = 74.86m (centro exato em 63.66m)
+    const baseLaneR = this.radius - 11.2; // 52.46m
+    const zMin = baseLaneR - 1.6; // 50.86m
+    const zMax = baseLaneR + 7 * 3.2 + 1.6; // 76.46m
+    const totalGateWidth = zMax - zMin; // 25.6m
 
-    // 9 Divisórias Acolchoadas Separando os 8 Boxes
+    // 9 Divisórias Tubulares Abertas (Estrutura Aberta / Roll-Cage vazada — deixa os cavalos 100% visíveis!)
     for (let d = 0; d <= 8; d++) {
-      const zDiv = zMin + d * 2.4;
+      const zDiv = zMin + d * 3.2;
       const dividerGroup = new THREE.Group();
       dividerGroup.position.set(-halfStraight, 0, zDiv);
 
-      // Painel divisor acolchoado
-      const padPanel = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.6, 0.16), paddingGreenMat);
-      padPanel.position.set(0, 1.45, 0);
+      // 3 Postes verticais de aço escovado
+      for (let px of [-3.2, 0.0, 3.2]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 4.8, 8), steelMat);
+        post.position.set(px, 2.4, 0);
+        post.castShadow = true;
+        dividerGroup.add(post);
+      }
+
+      // 3 Longarinas / Trilhos tubulares de aço horizontais (abertos, sem bloquear a visão)
+      for (let ry of [0.4, 2.7, 4.5]) {
+        const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 6.4, 8), steelMat);
+        rail.rotation.z = Math.PI / 2;
+        rail.position.set(0, ry, 0);
+        dividerGroup.add(rail);
+      }
+
+      // Bumper acolchoado baixo apenas na altura dos flancos do cavalo (y=1.35, altura 0.85m)
+      // O cavalo fica 100% visível por cima (dorso, cabeça, pescoço e jóquei) e por baixo (patas e cascos)!
+      const padPanel = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.85, 0.14), paddingGreenMat);
+      padPanel.position.set(0, 1.35, 0);
       padPanel.castShadow = true;
       dividerGroup.add(padPanel);
 
-      // Postes de aço prateado nas extremidades da divisória
-      const postBack = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4.8, 8), steelMat);
-      postBack.position.set(-2.0, 2.4, 0);
-      postBack.castShadow = true;
-      dividerGroup.add(postBack);
-
-      const postFront = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4.8, 8), steelMat);
-      postFront.position.set(2.0, 2.4, 0);
-      postFront.castShadow = true;
-      dividerGroup.add(postFront);
+      // Friso decorativo cromado no bumper
+      const trim = new THREE.Mesh(new THREE.BoxGeometry(5.24, 0.08, 0.16), steelMat);
+      trim.position.set(0, 1.78, 0);
+      dividerGroup.add(trim);
 
       stallGroup.add(dividerGroup);
     }
 
-    // 8 Pares de Cancelas Dianteiras Articuladas em V + Placas Numeradas
+    // 8 Pares de Cancelas Dianteiras Articuladas Vazadas + Cancelas Traseiras Baixas + Placas Numeradas
     for (let lane = 1; lane <= 8; lane++) {
-      const zLane = (this.radius - 8.4) + (lane - 1) * 2.4;
+      const zLane = baseLaneR + (lane - 1) * 3.2;
       const hColor = stallColors[lane - 1];
 
-      // Placa numerada 3D no topo do box (visível de longe)
+      // Placa numerada 3D ampla no topo do box (visível de longe)
       const plateCanvas = document.createElement("canvas");
       plateCanvas.width = 128; plateCanvas.height = 128;
       const pCtx = plateCanvas.getContext("2d");
@@ -1101,37 +1114,58 @@ class TrackScene {
 
       const plateTex = new THREE.CanvasTexture(plateCanvas);
       if (THREE.sRGBEncoding) plateTex.encoding = THREE.sRGBEncoding;
+      plateTex.needsUpdate = true;
 
       const numPlate = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, 1.2, 1.4),
-        new THREE.MeshStandardMaterial({ map: plateTex, roughness: 0.2 })
+        new THREE.BoxGeometry(0.12, 0.95, 0.95),
+        new THREE.MeshBasicMaterial({ map: plateTex })
       );
-      numPlate.position.set(-halfStraight + 2.05, 4.7, zLane);
+      numPlate.position.set(-halfStraight + 3.28, 2.3, zLane - 1.55);
       numPlate.castShadow = true;
       stallGroup.add(numPlate);
 
-      // PIVÔS E PORTAS DA CANCELA DIANTEIRA (V-DOORS)
+      // Cancela Traseira Baixa Tubular (permite ver cauda e patas traseiras)
+      const rearDoor = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.6, 2.9),
+        new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.6 })
+      );
+      rearDoor.position.set(-halfStraight - 3.2, 1.35, zLane);
+      rearDoor.castShadow = true;
+      stallGroup.add(rearDoor);
+
+      // PIVÔS E PORTAS DA CANCELA DIANTEIRA (V-DOORS VAZADAS E ABERTAS)
+      // O focinho, a cabeça, o pescoço e o jóquei ficam totalmente livres olhando para a frente!
       // Porta Esquerda
       const leftPivot = new THREE.Group();
-      leftPivot.position.set(-halfStraight + 2.0, 1.25, zLane - 1.12);
-      const leftDoor = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 2.2, 1.15),
-        new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.5 })
+      leftPivot.position.set(-halfStraight + 3.25, 0, zLane - 1.55);
+
+      const lPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 8), steelMat);
+      lPost.position.y = 1.3;
+      leftPivot.add(lPost);
+
+      const lPad = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.75, 1.52),
+        new THREE.MeshStandardMaterial({ color: hColor, roughness: 0.4 })
       );
-      leftDoor.position.set(0, 0, 0.58);
-      leftDoor.castShadow = true;
-      leftPivot.add(leftDoor);
+      lPad.position.set(0, 1.25, 0.76);
+      lPad.castShadow = true;
+      leftPivot.add(lPad);
 
       // Porta Direita
       const rightPivot = new THREE.Group();
-      rightPivot.position.set(-halfStraight + 2.0, 1.25, zLane + 1.12);
-      const rightDoor = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 2.2, 1.15),
-        new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.5 })
+      rightPivot.position.set(-halfStraight + 3.25, 0, zLane + 1.55);
+
+      const rPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 8), steelMat);
+      rPost.position.y = 1.3;
+      rightPivot.add(rPost);
+
+      const rPad = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.75, 1.52),
+        new THREE.MeshStandardMaterial({ color: hColor, roughness: 0.4 })
       );
-      rightDoor.position.set(0, 0, -0.58);
-      rightDoor.castShadow = true;
-      rightPivot.add(rightDoor);
+      rPad.position.set(0, 1.25, -0.76);
+      rPad.castShadow = true;
+      rightPivot.add(rPad);
 
       stallGroup.add(leftPivot);
       stallGroup.add(rightPivot);
@@ -1143,55 +1177,41 @@ class TrackScene {
       });
     }
 
-    // Treliça Metálica Superior Unindo Todos os Boxes
-    const trussBeam = new THREE.Mesh(
-      new THREE.BoxGeometry(4.4, 0.7, totalGateWidth + 1.2),
-      darkSteelMat
-    );
-    trussBeam.position.set(-halfStraight, 5.0, (zMin + zMax) / 2);
-    trussBeam.castShadow = true;
-    stallGroup.add(trussBeam);
+    // Semáforo de Largada em Mastro Lateral (Sem vigas por cima dos cavalos!)
+    const lightMast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 5.5, 8), steelMat);
+    lightMast.position.set(-halfStraight + 3.3, 2.75, zMin - 1.2);
+    stallGroup.add(lightMast);
 
-    // Faixa Superior Amarela com Listras de Largada
-    const hazardStripe = new THREE.Mesh(
-      new THREE.BoxGeometry(4.45, 0.35, totalGateWidth + 1.2),
-      hazardMat
+    const lightBox = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 2.2, 0.6),
+      new THREE.MeshStandardMaterial({ color: 0x0f172a })
     );
-    hazardStripe.position.set(-halfStraight, 5.4, (zMin + zMax) / 2);
-    stallGroup.add(hazardStripe);
+    lightBox.position.set(-halfStraight + 3.3, 4.4, zMin - 1.2);
+    stallGroup.add(lightBox);
 
-    // 3 Holofotes / Luzes do Semáforo de Partida no Centro
     for (let l = -1; l <= 1; l++) {
-      const lightHousing = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.28, 0.32, 0.5, 12),
-        new THREE.MeshStandardMaterial({ color: 0x0f172a })
-      );
-      lightHousing.position.set(-halfStraight + 2.2, 5.8, ((zMin + zMax) / 2) + l * 1.5);
-      lightHousing.rotation.z = Math.PI / 2;
-      stallGroup.add(lightHousing);
-
       const bulbMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), bulbMat);
-      bulb.position.set(-halfStraight + 2.45, 5.8, ((zMin + zMax) / 2) + l * 1.5);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), bulbMat);
+      bulb.position.set(-halfStraight + 3.58, 4.4 + l * 0.65, zMin - 1.2);
       stallGroup.add(bulb);
       this.startSignalLights.push(bulb);
     }
 
     // 4 Conjuntos de Rodas Móveis Industriais de Pneu na Base
     const wheelPositions = [
-      [-halfStraight - 2.0, 0.55, zMin - 0.4],
-      [-halfStraight + 2.0, 0.55, zMin - 0.4],
-      [-halfStraight - 2.0, 0.55, zMax + 0.4],
-      [-halfStraight + 2.0, 0.55, zMax + 0.4]
+      [-halfStraight - 3.25, 0.65, zMin - 0.5],
+      [-halfStraight + 3.25, 0.65, zMin - 0.5],
+      [-halfStraight - 3.25, 0.65, zMax + 0.5],
+      [-halfStraight + 3.25, 0.65, zMax + 0.5]
     ];
     wheelPositions.forEach((wp) => {
-      const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.4, 16), rubberTireMat);
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.45, 16), rubberTireMat);
       tire.rotation.x = Math.PI / 2;
       tire.position.set(wp[0], wp[1], wp[2]);
       tire.castShadow = true;
       stallGroup.add(tire);
 
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.45, 12), steelMat);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 12), steelMat);
       hub.rotation.x = Math.PI / 2;
       hub.position.set(wp[0], wp[1], wp[2]);
       stallGroup.add(hub);
@@ -1200,7 +1220,7 @@ class TrackScene {
     this.startGate = stallGroup;
     this.scene.add(stallGroup);
 
-    // 2. Portal Monumental de Chegada (Golden Horse Arches)
+    // 2. Portal Monumental de Chegada (Golden Horse Arches) com Banner Ultra-HD 4K Nítido
     const finishGroup = new THREE.Group();
     const pillarMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.8, roughness: 0.2 });
     
@@ -1215,29 +1235,100 @@ class TrackScene {
     t2.castShadow = true;
     finishGroup.add(t2);
 
-    // Banner Superior da Linha de Chegada
+    // BANNER ULTRA-HD 4K DA LINHA DE CHEGADA (2048 x 512 com Anisotropia 16x)
     const bannerCanvas = document.createElement("canvas");
-    bannerCanvas.width = 512; bannerCanvas.height = 128;
+    bannerCanvas.width = 2048;
+    bannerCanvas.height = 512;
     const bCtx = bannerCanvas.getContext("2d");
-    bCtx.fillStyle = "#111827";
-    bCtx.fillRect(0, 0, 512, 128);
+
+    // Fundo elegante em fibra de carbono / vidro escuro azul marinho profundo
+    const gradBg = bCtx.createLinearGradient(0, 0, 0, 512);
+    gradBg.addColorStop(0.0, "#090d16");
+    gradBg.addColorStop(0.5, "#0f172a");
+    gradBg.addColorStop(1.0, "#020617");
+    bCtx.fillStyle = gradBg;
+    bCtx.fillRect(0, 0, 2048, 512);
+
+    // Moldura dupla dourada luminosa com cantos decorativos
     bCtx.strokeStyle = "#fbbf24";
-    bCtx.lineWidth = 8;
-    bCtx.strokeRect(4, 4, 504, 120);
+    bCtx.lineWidth = 14;
+    bCtx.strokeRect(16, 16, 2016, 480);
+    bCtx.strokeStyle = "rgba(251, 191, 36, 0.4)";
+    bCtx.lineWidth = 4;
+    bCtx.strokeRect(32, 32, 1984, 448);
+
+    // Faixas decorativas de largada/chegada xadrez nas laterais (Checkered Flags)
+    const drawCheckeredStrip = (startX, startY, width, height) => {
+      const tileSize = 32;
+      for (let y = startY; y < startY + height; y += tileSize) {
+        for (let x = startX; x < startX + width; x += tileSize) {
+          bCtx.fillStyle = ((x / tileSize + y / tileSize) % 2 === 0) ? "#ffffff" : "#000000";
+          bCtx.fillRect(x, y, tileSize, tileSize);
+        }
+      }
+    };
+    drawCheckeredStrip(48, 48, 160, 416);
+    drawCheckeredStrip(2048 - 208, 48, 160, 416);
+
+    // Luzes LED esportivas ao longo do topo e da base
+    for (let lx = 240; lx <= 1800; lx += 48) {
+      bCtx.fillStyle = "#fbbf24";
+      bCtx.beginPath();
+      bCtx.arc(lx, 26, 6, 0, Math.PI * 2);
+      bCtx.fill();
+
+      bCtx.beginPath();
+      bCtx.arc(lx, 486, 6, 0, Math.PI * 2);
+      bCtx.fill();
+    }
+
+    // Subtítulo Superior em Dourado Nítido
     bCtx.fillStyle = "#fbbf24";
-    bCtx.font = "bold 38px sans-serif";
+    bCtx.font = "bold 44px 'Segoe UI', Arial, sans-serif";
     bCtx.textAlign = "center";
-    bCtx.fillText("🏁 LINHA DE CHEGADA 🏁", 256, 80);
+    bCtx.fillText("★ TIKTOK LIVE GRAND PRIX DERBY ★", 1024, 130);
+
+    // Título Principal "LINHA DE CHEGADA" em Branco Incandescente com Sombra 3D
+    bCtx.shadowColor = "rgba(0, 0, 0, 0.9)";
+    bCtx.shadowBlur = 18;
+    bCtx.shadowOffsetY = 6;
+    bCtx.fillStyle = "#ffffff";
+    bCtx.font = "900 130px 'Arial Black', Impact, sans-serif";
+    bCtx.fillText("🏁 LINHA DE CHEGADA 🏁", 1024, 290);
+    bCtx.shadowBlur = 0;
+    bCtx.shadowOffsetY = 0;
+
+    // Sub-barra informativa
+    bCtx.fillStyle = "#38bdf8";
+    bCtx.font = "bold 42px 'Segoe UI', Arial, sans-serif";
+    bCtx.fillText("FINISH LINE • 1000 METROS", 1024, 390);
 
     const bannerTex = new THREE.CanvasTexture(bannerCanvas);
     bannerTex.encoding = THREE.sRGBEncoding;
-    const banner = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 3.2, this.trackWidth + 3.0),
-      new THREE.MeshStandardMaterial({ map: bannerTex })
+    bannerTex.generateMipmaps = true;
+    bannerTex.minFilter = THREE.LinearMipmapLinearFilter;
+    bannerTex.magFilter = THREE.LinearFilter;
+    bannerTex.needsUpdate = true;
+    if (this.renderer) {
+      bannerTex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    }
+
+    // Caixa suspensa 3D da Linha de Chegada com texturas nítidas e luminosas na frente e no verso
+    const bannerBoxMat = [
+      new THREE.MeshBasicMaterial({ map: bannerTex }), // +X (frente da pista)
+      new THREE.MeshBasicMaterial({ map: bannerTex }), // -X (trás da pista)
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 }), // topo
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 }), // baixo
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 }), // lateral Z+
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 }), // lateral Z-
+    ];
+    const bannerBox = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 4.4, this.trackWidth + 3.0),
+      bannerBoxMat
     );
-    banner.position.set(-halfStraight, 12.0, this.radius);
-    banner.castShadow = true;
-    finishGroup.add(banner);
+    bannerBox.position.set(-halfStraight, 12.5, this.radius);
+    bannerBox.castShadow = true;
+    finishGroup.add(bannerBox);
 
     this.finishGate = finishGroup;
     this.scene.add(finishGroup);

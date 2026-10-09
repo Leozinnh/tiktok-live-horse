@@ -405,3 +405,5 @@ class ParticleSystem {
     }
   }
 }
+
+window.ParticleSystem = ParticleSystem;

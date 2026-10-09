@@ -325,12 +325,13 @@ A pista é modelada como uma oval clássica de hipódromo com 1.000 metros de co
 ```
 
 ### 6.1 Distribuição Exata das Raias
-* A pista tem **22 metros de largura** (se estendendo de $z = 52.66\text{m}$ até $z = 74.66\text{m}$).
-* As 8 raias foram distribuídas simetricamente a partir da base $R_{\text{base}} = \text{radius} - 8.4\text{m}$:
-  $$\text{Raia}(i) = 55.26\text{m} + (i - 1) \times 2.4\text{m}$$
-  * Raia 1 (Interna) = **$55.26\text{m}$** $\to$ perfeitamente alinhada com o Box #1.
-  * Raia 8 (Externa) = **$72.06\text{m}$** $\to$ perfeitamente alinhada com o Box #8.
-* Margem de segurança de ~2.6m de cada lado em relação às cercas interna e externa: **zero cavalos escapam da pista ou atravessam cercas**.
+* A pista tem **28 metros de largura** (se estendendo de $z = 49.66\text{m}$ até $z = 77.66\text{m}$).
+* As 8 raias foram distribuídas com **3.2 metros de largura por raia** a partir da base $R_{\text{base}} = \text{radius} - 11.2\text{m}$:
+  $$\text{Raia}(i) = 52.46\text{m} + (i - 1) \times 3.2\text{m}$$
+  * Raia 1 (Interna) = **$52.46\text{m}$** $\to$ perfeitamente alinhada com o Box #1.
+  * Raia 8 (Externa) = **$74.86\text{m}$** $\to$ perfeitamente alinhada com o Box #8.
+* Margem de segurança de ~2.8m de cada lado em relação às cercas interna e externa: **zero cavalos escapam da pista ou atravessam cercas**, com muito mais espaço lateral para ultrapassagens e exibição dos modelos 3D.
+* **Cabines dos Boxes:** Cada box de espera tem **6.6 metros de comprimento** por **3.2 metros de largura** e **3.2 metros de altura**, acomodando perfeitamente qualquer modelo de corpo (inclusive Titã Juggernaut e Dragster) com folga na frente e atrás.
 
 ### 6.2 Rotação Tangencial Contínua em Curvas (`rot_y`)
 Em vez de ângulos estáticos que causavam giros bruscos, a orientação do cavalo é calculada através da derivada tangencial contínua da trajetória:
@@ -352,19 +353,36 @@ Isso faz com que os cavalos se inclinem e façam as duas curvas com naturalidade
 
 ## 7. Cenário 3D e Cercas Paramétricas (`web/static/js/scene.js`)
 
-### 7.1 Portão de Largada Móvel Profissional (Boxes e Cancelas em V)
-O antigo partidor simples foi substituído por um **Partidor Móvel de Hipódromo Profissional** completo:
-* **8 Boxes com 9 Divisórias Acolchoadas:** Painéis divisores acolchoados em verde turfe escuro (`#14532d`), frisos prateados e postes cilíndricos de aço de 4.8m.
-* **Cancelas Dianteiras Articuladas em V (*V-Doors*):** Cada um dos 8 boxes possui um par de portas acolchoadas dianteiras que permanecem **fechadas a 0º durante a votação e contagem**, segurando os animais no partidor. No segundo zero da largada (`RACING`), as 8 portas abrem para fora em um movimento mecânico fluido de 85º.
-* **Treliça Superior com Semáforo de Partida:** Viga estrutural superior com testeira esportiva de corrida e 3 holofotes LED que funcionam como **semáforo de largada**: amarelo na votação, vermelho na contagem e verde ao vivo na corrida.
-* **Placas Numeradas 3D dos Boxes:** Painéis de alta definição acima de cada box exibindo o número `#1` ao `#8` com a cor oficial do cavalo.
-* **Chassis com Pneus de Borracha:** 4 conjuntos de pneus industriais de borracha na base externa, reproduzindo os partidores móveis de turfe internacional.
+### 7.1 Portão de Largada Móvel Tubular Aberto (Céu Aberto e Visibilidade 100%)
+O partidor foi desenhado com arquitetura **tubular aberta de alta tecnologia (*open roll-cage*)**, inspirada nos maiores hipódromos do mundo (Churchill Downs e Ascot), garantindo que os cavalos e seus nomes fiquem **completamente visíveis e desobstruídos sob o céu**:
+* **Sem Teto Obstrutivo:** A antiga viga superior que cortava a visão dos cavalos e tapava as placas de nome flutuantes foi **completamente removida**. Os boxes são abertos ao céu, permitindo ver perfeitamente as cabeças, orelhas, chifres, jóqueis e os crachás holográficos (`#1 RELÂMPAGO`, etc.) de qualquer ângulo superior.
+* **Divisórias Tubulares Vazadas:** Em vez de paredes opacas que escondiam os cavalos, cada box conta com **3 postes verticais esguios de aço escovado** e **3 longarinas horizontais abertas**, permitindo enxergar através dos boxes de qualquer ângulo.
+* **Bumpers de Flanco Baixos (Cintura Baixa):** O acolchoamento verde turfe escuro (`#14532d`) com frisos cromados fica restrito à altura dos flancos ($y = 1.35\text{m}$, apenas 0.85m de altura). Abaixo dele (patas e cascos) e acima dele (dorso, asas, crina, cabeça e jóquei) **tudo é 100% aberto e visível**!
+* **Cancelas Dianteiras Vazadas em V (*V-Doors*):** Portas articuladas com hastes de aço e almofadas baixas na cor de cada cavalo. A cabeça, os olhos e o pescoço do cavalo ficam totalmente visíveis olhando para a frente da pista. No início da prova (`RACING`), abrem 85º para a frente em um movimento mecânico fluido.
+* **Placas Numeradas na Altura dos Olhos:** As placas 3D com as cores e números de cada cavalo ficam montadas no poste frontal a 2.3m de altura, sem cobrir o focinho nem os crachás flutuantes.
+* **Semáforo de Partida em Mastro Lateral:** Os 3 holofotes sincronizados ficam montados em um mastro estilizado na lateral do partidor ($z = zMin - 1.2$), visíveis pela câmera e sem sobrecarregar a visão dos boxes.
 
 ### 7.2 Cercas de Turfe de Trilho Duplo com Flores
 * **Cercas de Trilho Duplo (360 Graus):** Malha paramétrica contínua com **trilho superior a 1.35m** e **trilho intermediário a 0.75m**, além de tampas arredondadas no topo de cada poste vertical em PVC branco puro.
 * **Canteiros de Flores na Sebe Viva Interna:** A sebe viva que contorna o perímetro interno da pista agora conta com **canteiros floridos multicoloridos** (petúnias vermelhas, flores amarelas, brancas e lilases).
 
-### 7.3 Elementos do Cenário e Ambientação
+### 7.3 Portal Monumental e Banner Ultra-HD 4K da Linha de Chegada
+* **Banner de Chegada Ultra-HD (2048 x 512):** O banner foi construído como uma caixa suspensa 3D independente com iluminação própria em `MeshBasicMaterial`, **filtragem anisotrópica máxima (16x)** e mipmapping ativado, permanecendo **nítido, luminoso e legível tanto de dia quanto à noite**:
+  * Face dianteira (+X) e traseira (-X) texturizadas em altíssima resolução sem distorções de geometria.
+  * Fundo esportivo em fibra de carbono e vidro azul marinho escuro.
+  * Moldura dupla dourada com cantos decorativos e luzes LED esportivas em toda a extensão.
+  * Faixas laterais com bandeiras quadriculadas de turfe (*checkered flags*).
+  * Subtítulo em dourado: `"★ TIKTOK LIVE GRAND PRIX DERBY ★"`.
+  * Título monumental em branco incandescente com sombra 3D: `"🏁 LINHA DE CHEGADA 🏁"`.
+  * Indicação métrica: `"FINISH LINE • 1000 METROS"`.
+
+### 7.4 Movimento Cinético Contínuo e Fluidez 60-144 FPS (Dead Reckoning)
+Para eliminar qualquer sensação de travamento (*stuttering*) ou engasgos decorrentes de variações naturais de latência nos pacotes de rede WebSocket:
+* **Previsão Cinemática Contínua por Frame:** Em cada quadro do `requestAnimationFrame`, a posição do cavalo avança no espaço 3D usando seu vetor velocidade instantâneo:
+  $$x_{\text{novo}} = x + v \cdot \sin(\text{rot}_y) \cdot dt$$
+  $$z_{\text{novo}} = z + v \cdot \cos(\text{rot}_y) \cdot dt$$
+* **Amortecimento Ponderado por Tempo Real:** As coordenadas do servidor são integradas suavemente com fator $\min(1.0, dt \times 9.0)$, absorvendo imperceptivelmente qualquer atraso ou jitter de rede sem desacelerações repentinas.
+* **Resultado:** Animação de corrida sedosa e ultra-fluida a 60 FPS estáveis (e até 120/144 FPS em monitores de alta taxa de atualização).
 * **Torre dos Comissários e Cabine de Transmissão (*Stewards Tower*):** Edifício de observação envidraçado de 2 andares perto da linha de chegada, com base de madeira nobre, janelões panorâmicos em vidro azul espelhado, telhado colonial pontudo e mastro de antena esportiva.
 * **Tendas Brancas de Paddock VIP & Hospitality:** 3 gazebos brancos de evento com cúpulas cônicas, colunas brancas e mesas redondas posicionadas na área de hospitalidade à beira da reta.
 * **Cais de Madeira no Lago Ornamental:** Deck rústico de madeira com postes de amarração náuticos avançando sobre a água límpida do lago central.

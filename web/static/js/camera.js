@@ -109,7 +109,7 @@ class CinematicCameraDirector {
           128.0 + Math.sin(a) * 14.0
         );
         // Olhar passeia devagar pelos boxes, sem perder a área de largada
-        this.targetLookAt.set(-148.0 + Math.sin(a * 0.9) * 4.0, 4.0, 70.0);
+        this.targetLookAt.set(-148.0 + Math.sin(a * 0.9) * 4.0, 3.5, 63.66);
         break;
       }
 
