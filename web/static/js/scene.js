@@ -387,7 +387,7 @@ class TrackScene {
   }
 
   buildGroundAndInfield() {
-    // 1. Gramado Base Gigante (com textura procedural de grama)
+    // 1. Gramado Base Gigante (com textura procedural de grama uniforme)
     const grassGeo = new THREE.PlaneGeometry(1600, 1400, 32, 32);
     const grassMat = new THREE.MeshLambertMaterial({
       map: this.criarTexturaGrama(48, 42, "#226926"),
@@ -399,24 +399,7 @@ class TrackScene {
     grass.receiveShadow = true;
     this.scene.add(grass);
 
-    // 2. Gramado Infield Central Texturizado com Faixas de Corte
-    // (duas texturas — uma por tom do corte — reaproveitadas nas faixas)
-    const texturaCorteClaro = this.criarTexturaGrama(12, 1.6, "#2e7d32");
-    const texturaCorteEscuro = this.criarTexturaGrama(12, 1.6, "#256e29");
-    for (let strip = -120; strip <= 120; strip += 20) {
-      const stripGeo = new THREE.PlaneGeometry(280, 18);
-      const stripMat = new THREE.MeshLambertMaterial({
-        map: Math.abs(strip) % 40 === 0 ? texturaCorteClaro : texturaCorteEscuro,
-        side: THREE.DoubleSide,
-      });
-      const stripMesh = new THREE.Mesh(stripGeo, stripMat);
-      stripMesh.rotation.x = -Math.PI / 2;
-      stripMesh.position.set(0, -0.08, strip * 0.4);
-      stripMesh.receiveShadow = true;
-      this.scene.add(stripMesh);
-    }
-
-    // 3. Lago Ornamental no Infield
+    // 2. Lago Ornamental no Infield
     const lakeGeo = new THREE.RingGeometry(18, 42, 36);
     const lakeMat = new THREE.MeshStandardMaterial({
       color: 0x0ea5e9,
