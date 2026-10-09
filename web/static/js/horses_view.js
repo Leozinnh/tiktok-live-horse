@@ -318,11 +318,20 @@ class HorseVisualManager {
           this.particles.emitDust(horseObj.group.position, speed);
         }
 
-        // Animação de asas (Pégaso)
+        // Animação de asas graciosa e fluida (Pégaso)
         if (horseObj.wings) {
-          const wingAngle = Math.sin(horseObj.phase * 2.2) * 0.35;
-          horseObj.wings.left.rotation.z = 0.25 + wingAngle;
-          horseObj.wings.right.rotation.z = -(0.25 + wingAngle);
+          const t = horseObj.phase * 2.2;
+          const flap = Math.sin(t);
+          const flapCos = Math.cos(t);
+
+          // Batimento tridimensional: abre e varre para trás na descida, recolhe suave na subida
+          horseObj.wings.left.rotation.z = 0.22 + flap * 0.45;
+          horseObj.wings.left.rotation.y = 0.12 + flapCos * 0.18;
+          horseObj.wings.left.rotation.x = -0.15 + flap * 0.1;
+
+          horseObj.wings.right.rotation.z = -(0.22 + flap * 0.45);
+          horseObj.wings.right.rotation.y = -(0.12 + flapCos * 0.18);
+          horseObj.wings.right.rotation.x = -0.15 + flap * 0.1;
         }
       } else {
         // Em repouso nos boxes
@@ -333,9 +342,15 @@ class HorseVisualManager {
         horseObj.legs.backL.upper.rotation.x = 0;
         horseObj.legs.backR.upper.rotation.x = 0;
 
+        // Asas elegantemente recolhidas e dobradas para trás contra o dorso
         if (horseObj.wings) {
-          horseObj.wings.left.rotation.z = 0.15;
-          horseObj.wings.right.rotation.z = -0.15;
+          horseObj.wings.left.rotation.z = -0.2;
+          horseObj.wings.left.rotation.y = -0.35;
+          horseObj.wings.left.rotation.x = 0.12;
+
+          horseObj.wings.right.rotation.z = 0.2;
+          horseObj.wings.right.rotation.y = 0.35;
+          horseObj.wings.right.rotation.x = 0.12;
         }
       }
 

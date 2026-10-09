@@ -190,6 +190,8 @@ async def test_abertura_anuncia_o_clima_da_corrida(tmp_path):
 @pytest.mark.asyncio
 async def test_cada_corrida_troca_o_clima_e_anuncia(tmp_path):
     """Ciclo completo: corrida nova = clima novo, avisado de novo."""
+    import random
+    random.seed(42)
     from game.director import DirectorState
 
     voz = FakeNarrador()
