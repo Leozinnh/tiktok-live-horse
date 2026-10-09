@@ -133,8 +133,8 @@ class TrackScene {
     this.scene.background = new THREE.Color(0x7dd3fc);
     this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.0014);
 
-    // 2. Câmera
-    this.camera = new THREE.PerspectiveCamera(48, width / height, 1.0, 1800.0);
+    // 2. Câmera Panorâmica Esportiva para Transmissão Vertical 9:16
+    this.camera = new THREE.PerspectiveCamera(54, width / height, 1.0, 1800.0);
     this.camera.position.set(-210, 36, 140);
     this.camera.lookAt(new THREE.Vector3(-145, 4, 75));
 

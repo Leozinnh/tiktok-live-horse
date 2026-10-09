@@ -51,6 +51,8 @@ class HorseState:
 
         # O "dia do cavalo": sorteado a cada corrida (ver _draw_form e reset)
         self.form: float = self._draw_form()
+        # Tempo de reação no partidor (largada orgânica aleatória para alternar quem sai na frente)
+        self.start_reaction: float = random.uniform(0.68, 1.38)
         # Arrancadas de sorte: duração restante e multiplicador do surto atual
         self.surge_remaining: float = 0.0
         self.surge_mult: float = 1.0
@@ -75,6 +77,8 @@ class HorseState:
         self.cheer_count = 0
         self.supporter_count = 0
         self.form = self._draw_form()
+        # Tempo de reação no partidor (largada orgânica aleatória para alternar quem sai na frente)
+        self.start_reaction = random.uniform(0.68, 1.38)
         self.surge_remaining = 0.0
         self.surge_mult = 1.0
         self.surge_count = 0
@@ -233,9 +237,18 @@ class HorseState:
             * self.surge_mult
             * organic_jitter
         )
+
+        # Reação aleatória de partidor nos primeiros 60m (permite que qualquer cavalo largue na frente)
+        if self.distance < 60.0:
+            fade = (60.0 - self.distance) / 60.0
+            gate_jump = 1.0 + (self.start_reaction - 1.0) * fade
+            target_speed *= gate_jump
         
         # Interpolação suave de aceleração (lerp)
         accel_rate = self.config.acceleration * 1.5 * dt
+        if self.distance < 45.0:
+            fade_accel = (45.0 - self.distance) / 45.0
+            accel_rate = (8.0 * self.start_reaction) * 1.5 * dt * fade_accel + accel_rate * (1.0 - fade_accel)
         self.speed += (target_speed - self.speed) * min(1.0, accel_rate)
         
         # Atualiza distância
@@ -251,6 +264,7 @@ class HorseState:
             self.distance = track_length
             self.finished = True
             self.finish_time_ms = round(race_elapsed_ms - (1.0 - frac) * dt * 1000.0, 1)
+            self.speed = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         return {

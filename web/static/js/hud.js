@@ -370,6 +370,16 @@ class BroadcastHUD {
     }
   }
 
+  getContrastColor(hexColor) {
+    if (!hexColor || typeof hexColor !== "string" || !hexColor.startsWith("#")) return "#ffffff";
+    const hex = hexColor.replace("#", "");
+    const r = parseInt(hex.slice(0, 2), 16) || 0;
+    const g = parseInt(hex.slice(2, 4), 16) || 0;
+    const b = parseInt(hex.slice(4, 6), 16) || 0;
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    return yiq >= 165 ? "#0f172a" : "#ffffff";
+  }
+
   renderVotingPanel(state, stateData) {
     const summary = stateData.voting_summary || {};
     const horses = Object.values(summary);
@@ -379,9 +389,10 @@ class BroadcastHUD {
       // de entrada e a cartela piscava a cada voto novo no chat.
       let cardsHtml = "";
       horses.forEach((h) => {
+        const textColor = this.getContrastColor(h.color_hex);
         cardsHtml += `
           <div class="horse-vote-card" style="border-color: ${h.color_hex};">
-            <div class="num-badge" style="background: ${h.color_hex};">#${h.horse_id}</div>
+            <div class="num-badge" style="background: ${h.color_hex}; color: ${textColor};">#${h.horse_id}</div>
             <div class="info">
               <div class="name">${h.horse_name}</div>
               <div class="supporters" data-horse="${h.horse_id}">👥 ${h.supporters_count} apoiadores</div>
@@ -465,11 +476,12 @@ class BroadcastHUD {
     let rowsHtml = "";
     leaderboard.forEach((h) => {
       const isP1 = (h.position === 1);
+      const textColor = this.getContrastColor(h.color_hex);
       rowsHtml += `
         <div class="tower-row ${isP1 ? 'p1' : ''}" style="border-left-color: ${h.color_hex};">
           <div class="left">
             <span class="tower-pos">${h.position}</span>
-            <span class="tower-badge" style="background: ${h.color_hex};">#${h.horse_id}</span>
+            <span class="tower-badge" style="background: ${h.color_hex}; color: ${textColor};">#${h.horse_id}</span>
             <span class="tower-name">${h.name}</span>
           </div>
           <div class="right">
@@ -495,8 +507,9 @@ class BroadcastHUD {
       let dotsHtml = "";
       horses.forEach((h) => {
         const pct = Math.min(98, Math.max(1, (h.distance / trackLength) * 100));
+        const dotTextColor = this.getContrastColor(h.color_hex);
         dotsHtml += `
-          <div class="horse-progress-dot" style="left: ${pct}%; background: ${h.color_hex};" title="#${h.number} ${h.name}">
+          <div class="horse-progress-dot" style="left: ${pct}%; background: ${h.color_hex}; color: ${dotTextColor};" title="#${h.number} ${h.name}">
             ${h.number}
           </div>
         `;

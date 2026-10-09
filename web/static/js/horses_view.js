@@ -287,9 +287,9 @@ class HorseVisualManager {
       while (diffRot > Math.PI) diffRot -= Math.PI * 2;
       horseObj.group.rotation.y += diffRot * 0.45;
 
-      // Animação Procedural de Galope sincronizada à velocidade
-      const speed = hData.speed || 0.0;
-      if (speed > 1.0) {
+      // Animação Procedural de Galope sincronizada à velocidade (interrompe quando cruzar a chegada)
+      const speed = hData.finished ? 0.0 : (hData.speed || 0.0);
+      if (!hData.finished && speed > 1.0) {
         horseObj.phase += speed * dt * 0.8;
 
         // Movimento do tronco (sobe e desce + pitch)
@@ -334,13 +334,18 @@ class HorseVisualManager {
           horseObj.wings.right.rotation.x = -0.15 + flap * 0.1;
         }
       } else {
-        // Em repouso nos boxes
+        // Em repouso nos boxes ou parado na linha de chegada (parado naturalmente com as 4 patas no chão)
         horseObj.body.position.y = 2.4 + Math.sin(Date.now() * 0.003 + horseObj.id) * 0.04;
         horseObj.body.rotation.x = 0;
+        horseObj.neck.rotation.x = -Math.PI / 5;
         horseObj.legs.frontL.upper.rotation.x = 0;
+        horseObj.legs.frontL.lower.rotation.x = 0;
         horseObj.legs.frontR.upper.rotation.x = 0;
+        horseObj.legs.frontR.lower.rotation.x = 0;
         horseObj.legs.backL.upper.rotation.x = 0;
+        horseObj.legs.backL.lower.rotation.x = 0;
         horseObj.legs.backR.upper.rotation.x = 0;
+        horseObj.legs.backR.lower.rotation.x = 0;
 
         // Asas elegantemente recolhidas e dobradas para trás contra o dorso
         if (horseObj.wings) {

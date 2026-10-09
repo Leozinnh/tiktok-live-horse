@@ -549,40 +549,43 @@ html, body {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  background: linear-gradient(180deg, rgba(51, 65, 85, 0.92), rgba(15, 23, 42, 0.94));
-  border: 2px solid transparent;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98));
+  border: 2px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
   padding: 8px 6px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.55);
   transition: transform 0.2s;
 }
 
 .horse-vote-card .num-badge {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 15px;
   font-weight: 900;
-  color: #fff;
   margin-bottom: 4px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
 }
 
 .horse-vote-card .info .name {
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 84px;
+  max-width: 86px;
 }
 
 .horse-vote-card .info .supporters {
   font-size: 11px;
-  color: var(--text-sub);
+  color: #e2e8f0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
   margin-top: 2px;
 }
 

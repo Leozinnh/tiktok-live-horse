@@ -45,6 +45,30 @@ class CinematicCameraDirector {
     const normX = Math.cos(leaderRot);
     const normZ = -Math.sin(leaderRot);
 
+    // Cálculo do centro do pelotão para enquadrar todos os 8 cavalos
+    let packCenterX = 0, packCenterY = 0, packCenterZ = 0;
+    const trackedList = activeHorses.length > 0 ? activeHorses : horses;
+    if (trackedList.length > 0) {
+      for (let h of trackedList) {
+        const p = this.horseManager.getHorsePosition(h.id);
+        packCenterX += p.x;
+        packCenterY += p.y;
+        packCenterZ += p.z;
+      }
+      packCenterX /= trackedList.length;
+      packCenterY /= trackedList.length;
+      packCenterZ /= trackedList.length;
+    } else {
+      packCenterX = leaderPos.x;
+      packCenterY = leaderPos.y;
+      packCenterZ = leaderPos.z;
+    }
+
+    // Ponto focal balanceado entre o líder e o centro do pelotão (mantém todos visíveis!)
+    const focusX = leaderPos.x * 0.45 + packCenterX * 0.55;
+    const focusY = leaderPos.y * 0.45 + packCenterY * 0.55;
+    const focusZ = leaderPos.z * 0.45 + packCenterZ * 0.55;
+
     // 1. Seleção de Modo com base na fase da transmissão
     if (directorState === "VOTING" || directorState === "COUNTDOWN") {
       this.mode = "CAM_START";
@@ -93,28 +117,28 @@ class CinematicCameraDirector {
         // Câmera guindaste/aérea esportiva: bem afastada para trás e para cima
         // Enquadra perfeitamente todos os 8 cavalos, distâncias e ultrapassagens
         this.targetPos.set(
-          leaderPos.x - fwdX * 44.0 + normX * 18.0,
-          leaderPos.y + 24.0,
-          leaderPos.z - fwdZ * 44.0 + normZ * 18.0
+          focusX - fwdX * 58.0 + normX * 18.0,
+          focusY + 30.0,
+          focusZ - fwdZ * 58.0 + normZ * 18.0
         );
         this.targetLookAt.set(
-          leaderPos.x + fwdX * 8.0,
-          leaderPos.y + 1.5,
-          leaderPos.z + fwdZ * 8.0
+          focusX + fwdX * 6.0,
+          focusY + 2.0,
+          focusZ + fwdZ * 6.0
         );
         break;
 
       case "CAM_SIDE":
         // Visão lateral de transmissão de TV (estilo helicóptero esportivo)
         this.targetPos.set(
-          leaderPos.x - fwdX * 12.0 + normX * 46.0,
-          leaderPos.y + 28.0,
-          leaderPos.z - fwdZ * 12.0 + normZ * 46.0
+          focusX - fwdX * 14.0 + normX * 52.0,
+          focusY + 32.0,
+          focusZ - fwdZ * 14.0 + normZ * 52.0
         );
         this.targetLookAt.set(
-          leaderPos.x + fwdX * 6.0,
-          leaderPos.y + 1.5,
-          leaderPos.z + fwdZ * 6.0
+          focusX + fwdX * 4.0,
+          focusY + 2.0,
+          focusZ + fwdZ * 4.0
         );
         break;
 
