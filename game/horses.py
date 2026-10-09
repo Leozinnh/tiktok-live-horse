@@ -38,20 +38,40 @@ class HorseState:
         self.speed: float = 0.0
         self.stamina: float = 100.0
         self.finished: bool = False
-        self.finish_time_ms: int = 0
+        self.finish_time_ms: float = 0.0
         self.active_boosts: List[ActiveBoost] = []
         self.cheer_count: int = 0
         self.supporter_count: int = 0
-        
+
+        # O "dia do cavalo": sorteado a cada corrida (ver _draw_form e reset)
+        self.form: float = self._draw_form()
+        # Arrancadas de sorte: duração restante e multiplicador do surto atual
+        self.surge_remaining: float = 0.0
+        self.surge_mult: float = 1.0
+        self.surge_count: int = 0
+
+    def _draw_form(self) -> float:
+        """
+        O "dia do cavalo": cada corrida sorteia uma forma levemente boa ou ruim.
+        Escala com a sorte (FANTASMA varia mais, TITÃ quase não) e é limitada a
+        ±3% — o bastante para que nenhuma corrida esteja decidida na largada.
+        """
+        sigma = 0.010 * (self.config.luck / 10.0) + 0.002
+        return max(0.97, min(1.03, 1.0 + random.gauss(0.0, sigma)))
+
     def reset(self) -> None:
         self.distance = 0.0
         self.speed = 0.0
         self.stamina = 100.0
         self.finished = False
-        self.finish_time_ms = 0
+        self.finish_time_ms = 0.0
         self.active_boosts = []
         self.cheer_count = 0
         self.supporter_count = 0
+        self.form = self._draw_form()
+        self.surge_remaining = 0.0
+        self.surge_mult = 1.0
+        self.surge_count = 0
 
     def add_boost(
         self,
@@ -72,63 +92,75 @@ class HorseState:
 
     def calculate_personality_factor(self, progress_ratio: float, current_rank: int) -> float:
         """
-        Modulador comportamental de 0.0 a 1.0 de progresso na pista.
+        Modulador comportamental (0.0 a 1.0 de progresso na pista).
+
+        Regra de ouro: para cada personalidade, a MÉDIA HARMÔNICA do fator é
+        ~1.00 — soma da fração da corrida dividida pelo fator (a conta está
+        anotada em cada faixa). Média harmônica e não aritmética porque o que
+        decide a corrida é o TEMPO (tempo = distância/velocidade): um fator
+        baixo no início custa mais tempo do que a média simples sugere. Sem
+        essa conta, personalidade virava vantagem fixa de verdade e as mesmas
+        posições se repetiam em toda corrida.
         """
         p = self.personality
         factor = 1.0
-        
+
         if p == "FRONT_RUNNER":  # Relâmpago
-            # Início estrondoso, queda drástica na reta final
+            # Explode na largada e paga a conta na reta final
+            # 0.40/1.075 + 0.35/1.00 + 0.25/0.925 = 0.99
             if progress_ratio < 0.4:
-                factor = 1.12
+                factor = 1.075
             elif progress_ratio < 0.75:
-                factor = 1.02
+                factor = 1.00
             else:
-                factor = 0.90  # Cansaço acentuado
-                
+                factor = 0.925
+
         elif p == "CLOSER":  # Trovão
-            # Início reservado, arranque avassalador no final
+            # Economiza e dispara nos últimos 250m
+            # 0.50/0.945 + 0.25/1.00 + 0.25/1.145 = 1.00
             if progress_ratio < 0.5:
-                factor = 0.94
+                factor = 0.945
             elif progress_ratio < 0.75:
-                factor = 1.04
+                factor = 1.00
             else:
-                factor = 1.15  # Surto final
-                
+                factor = 1.145
+
         elif p == "PACER":  # Furacão
-            # Totalmente estável do início ao fim
-            factor = 1.01
-            
+            # Metrônomo: o mesmo ritmo do início ao fim
+            factor = 1.00
+
         elif p == "DRAFTER":  # Raio
-            # Agressivo se estiver atrás do 1º lugar (no vácuo)
+            # Forte no vácuo; QUANDO assume a ponta, perde rendimento de verdade
+            # (0.78/1.018 + 0.22/0.94 = 1.00 — o vaivém fecha a conta: sem a
+            # penalidade de líder, o vácuo virava motor perpétuo e ele vencia
+            # ~80% das corridas)
             if current_rank > 1:
-                factor = 1.07
+                factor = 1.018
             else:
-                factor = 0.98
-                
+                factor = 0.94
+
         elif p == "CORNER_SPECIALIST":  # Pantera
-            # Pista oval tem curvas em 20%-40% e 70%-90%
+            # Pista oval tem curvas em 20%-40% e 70%-90% do traçado
+            # 0.40/1.06 (curvas) + 0.60/0.97 (retas) = 1.00
             in_curve = (0.20 <= progress_ratio <= 0.40) or (0.70 <= progress_ratio <= 0.90)
-            factor = 1.08 if in_curve else 0.98
-            
+            factor = 1.06 if in_curve else 0.97
+
         elif p == "JUGGERNAUT":  # Titã
-            # Lento no início, constante e imparável
+            # Arrancada pesada, mas depois não para mais
+            # 0.20/0.90 + 0.80/1.03 = 1.00
             if progress_ratio < 0.2:
-                factor = 0.92
+                factor = 0.90
             else:
                 factor = 1.03
-                
+
         elif p == "COLD_TACTICIAN":  # Nevasca
-            # Mantém ritmo equilibrado
-            factor = 1.02
-            
+            # Ritmo frio e constante; quem decide é o clima (ver weather_events)
+            factor = 1.00
+
         elif p == "WILDCARD":  # Fantasma
-            # Sorte caótica: pode ter picos aleatórios
-            if random.random() < 0.15:
-                factor = 1.18
-            else:
-                factor = 0.98
-                
+            # Base neutra: o caos vem das arrancadas de sorte (ver update_physics)
+            factor = 1.00
+
         return factor
 
     def update_physics(
@@ -160,14 +192,25 @@ class HorseState:
         # 3. Fator de personalidade
         personality_mult = self.calculate_personality_factor(progress, current_rank)
         
-        # 4. Fadiga da stamina
-        stamina_loss = dt * (3.0 - (self.config.stamina * 0.15))
+        # 4. Fadiga da stamina: agora pesa de verdade na reta final
+        #    (quem tem 6.3 de stamina termina bem mais lento que quem tem 10)
+        stamina_loss = dt * (2.7 - (self.config.stamina * 0.16))
         self.stamina = max(10.0, self.stamina - stamina_loss)
-        stamina_mult = 0.85 + (self.stamina / 100.0) * 0.15
-        
-        # 5. Ruído orgânico de galope
+        stamina_mult = 0.86 + (self.stamina / 100.0) * 0.14
+
+        # 5. Sorte: o "dia do cavalo" (form) + arrancadas surpresa
+        #    Sorte alta = arrancadas mais frequentes e mais fortes (Fantasma),
+        #    mas ninguém fica imune a um dia ruim.
+        if self.surge_remaining > 0.0:
+            self.surge_remaining -= dt
+        else:
+            self.surge_mult = 1.0
+            if random.random() < dt * (0.03 + self.config.luck * 0.012):
+                self.surge_remaining = random.uniform(0.4, 1.2)
+                self.surge_mult = 1.05 + self.config.luck * 0.003
+                self.surge_count += 1
         organic_jitter = 1.0 + random.uniform(-0.02, 0.02) * (self.config.luck / 10.0)
-        
+
         # Velocidade instantânea alvo
         target_speed = (
             self.config.base_speed
@@ -176,6 +219,8 @@ class HorseState:
             * boost_mult
             * (1.0 + cheer_bonus)
             * stamina_mult
+            * self.form
+            * self.surge_mult
             * organic_jitter
         )
         
@@ -184,13 +229,18 @@ class HorseState:
         self.speed += (target_speed - self.speed) * min(1.0, accel_rate)
         
         # Atualiza distância
+        prev_distance = self.distance
         self.distance += self.speed * dt
-        
-        # Verifica linha de chegada
+
+        # Verifica linha de chegada — tempo com precisão de foto-finish:
+        # cruzou no meio do tick? O tempo é o instante exato do cruzamento,
+        # não o fim do tick (sem isso, empates falsos e 17ms de erro).
         if self.distance >= track_length:
+            step = self.distance - prev_distance
+            frac = 1.0 if step <= 0.0 else (track_length - prev_distance) / step
             self.distance = track_length
             self.finished = True
-            self.finish_time_ms = race_elapsed_ms
+            self.finish_time_ms = round(race_elapsed_ms - (1.0 - frac) * dt * 1000.0, 1)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

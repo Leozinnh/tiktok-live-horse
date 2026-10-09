@@ -54,10 +54,15 @@ class CinematicCameraDirector {
       const currentTrackedHorse = horses.find((h) => h.id === targetHorseId);
       const trackedDist = currentTrackedHorse ? currentTrackedHorse.distance : 0;
 
-      if (trackedDist >= 870 && trackedDist < 1000) {
-        // Reta final e linha de chegada enquanto o cavalo ativo estiver cruzando
+      const winnerDefined = !!engineData.winner_horse_id;
+      if (trackedDist >= 895 && trackedDist < 1000) {
+        // Curva final do cavalo ativo rumo à linha (x=-150)
         this.mode = "CAM_FINISH";
-      } else if (activeHorses.length === 0 && engineData.winner_horse_id) {
+      } else if (winnerDefined && activeHorses.length > 0 && trackedDist >= 800) {
+        // Vencedor já cruzou: fica na linha mostrando os PRÓXIMOS cruzamentos
+        // (o alvo é o cavalo mais adiantado da disputa)
+        this.mode = "CAM_FINISH";
+      } else if (activeHorses.length === 0 && winnerDefined) {
         // Todos cruzaram, já foca no vencedor celebrando
         this.mode = "CAM_PODIUM";
       } else {
@@ -69,11 +74,20 @@ class CinematicCameraDirector {
 
     // 2. Cálculo dos pontos de câmera bem mais afastados (ampla visão esportiva)
     switch (this.mode) {
-      case "CAM_START":
-        // Vista aérea panorâmica dos boxes de largada e arquibancadas
-        this.targetPos.set(-210, 36, 140);
-        this.targetLookAt.set(-145, 4.0, 75);
+      case "CAM_START": {
+        // Deriva cinematográfica ao redor dos boxes de largada: no menu de
+        // votação a câmera ficava 100% parada e parecia que a tela travou.
+        // Órbita lenta (~22s por volta) + balanço vertical suave.
+        const a = this.timer * 0.28;
+        this.targetPos.set(
+          -215.0 + Math.cos(a) * 18.0,
+          33.0 + Math.sin(a * 1.7) * 3.0,
+          128.0 + Math.sin(a) * 14.0
+        );
+        // Olhar passeia devagar pelos boxes, sem perder a área de largada
+        this.targetLookAt.set(-148.0 + Math.sin(a * 0.9) * 4.0, 4.0, 70.0);
         break;
+      }
 
       case "CAM_CHASE":
         // Câmera guindaste/aérea esportiva: bem afastada para trás e para cima
@@ -104,11 +118,20 @@ class CinematicCameraDirector {
         );
         break;
 
-      case "CAM_FINISH":
-        // Câmera angular na reta de chegada enquadrando o portal e a aproximação
-        this.targetPos.set(186, 15, this.scene.radius + 24.0);
-        this.targetLookAt.set(142, 2.8, this.scene.radius + 4.0);
+      case "CAM_FINISH": {
+        // Câmera de chegada ancorada na LINHA REAL da pista (x=-150):
+        // fica por fora da curva final olhando o portal e o alvo é o cavalo
+        // que está cruzando. Quando o vencedor passa, o alvo vira o próximo
+        // da disputa e a câmera acompanha — antes ela travava num ponto fixo
+        // do outro lado da pista e a chegada dos demais ficava fora de quadro.
+        const line = this.scene.finishLinePosition || {
+          x: -this.scene.straightLen / 2.0,
+          z: this.scene.radius
+        };
+        this.targetPos.set(line.x - 42.0, 17.0, line.z + 34.0);
+        this.targetLookAt.set(leaderPos.x, leaderPos.y + 1.6, leaderPos.z);
         break;
+      }
 
       case "CAM_PODIUM":
         // Órbita cinematográfica 360º ampla em torno do vencedor

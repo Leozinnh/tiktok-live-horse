@@ -37,7 +37,8 @@ O servidor iniciará instantaneamente na porta **8000**.
    - **Altura:** `1920`
    - **Taxa de Quadros (FPS):** `60`
    - **Controlar áudio via OBS:** Marque para monitorar e mixar o som direto pelo OBS.
-4. Clique em **OK**. A pista 3D, cavalos animados, câmeras de TV e HUD esportivo aparecerão imediatamente.
+4. Clique em **OK**. A pista 3D, cavalos animados, câmeras de TV e HUD esportivo aparecerão imediatamente — a barra do topo mostra a **corrida atual** (com flash a cada prova nova), o **clima da pista** (informação de aposta!), a fase colorida (**AO VIVO** em vermelho) e o relógio contextual (segundos na votação, **distância do líder** na corrida).
+5. **Voz da corrida (TTS):** a narração falada sai pelo **alto-falante padrão do Windows** (fora do navegador). Adicione também **Áudio do Desktop** à cena — ou **Captura de Áudio do Aplicativo** apontando para o `python.exe` — senão a voz não chega em quem assiste. (Detalhes em [🔊 Narração por Voz](#-narração-por-voz-tts).)
 
 ---
 
@@ -99,7 +100,7 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
 O jogo roda infinitamente sem necessidade de operador humano:
 1. **ESCOLHA SEU CAVALO (30s):** Grade na tela com os 8 cavalos e contadores de torcida ao vivo. O chat comenta `1` a `8` ou o nome do cavalo.
 2. **CONTAGEM REGRESSIVA (5s):** 5.. 4.. 3.. 2.. 1.. com bips sonoros e portões dos boxes se preparando.
-3. **CORRIDA AO VIVO (~35s):** Física a 60 ticks/s, câmeras cinematográficas inteligentes, galope procedural sincronizado, poeira de cascos, cercas contínuas em 360º e turbos.
+3. **CORRIDA AO VIVO (~35s):** Física a 60 ticks/s, **locução ao vivo** (abertura, disputa e reta final narradas pelo locutor; chegada apertada ganha foto-finish), câmeras cinematográficas inteligentes, galope procedural sincronizado, poeira de cascos, cercas contínuas em 360º e turbos.
 4. **DISPUTA DE CHEGADA E PÓDIO (8s):** Ao cruzar a linha de chegada, a câmera acompanha a disputa pelo 2º e 3º lugares e 3.5s depois avança para o pódio com troféus, fanfarra orquestral e chuva de confetes em órbita 360º.
 5. **XP E NÍVEIS (6s):** Distribuição de XP no banco de dados SQLite e aviso sonoro de "Level Up".
 6. **TOP JOGADORES (10s):** Exibição do ranking geral dos maiores apoiadores da LIVE.
@@ -114,6 +115,20 @@ Quando for iniciar sua transmissão ao vivo no TikTok:
 python main.py --tiktok-user SEU_USUARIO_TIKTOK --test-mode=False
 ```
 *(Substitua `SEU_USUARIO_TIKTOK` pelo seu nome de usuário do TikTok sem o `@`).*
+
+---
+
+## 🔊 Narração por Voz (TTS)
+
+A live ganha locução: presente, chegada, votação aberta, largada, vencedor **e a própria corrida** viram FALA — mesmo motor do `tiktok-live-pixel` (edge-tts gera o mp3 → MCI do Windows toca → arquivo apagado na hora). A voz sabe quem presenteou e qual o cavalo: *"Ana mandou 5x Rose pro Relâmpago!"*. Nome de cavalo em CAIXA ALTA é falado em caixa normal, senão soa grito (e nome curto sai letra por letra).
+
+- **Locução ao vivo:** durante a prova o locutor chama a **abertura** (120m), o **placar** (320m, 620m e 760m — sempre citando o trio da frente), a **disputa** (480m) e a **reta final** (880m) — ~1 fala a cada 5s, e a votação ganha lembrete a cada 12s. Quando a chegada é decidida por menos de 50ms, entra a **foto-finish** antes do anúncio do campeão.
+- **Ligar/desligar:** `config/config.json` → `"tts": { "active": true }`. Vem ligada.
+- **Vozes:** `tts.voz` (padrão `pt-BR-FranciscaNeural`) e `tts.vozes` — lista por onde as falas rodiziam; lista vazia = sempre a `tts.voz`. As três vozes pt-BR do serviço já vêm configuradas no rodízio.
+- **Quem entra na live** ganha um oi falado. `tts.anunciar_entrada: false` cala só a chegada e mantém o resto (útil em live muito cheia).
+- **Frases:** ficam em `game/falas.py` — ou troque por listas próprias em `tts.falas`, `tts.boas_vindas`, `tts.votacao`, `tts.largada`, `tts.vencedor` e nas da locução (`tts.corrida_abertura`, `tts.corrida_disputa`, `tts.corrida_placar`, `tts.reta_final`, `tts.foto_finish`) no config, sem tocar em código.
+- **Teste de ouvido:** `python tools/smoke_audio.py` fala uma de cada momento, sem abrir live.
+- **Não precisa da biblioteca de voz?** O jogo segue mudo e em frente: falha de áudio vira log, nunca derruba a corrida.
 
 ---
 

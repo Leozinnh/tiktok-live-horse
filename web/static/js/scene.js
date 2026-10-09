@@ -24,6 +24,11 @@ class TrackScene {
     this.finishGate = null;
     this.startGate = null;
 
+    // Posição da linha de chegada REAL da pista (distância 1000 = fim da
+    // curva 4, em x=-150). É a mesma âncora usada pela física — a câmera de
+    // chegada e o HUD dependem dela, então fica definida já no construtor.
+    this.finishLinePosition = new THREE.Vector3(-this.straightLen / 2.0, 0, this.radius);
+
     this.currentWeather = "CLEAR";
     this.init();
   }
@@ -289,7 +294,10 @@ class TrackScene {
     const finishMat = new THREE.MeshBasicMaterial({ map: checkerTex });
     const finishMesh = new THREE.Mesh(finishLineGeo, finishMat);
     finishMesh.rotation.x = -Math.PI / 2;
-    finishMesh.position.set(halfStraight, 0.09, this.radius);
+    // A corrida cruza a linha em x=-150 (distância 1000 na física), não em
+    // +150: com a linha desenhada do outro lado a câmera de chegada
+    // enquadrava um trecho vazio da reta.
+    finishMesh.position.set(-halfStraight, 0.09, this.radius);
     this.scene.add(finishMesh);
   }
 
@@ -372,8 +380,8 @@ class TrackScene {
       { text: "600m", x: 50, z: -this.radius - 12 },
       { text: "400m", x: 150, z: -10 },
       { text: "200m", x: 50, z: this.radius + 13 },
-      { text: "100m", x: 100, z: this.radius + 13 },
-      { text: "FINAL", x: 148, z: this.radius + 13 }
+      { text: "100m", x: -50, z: this.radius + 13 },
+      { text: "FINAL", x: -170, z: this.radius + 13 }
     ];
 
     markers.forEach((m) => {
@@ -640,12 +648,12 @@ class TrackScene {
     
     // Torres laterais com detalhes dourados
     const t1 = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 13, 16), pillarMat);
-    t1.position.set(halfStraight, 6.5, this.radius - this.trackWidth * 0.5 - 1.5);
+    t1.position.set(-halfStraight, 6.5, this.radius - this.trackWidth * 0.5 - 1.5);
     t1.castShadow = true;
     finishGroup.add(t1);
 
     const t2 = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 13, 16), pillarMat);
-    t2.position.set(halfStraight, 6.5, this.radius + this.trackWidth * 0.5 + 1.5);
+    t2.position.set(-halfStraight, 6.5, this.radius + this.trackWidth * 0.5 + 1.5);
     t2.castShadow = true;
     finishGroup.add(t2);
 
@@ -668,7 +676,7 @@ class TrackScene {
       new THREE.BoxGeometry(0.8, 3.2, this.trackWidth + 3.0),
       new THREE.MeshStandardMaterial({ map: bannerTex })
     );
-    banner.position.set(halfStraight, 12.0, this.radius);
+    banner.position.set(-halfStraight, 12.0, this.radius);
     banner.castShadow = true;
     finishGroup.add(banner);
 

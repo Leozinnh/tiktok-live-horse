@@ -22,7 +22,10 @@ from typing import Optional
 
 from TikTokLive import TikTokLiveClient
 from TikTokLive.client.errors import UserNotFoundError, UserOfflineError, WebcastBlockedError
-from TikTokLive.events import CommentEvent, GiftEvent, LikeEvent
+from TikTokLive.events import (
+    CommentEvent, GiftEvent, LikeEvent, JoinEvent,
+    ConnectEvent, DisconnectEvent, LiveEndEvent,
+)
 
 from tiktok.parser import CommandParser
 from backend.security import SecurityManager
@@ -57,6 +60,22 @@ class TikTokLiveAdapter:
                 client = TikTokLiveClient(unique_id=f"@{self.tiktok_username}")
                 self.client = client
 
+                # `connect()` bloqueia até o websocket fechar, então o "conectou!"
+                # só pode ser anunciado por evento, nunca pela linha seguinte.
+                @client.on(ConnectEvent)
+                async def on_connect(event: ConnectEvent):
+                    logger.info(f"✅ CONECTADO na live de @{event.unique_id} (sala {event.room_id}).")
+
+                @client.on(DisconnectEvent)
+                async def on_disconnect(event: DisconnectEvent):
+                    # No shutdown (Ctrl+C) o ciclo já está encerrando: não assustar.
+                    if self.is_running:
+                        logger.warning("🔌 Desconectado da live do TikTok.")
+
+                @client.on(LiveEndEvent)
+                async def on_live_end(event: LiveEndEvent):
+                    logger.info("📴 A live encerrou. Aguardando nova transmissão...")
+
                 @client.on(CommentEvent)
                 async def on_comment(event: CommentEvent):
                     user, nick = self._identidade(event)
@@ -86,6 +105,18 @@ class TikTokLiveAdapter:
                     user, nick = self._identidade(event)
                     count = max(1, int(event.repeat_count or 1))
                     await self.director.handle_viewer_gift(user, nick, gift.name, count)
+
+                @client.on(JoinEvent)
+                async def on_join(event: JoinEvent):
+                    # Chegou alguém: a voz dá o oi (tts.anunciar_entrada no config).
+                    # Cooldown por pessoa: o TikTok repete a entrada de quem sai e
+                    # volta; a live não precisa ouvir o mesmo nome duas vezes seguidas.
+                    user, nick = self._identidade(event)
+                    if not user:
+                        return
+                    if not self.security.check_and_set_cooldown(user, "join", cooldown_seconds=60.0):
+                        return
+                    await self.director.handle_viewer_join(user, nick)
 
                 @client.on(LikeEvent)
                 async def on_like(event: LikeEvent):
@@ -137,8 +168,9 @@ class TikTokLiveAdapter:
                 backoff = min(BACKOFF_MAX, backoff * 2)
                 continue
 
-            # Só chega aqui quando a conexão caiu com o websocket fechando normalmente.
-            logger.warning("Conexão com TikTok encerrada pelo servidor.")
+            # Só chega aqui quando o websocket fechou normalmente; o aviso já saiu
+            # no handler de DisconnectEvent/LiveEndEvent — aqui só decide reconectar.
+            logger.debug("Websocket do TikTok fechou sem exceção.")
             await self._descartar(client)
             if not self.is_running:
                 break

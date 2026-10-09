@@ -17,7 +17,7 @@ class RaceEngine:
             self.horses.append(HorseState(config=h_cfg, lane=i + 1))
             
         self.status: str = "READY"  # READY, RACING, FINISHED
-        self.race_elapsed_ms: int = 0
+        self.race_elapsed_ms: float = 0.0
         self.winner_horse_id: Optional[int] = None
         self.final_results: List[Dict[str, Any]] = []
         self.leader_horse_id: Optional[int] = None
@@ -78,7 +78,9 @@ class RaceEngine:
         if self.status != "RACING":
             return
             
-        self.race_elapsed_ms += int(dt * 1000)
+        # Relógio em ms SEM arredondar por tick: int(dt*1000) acumulava ~1,4s de
+        # drift numa corrida de 35s e sujava o foto-finish dos tempos de chegada.
+        self.race_elapsed_ms += dt * 1000.0
         
         # Ordena cavalos por distância para calcular posições correntes
         sorted_by_dist = sorted(self.horses, key=lambda h: h.distance, reverse=True)
@@ -111,9 +113,11 @@ class RaceEngine:
         if (all_finished or post_win_timeout or timeout) and self.status == "RACING":
             self.status = "FINISHED"
             # Monta pódio final ordenado
+            # Quem terminou vem SEMPRE na frente de quem não terminou; entre os
+            # que terminaram, vale o tempo de chegada (foto-finish).
             results_order = sorted(
                 self.horses,
-                key=lambda h: (-1 if h.finished else 0, -h.finish_time_ms if h.finished else h.distance),
+                key=lambda h: (h.finished, -h.finish_time_ms if h.finished else h.distance),
                 reverse=True
             )
             self.final_results = []
@@ -123,7 +127,7 @@ class RaceEngine:
                     "final_position": pos,
                     "name": h.name,
                     "color_hex": h.color_hex,
-                    "finish_time_ms": h.finish_time_ms if h.finished else self.race_elapsed_ms
+                    "finish_time_ms": h.finish_time_ms if h.finished else round(self.race_elapsed_ms, 1)
                 })
 
     def get_snapshot(self) -> Dict[str, Any]:
@@ -155,7 +159,7 @@ class RaceEngine:
             
         return {
             "status": self.status,
-            "race_elapsed_ms": self.race_elapsed_ms,
+            "race_elapsed_ms": int(self.race_elapsed_ms),
             "track_length": self.track_length,
             "weather": self.weather_system.current_weather.value,
             "wind_speed": round(self.weather_system.wind_speed, 2),

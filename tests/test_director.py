@@ -52,7 +52,41 @@ async def test_director_state_transitions(tmp_path):
     # Executa step de tempo que transiciona VOTING -> COUNTDOWN
     await director.tick(0.15)
     assert director.state == DirectorState.COUNTDOWN
-    
+
     # Transiciona COUNTDOWN -> RACING
     await director.tick(0.06)
     assert director.state == DirectorState.RACING
+
+
+@pytest.mark.asyncio
+async def test_narracao_da_corrida_no_console(tmp_path, caplog):
+    """O console conta a história da live: votação, largada, presente, prêmios."""
+    import logging
+    from game.director import EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+
+    repo = DatabaseRepository(db_path=str(tmp_path / "test_narracao.db"))
+    await repo.init_db()
+    engine = RaceEngine(config)
+
+    with caplog.at_level(logging.INFO, logger="game.director"):
+        director = EventDirector(config=config, engine=engine, repository=repo)
+        assert "votação aberta" in caplog.text
+
+        await director.handle_viewer_choice("leo", "Leonardo", 1)
+        await director.tick(0.15)
+        assert "Votação encerrada" in caplog.text
+        assert "favorito #1" in caplog.text
+
+        await director.tick(0.06)
+        assert "COMEÇOU" in caplog.text
+
+        await director.handle_viewer_gift("leo", "Leonardo", "Lion", 1)
+        assert "enviou Lion x1" in caplog.text
+
+        await director.handle_viewer_like("leo", "Leonardo", 10)
+        assert "10 curtidas" in caplog.text

@@ -16,9 +16,13 @@
     <div id="hud-overlay">
       <!-- 1. Top Bar de Transmissão -->
       <div class="top-broadcast-bar">
-        <div class="race-badge">
+        <div class="race-badge" id="raceBadge">
           <span class="trophy">🏇</span>
-          <span class="title" id="hudRaceNumber">CORRIDA #1</span>
+          <div class="race-badge-text">
+            <span class="label">CORRIDA</span>
+            <span class="title" id="hudRaceNumber">#1</span>
+          </div>
+          <span class="weather-chip" id="hudWeather" style="display: none;">☀️ SOL</span>
         </div>
 
         <div class="status-pill" id="hudStatePill">
@@ -27,9 +31,9 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 14px;">
-          <div class="timer-box">
+          <div class="timer-box" id="hudTimerBox">
             <span class="num" id="hudTimer">30</span>
-            <span class="unit">s</span>
+            <span class="unit" id="hudTimerUnit">s</span>
           </div>
           <button class="audio-toggle-btn" id="audioToggleBtn" title="Ativar/Desativar Som">🔊</button>
         </div>

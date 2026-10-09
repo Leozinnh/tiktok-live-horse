@@ -1,14 +1,41 @@
+// O clima da pista vira chip no badge da corrida. É informação de APOSTA: o
+// sorteio acontece antes da votação abrir, então quem escolhe o cavalo já
+// sabe em que tempo a corrida vai ser (e cada cavalo tem seu clima favorito).
+const WEATHER_INFO = {
+  CLEAR: { icon: "☀️", label: "SOL" },
+  SUNSET: { icon: "🌅", label: "PÔR DO SOL" },
+  NIGHT_LIGHTS: { icon: "🌃", label: "NOTURNA" },
+  RAIN: { icon: "🌧️", label: "CHUVA" },
+  STORM: { icon: "⚡", label: "TEMPESTADE" },
+  WIND: { icon: "💨", label: "VENTO" },
+};
+
+// A cor da pill de status por fase (as classes moram no styles.css).
+const STATE_PILL_CLASS = {
+  VOTING: "betting",
+  COUNTDOWN: "countdown",
+  RACING: "live",
+  PODIUM: "podium",
+  XP_REWARDS: "rewards",
+  LEADERBOARD: "leaderboard",
+};
+
 class BroadcastHUD {
   constructor(audio) {
     this.audio = audio;
     this.lastState = null;
+    this.lastRaceNumber = null;
     this.activeNotifications = new Set();
-    
+
     // Elementos DOM
+    this.raceBadgeEl = document.getElementById("raceBadge");
     this.raceNumberEl = document.getElementById("hudRaceNumber");
+    this.weatherEl = document.getElementById("hudWeather");
     this.statePillEl = document.getElementById("hudStatePill");
     this.stateTextEl = document.getElementById("hudStateText");
     this.timerEl = document.getElementById("hudTimer");
+    this.timerUnitEl = document.getElementById("hudTimerUnit");
+    this.timerBoxEl = document.getElementById("hudTimerBox");
     this.notificationContainer = document.getElementById("notification-container");
     this.centerModal = document.getElementById("center-modal");
     this.leaderboardEl = document.getElementById("hudLeaderboard");
@@ -51,18 +78,30 @@ class BroadcastHUD {
     }
 
     // 1. Atualizar Header
+    const raceNumber = stateData.race_number || 1;
     if (this.raceNumberEl) {
-      this.raceNumberEl.innerText = `CORRIDA #${stateData.race_number || 1}`;
+      this.raceNumberEl.innerText = `#${raceNumber}`;
     }
+    // Corrida nova: o número salta na tela (o primeiro payload também pulsa,
+    // já que a página acabou de carregar e o olho precisa achar o lugar).
+    if (this.raceBadgeEl && raceNumber !== this.lastRaceNumber) {
+      this.raceBadgeEl.classList.remove("flash");
+      void this.raceBadgeEl.offsetWidth; // força o reinício da animação
+      this.raceBadgeEl.classList.add("flash");
+      this.lastRaceNumber = raceNumber;
+    }
+
+    this.renderWeather(stateData);
 
     const state = stateData.director_state || "READY";
     if (this.stateTextEl) {
       this.stateTextEl.innerText = this.translateState(state);
     }
-
-    if (this.timerEl) {
-      this.timerEl.innerText = Math.ceil(stateData.remaining_seconds || 0);
+    if (this.statePillEl) {
+      this.statePillEl.className = `status-pill ${STATE_PILL_CLASS[state] || ""}`.trim();
     }
+
+    this.renderTimer(state, stateData);
 
     // 2. Notificações Flutuantes (Fila sem repetição)
     if (stateData.notifications && Array.isArray(stateData.notifications)) {
@@ -94,6 +133,52 @@ class BroadcastHUD {
       case "LEADERBOARD": return "TOP APOIADORES";
       default: return state;
     }
+  }
+
+  renderWeather(stateData) {
+    if (!this.weatherEl) return;
+    const weather = (stateData.engine && stateData.engine.weather) || "CLEAR";
+    const info = WEATHER_INFO[weather];
+    if (!info) {
+      this.weatherEl.style.display = "none";
+      return;
+    }
+    this.weatherEl.innerText = `${info.icon} ${info.label}`;
+    this.weatherEl.className = `weather-chip weather-${weather.toLowerCase()}`;
+    this.weatherEl.style.display = "flex";
+  }
+
+  renderTimer(state, stateData) {
+    if (!this.timerBoxEl) return;
+
+    // O relógio conta o que importa em cada fase: segundos até a largada na
+    // votação/contagem e a DISTÂNCIA DO LÍDER na corrida — antes a prova
+    // inteira exibia um "0s" parado, o pedaço mais morto do HUD.
+    let valor = null;
+    let unidade = "s";
+    let urgente = false;
+
+    if (state === "VOTING" || state === "COUNTDOWN") {
+      const segundos = Math.ceil(stateData.remaining_seconds || 0);
+      valor = segundos;
+      urgente = segundos > 0 && segundos <= 5;
+    } else if (state === "RACING") {
+      const leaderboard = (stateData.engine && stateData.engine.leaderboard) || [];
+      const metros = leaderboard.length ? Math.round(leaderboard[0].distance) : 0;
+      valor = metros;
+      unidade = "m";
+      urgente = metros >= 900; // reta final: o líder está chegando
+    }
+
+    if (valor === null) {
+      this.timerBoxEl.style.display = "none";
+      return;
+    }
+
+    this.timerBoxEl.style.display = "flex";
+    this.timerBoxEl.classList.toggle("urgent", urgente);
+    if (this.timerEl) this.timerEl.innerText = valor;
+    if (this.timerUnitEl) this.timerUnitEl.innerText = unidade;
   }
 
   showToast(notification) {

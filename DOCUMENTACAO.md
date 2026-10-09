@@ -67,7 +67,9 @@ tiktok_live_cavalo/
 │   ├── director.py              # Máquina de estados contínua (VOTING -> PODIUM -> LEADERBOARD)
 │   ├── horses.py                # Modelagem do estado de cada cavalo, fadiga e boosts
 │   ├── physics.py               # Trajetória oval, derivadas tangenciais e raias 3D
-│   └── weather_events.py        # Modificadores climáticos (Sol, Chuva, Tempestade, Vento)
+│   ├── weather_events.py        # Modificadores climáticos (Sol, Chuva, Tempestade, Vento)
+│   ├── narrador.py              # Voz da live: fila + thread, edge-tts gera, MCI toca e apaga
+│   └── falas.py                 # As frases faladas (presente, chegada, votação, largada, vencedor)
 ├── tiktok/
 │   ├── adapter.py               # Conector TikTokLiveClient com auto-reconnect
 │   ├── mock_adapter.py          # Emulador de eventos para o Modo de Teste
@@ -90,7 +92,9 @@ tiktok_live_cavalo/
 │       │   └── test_panel.js    # Lógica interativa do painel admin com WebSocket
 │       ├── index.html           # Página capturada pelo OBS Studio (Browser Source)
 │       └── test.html            # Interface de controle do streamer no navegador (/test)
-├── tests/                       # 16 testes automatizados (pytest) com 100% de aprovação
+├── tools/
+│   └── smoke_audio.py           # Teste de ouvido da voz, sem abrir live
+├── tests/                       # 43 testes automatizados (pytest) com 100% de aprovação
 ├── main.py                      # Ponto de entrada do sistema (`python main.py`)
 ├── requirements.txt             # Dependências Python (fastapi, uvicorn, aiosqlite, etc.)
 ├── README.md                    # Guia rápido de inicialização
@@ -113,6 +117,24 @@ Para calibrar o ritmo da transmissão sem encostar em código Python, edite `con
   "leaderboard_duration_seconds": 10.0, // Duração da tela de TOP jogadores da LIVE
   "track_length_meters": 1000.0,        // Comprimento da pista oval em metros virtuais
   "tick_rate": 60,                      // Taxa de atualização física por segundo (60 Hz)
+  "tts": {
+    "active": true,                     // Narração por voz ligada/desligada
+    "voz": "pt-BR-FranciscaNeural",     // Voz padrão (e do rodízio, se "vozes" vazio)
+    "vozes": [                          // Rodízio de vozes (lista vazia = sempre a "voz")
+      "pt-BR-FranciscaNeural",
+      "pt-BR-AntonioNeural",
+      "pt-BR-ThalitaMultilingualNeural"
+    ],
+    "rate": "+8%",                      // Velocidade da fala (edge-tts)
+    "pitch": "+3Hz",                    // Tom da fala (edge-tts)
+    "anunciar_entrada": true,           // Oi falado para quem entra na live
+    // Listas de frases próprias (opcionais): ausente/vazia = as do jogo
+    // (game/falas.py); preenchida, substitui a lista inteira. Chaves:
+    // "falas" (presentes), "boas_vindas", "votacao", "largada", "vencedor" e
+    // as da locução ao vivo — "corrida_abertura", "corrida_disputa",
+    // "corrida_placar", "reta_final", "foto_finish".
+    "falas": null
+  },
   "xp": {
     "participation": 20,                // XP ganho por escolher qualquer cavalo
     "cheer": 5,                         // XP ganho por mensagens de torcida
@@ -283,7 +305,7 @@ A interface do usuário foi desenhada no padrão das transmissões da **Fórmula
 
 ```text
 ┌────────────────────────────────────────────────────────┐
-│ [🏇 CORRIDA #42]      [🔴 AO VIVO]       [⏳ 28s] [🔊] │  ← Top Bar
+│ [🏇 CORRIDA #42 ⚡TEMPESTADE]  [🔴 AO VIVO]  [847m] [🔊] │  ← Top Bar
 ├────────────────────────────────────────────────────────┤
 │ [───1───2──────3─────────4──5──────6──7────8────────🏁] │  ← Régua de Progresso
 ├────────────────────────────────────────────────────────┤
@@ -308,6 +330,12 @@ A interface do usuário foi desenhada no padrão das transmissões da **Fórmula
 │             (Votação, Contagem, Pódio, XP)             │
 └────────────────────────────────────────────────────────┘
 ```
+
+### A Top Bar ("CORRIDA #N") em detalhe:
+* **Badge da corrida:** troféu em chip dourado + rótulo `CORRIDA` + número `#N` com gradiente. Quando uma corrida NOVA abre, o número salta na tela (flash) — o olho do espectador acha o marcador sozinho.
+* **Chip de clima:** ☀️ SOL, 🌅 PÔR DO SOL, 🌃 NOTURNA, 🌧️ CHUVA, ⚡ TEMPESTADE ou 💨 VENTO — cada um com a sua cor. É **informação de aposta**: o clima da pista é sorteado ANTES da votação abrir, e cada cavalo tem o seu clima favorito (ver seção 8) — quem escolhe o cavalo já sabe em que tempo a prova vai ser.
+* **Pill de status por fase:** votação é dourada, **AO VIVO é vermelha** (com pulso mais rápido), pódio dourado, XP verde e ranking azul — a fase se lê de longe, sem precisar ler o texto.
+* **Relógio contextual:** na votação/contagem conta os segundos (fica vermelho e pisca nos últimos 5s); **na corrida vira a distância do líder** (ex.: `847m`, vermelho ao passar dos 900m — reta final); nas telas de resultado some (não há o que contar).
 
 ### Controles de Calibração do HUD no Painel Admin (`/test`):
 No **Card 4** de `http://localhost:8000/test`, você ajusta a interface do OBS ao vivo:
@@ -367,7 +395,8 @@ Cada subida de nível gera uma notificação animada na tela com estrela dourada
    * **Taxa de Quadros:** `60 FPS`
    * **Controlar áudio via OBS:** Marque para ouvir o áudio das corridas no mixer do OBS.
 4. Abra o painel de testes em um segundo monitor: `http://localhost:8000/test`.
-5. Para conectar à sua live real do TikTok quando abrir transmissão:
+5. **Voz da corrida (TTS):** a narração falada sai pelo **alto-falante padrão do Windows** (fora do navegador). Adicione à cena uma fonte **Áudio do Desktop** — ou **Captura de Áudio do Aplicativo** apontando para o `python.exe` — para a voz entrar na transmissão. O som 3D do jogo continua vindo pelo Browser Source.
+6. Para conectar à sua live real do TikTok quando abrir transmissão:
    ```bash
    python main.py --tiktok-user SEU_USUARIO_TIKTOK --test-mode=False
    ```
@@ -376,7 +405,7 @@ Cada subida de nível gera uma notificação animada na tela com estrela dourada
 
 ## 13. Testes Automatizados e Garantia de Qualidade
 
-O projeto possui **16 testes automatizados** cobrindo todos os módulos vitais. Para executar:
+O projeto possui **43 testes automatizados** cobrindo todos os módulos vitais. Para executar:
 
 ```bash
 python -m pytest -v
@@ -390,4 +419,45 @@ Os testes verificam:
 * Máquina de estados do `EventDirector` (VOTING $\to$ COUNTDOWN $\to$ RACING $\to$ PODIUM $\to$ XP $\to$ LEADERBOARD).
 * Parser semântico de comandos do TikTok (números, nomes, presentes e comandos de torcida).
 * Endpoints REST do servidor FastAPI e sincronização WebSocket.
+* Voz da live: frases e fila do Narrador com gerador/tocador injetados (sem internet e sem placa de som), incluindo o descarte da fala mais antiga com a fila cheia.
+* Locução ao vivo: frases da dupla da frente, queda na frase padrão com placeholder quebrado e todas as frases do jogo formatando sem erro.
+* Fiação da voz no `EventDirector`: votação (com lembrete a cada 12s), largada, vencedor, presente e entrada falados nos momentos certos — e a locução disparando abertura, disputa, reta final e os três placares UMA vez cada, na ordem da prova.
+* Margem da foto-finish: a exclamação só entra quando a chegada foi decidida no detalhe.
 * Teste de integração ponta a ponta (E2E) simulando uma prova completa com espectadores reais.
+
+---
+
+## 14. Narração por Voz (`game/narrador.py` + `game/falas.py`)
+
+Mesmo motor do `tiktok-live-pixel`, portado inteiro: uma **thread com fila**, pelo mesmo motivo da thread do TikTok — gerar a voz leva segundos, e o loop de eventos do jogo não pode esperar por isso. Quem presenteia ganha o crédito no telão NA HORA; a fala entra na fila e sai quando der. O ciclo é o pedido original: **gera → toca → apaga**.
+
+1. O `EventDirector` (ou o adapter, no caso da chegada) chama `narrador.anunciar_*` e segue em frente — nunca bloqueia.
+2. A thread da fila sintetiza o mp3 com o **edge-tts** (nuvem da Microsoft, sem chave de API) num arquivo temporário.
+3. A reprodução usa o **MCI do Windows** via `ctypes` (biblioteca padrão): nenhum binário externo nem pacote de áudio para instalar.
+4. Terminou de tocar, o arquivo é apagado.
+
+### A locução ao vivo (o locutor da corrida)
+
+A corrida era o único trecho silencioso da transmissão: saía a largada e depois só o vencedor — ~35s de vazio. Agora o narrador acompanha a prova inteira, disparado por **marco de distância do líder** (`MARCOS_LOCUCAO` no `EventDirector`); cada marco fala **uma vez por corrida** (o placar são três marcos distintos, um por distância). O ritmo ficou de **~1 fala a cada 5s** — medido a 60Hz, o maior buraco entre falas caiu de 10-12s para ~6s:
+
+| Momento | Marco | Frase (exemplo) |
+|---|---|---|
+| **Abertura** | 120m | *"{lider} puxa o ritmo! E olha o {segundo} vindo colado logo atrás!"* |
+| **Placar** | 320m, 620m e 760m | *"Olha o placar! {lider} na frente, {segundo} em segundo e {terceiro} fechando o trio!"* — o placar do turfe: cita o **trio** da frente |
+| **Disputa** | 480m | *"A corrida tá pegada! {lider} e {segundo} lado a lado!"* |
+| **Reta final** | 880m | *"Reta final! {lider} na frente e {segundo} vem voando!"* — cai a ~4s da linha: o tempo de gerar o áudio e a voz entrar no ar antes do cruzamento |
+| **Foto-finish** | chegada | *"Que chegada! {vencedor} levou no fio do bigode na frente do {segundo}!"* — só quando a chegada foi decidida por **menos de 50ms** (`MARGEM_FOTO_FINISH_MS`; acontece em ~1/3 das corridas). Entra na fila ANTES do anúncio do campeão: primeiro o susto, depois o veredito |
+
+E a **votação** (30s parados) não fica muda: a voz lembra a galera de votar a cada **12s** (`CHAMADA_VOTACAO_INTERVALO`) até a largada.
+
+Toda frase da locução cita a **dupla da frente** (ou o trio, no placar) — a tensão da fala está no duelo, não num cavalo sozinho.
+
+Detalhes de projeto:
+
+* **Fila máxima de 20 falas:** cheia, a mais antiga sai — narrar o que está acontecendo agora vale mais do que narrar o atrasado.
+* **Frases sorteadas** de `game/falas.py` (dezenas por momento): a voz nunca vira disco riscado. Um `{placeholder}` inválido numa frase editada cai na frase padrão com aviso no log — nunca deixa a live muda. As listas da locução aceitam troca pelo config (`tts.corrida_abertura`, `tts.corrida_disputa`, `tts.corrida_placar`, `tts.reta_final`, `tts.foto_finish`).
+* **Rodízio de vozes** (`tts.vozes`): uma live inteira numa voz só soa como robô lendo avisos; a lista vazia volta para a `tts.voz` de sempre.
+* **Nome de cavalo em CAIXA ALTA** (RELÂMPAGO) é falado em caixa normal (Relâmpago): caixa alta na fala soa como grito, e nome curto todo em maiúsculas corre o risco de sair letra por letra.
+* **Chegada de espectador** (`JoinEvent` do TikTok): oi falado com cooldown de 60s por pessoa (o TikTok repete a entrada de quem sai e volta). Entrada não grava no banco nem rende XP — é presença, não voto. `tts.anunciar_entrada: false` cala só a chegada.
+* **Falha de áudio nunca derruba o jogo:** sem internet, sem biblioteca ou sem placa de som, o que acontece é um aviso no log (`Não consegui falar ...`) e a corrida segue em frente.
+* **Teste de ouvido:** `python tools/smoke_audio.py presente` (ou `entrada`, `votacao`, `largada`, `vencedor`; sem argumento, fala uma de cada).

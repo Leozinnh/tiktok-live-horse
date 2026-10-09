@@ -1,9 +1,13 @@
 import asyncio
+import logging
 from enum import Enum
 from typing import Dict, Any, List, Optional
 from config.settings import Settings
 from game.engine import RaceEngine
+from game.narrador import Narrador
 from backend.database.repository import DatabaseRepository
+
+logger = logging.getLogger(__name__)
 
 class DirectorState(str, Enum):
     VOTING = "VOTING"
@@ -52,12 +56,45 @@ LIKE_DURATION_SECONDS = 3.0
 LIKE_POWER_BASE = 1.02
 LIKE_POWER_MAX = 1.05
 
+# Locução ao vivo: os marcos de distância do líder (metros) que disparam cada
+# chamada e a margem de chegada (ms) que faz a corrida ganhar a exclamação da
+# foto-finish. Cada marco fala UMA vez por corrida.
+#
+# Os marcos são DENSOS de propósito: a ~28m/s, um a cada ~120-160m dá uma
+# fala a cada ~5s — a corrida fica narrada do começo ao fim, como numa
+# transmissão de turfe de verdade. Com só três marcos (abertura, disputa e
+# reta), sobravam buracos de 10-12s de silêncio no meio da prova.
+# O de 880m cai a ~4s da linha: é o tempo de gerar o áudio e a voz entrar no
+# ar antes do vencedor cruzar (a fila do narrador é uma só).
+MARCOS_LOCUCAO = (
+    (120.0, "abertura"),
+    (320.0, "placar"),
+    (480.0, "disputa"),
+    (620.0, "placar"),
+    (760.0, "placar"),
+    (880.0, "reta_final"),
+)
+MARGEM_FOTO_FINISH_MS = 50.0
+
+# De quanto em quanto tempo a votação é RE-chamada na voz. A chamada de
+# abertura sozinha deixava 30s de silêncio na fase em que o público precisa
+# de lembrete — o locutor de rádio não fica mudo pedindo voto.
+CHAMADA_VOTACAO_INTERVALO = 12.0
+
 
 class EventDirector:
-    def __init__(self, config: Settings, engine: RaceEngine, repository: DatabaseRepository):
+    def __init__(
+        self,
+        config: Settings,
+        engine: RaceEngine,
+        repository: DatabaseRepository,
+        narrador: Optional[Narrador] = None,
+    ):
         self.config = config
         self.engine = engine
         self.repository = repository
+        # A voz da live (opcional): None = jogo mudo, como nos testes.
+        self.narrador = narrador
         
         self.state: DirectorState = DirectorState.VOTING
         self.race_number: int = 1
@@ -74,6 +111,34 @@ class EventDirector:
         self.last_race_rewards: List[Dict[str, Any]] = []
         self.podium_data: List[Dict[str, Any]] = []
         self.leaderboard_data: List[Dict[str, Any]] = []
+        # Marcos da locução ao vivo já falados NESTA corrida (abertura,
+        # disputa, reta final) — zerado na largada, pra nenhum marco repetir.
+        self._marcos_falados: set[str] = set()
+
+        self._anunciar_votacao_aberta()
+
+    def _nome_cavalo(self, horse_id: int) -> str:
+        return next((h.name for h in self.config.horses if h.id == horse_id), f"#{horse_id}")
+
+    def _anunciar_votacao_aberta(self) -> None:
+        logger.info(
+            f"🗳️ Corrida #{self.race_number} — votação aberta por "
+            f"{self.config.voting_duration_seconds:.0f}s! Comenta 1-8 pra escolher teu cavalo."
+        )
+        if self.narrador is not None:
+            self.narrador.anunciar_votacao(self.race_number)
+        # Daqui a CHAMADA_VOTACAO_INTERVALO sai o primeiro LEMBRETE de voto
+        # (o relógio do estado acabou de zerar nos três pontos que chamam
+        # este método: criação, reset e virada do ranking).
+        self._proxima_chamada_votacao = self.state_timer + CHAMADA_VOTACAO_INTERVALO
+
+    def _resumo_votos(self) -> str:
+        """Linha única e agregada: nada de logar voto por voto (viraria spam em live cheia)."""
+        votos = sum(len(s) for s in self.horse_supporters.values())
+        if not votos:
+            return "nenhum voto"
+        hid, sups = max(self.horse_supporters.items(), key=lambda kv: len(kv[1]))
+        return f"{votos} voto(s), favorito #{hid} {self._nome_cavalo(hid)} ({len(sups)})"
 
     def get_current_choices_summary(self) -> Dict[int, Dict[str, Any]]:
         summary = {}
@@ -188,8 +253,14 @@ class EventDirector:
         # Adiciona XP ao viewer
         await self.repository.add_gift_xp(viewer["id"], xp * gift_count)
         
-        # Log visível no terminal Python do servidor
-        print(f"\n[PRESENTE RECEBIDO] {gift_emoji} @{viewer['display_name']} enviou {gift_name} x{gift_count} para o Cavalo #{chosen_horse_id} ({h_name})! (+{xp * gift_count} XP)\n")
+        logger.info(
+            f"🎁 @{viewer['display_name']} enviou {gift_name} x{gift_count} → #{chosen_horse_id} {h_name} "
+            f"({b_label} {power:.2f}x por {dur:.0f}s, +{xp * gift_count} XP)"
+        )
+        if self.narrador is not None:
+            self.narrador.anunciar_presente(
+                viewer["display_name"], gift_count, gift_name, h_name
+            )
 
         self.notifications_queue.append({
             "type": "GIFT",
@@ -204,6 +275,15 @@ class EventDirector:
             "horse_name": h_name,
             "badge": gift_emoji
         })
+
+    async def handle_viewer_join(self, tiktok_username: str, display_name: str) -> None:
+        """Quem chegou ganha um oi da voz (se o narrador estiver ligado).
+
+        Não grava nada no banco: entrada é presença, não voto — criar linha
+        de viewer para cada chegada encheria o ranking de gente sem XP.
+        """
+        if self.narrador is not None:
+            self.narrador.anunciar_entrada(display_name or tiktok_username)
 
     async def handle_cheer_command(self, tiktok_username: str, display_name: str) -> None:
         viewer = await self.repository.get_or_create_viewer(tiktok_username, display_name)
@@ -246,15 +326,24 @@ class EventDirector:
             gift_emoji="❤️",
             donor_name=display_name or "Torcida"
         )
+        logger.info(
+            f"❤️ Rajada de {count} curtidas de {display_name or 'anônimo'} → "
+            f"empurrão no #{chosen_horse_id} {self._nome_cavalo(chosen_horse_id)} ({power:.2f}x)"
+        )
 
     async def skip_to_countdown(self) -> None:
         """Pula o tempo de votação e inicia a contagem de largada imediatamente."""
+        logger.info(
+            f"⏩ Votação pulada pelo painel — {self._resumo_votos()}. "
+            f"Largada em {self.config.countdown_duration_seconds:.0f}s!"
+        )
         self.state = DirectorState.COUNTDOWN
         self.state_timer = 0.0
 
     async def force_finish_race(self) -> None:
         """Força a finalização da corrida e avança para o pódio."""
         if self.state == DirectorState.RACING:
+            logger.info("⏭️ Corrida finalizada manualmente pelo painel.")
             # Força avanço dos cavalos para cruzar a linha
             for h in self.engine.horses:
                 if not h.finished:
@@ -267,6 +356,57 @@ class EventDirector:
             snapshot = self.engine.get_snapshot()
             self.podium_data = snapshot.get("final_results", [])[:3]
 
+    def _locucao_da_corrida(self) -> None:
+        """As chamadas ao vivo da corrida, por MARCO de distância do líder.
+
+        A corrida era o único trecho silencioso da transmissão: saía a
+        largada e depois só o vencedor, ~35s de vazio. Aqui a voz acompanha
+        a prova — quem puxa e quem vem na cola, na abertura, no meio e na
+        reta final. Cada marco fala uma vez por corrida; quem decide a HORA
+        é este método, o TEXTO é do narrador.
+        """
+        if self.narrador is None:
+            return
+        ordenados = sorted(self.engine.horses, key=lambda h: h.distance, reverse=True)
+        if len(ordenados) < 2:
+            return
+        lider = ordenados[0]
+        if lider.finished:
+            # Já cruzou: a fila é do vencedor agora, a locução cumpriu o papel.
+            return
+        segundo = ordenados[1]
+        terceiro = ordenados[2] if len(ordenados) > 2 else segundo
+        for marco, tipo in MARCOS_LOCUCAO:
+            # A chave é o PAR (tipo, marco): "placar" aparece três vezes na
+            # tabela e cada um fala uma vez, no seu próprio marco.
+            chave = f"{tipo}@{marco}"
+            if chave in self._marcos_falados or lider.distance < marco:
+                continue
+            self._marcos_falados.add(chave)
+            if tipo == "abertura":
+                self.narrador.anunciar_abertura(lider.name, segundo.name)
+            elif tipo == "disputa":
+                self.narrador.anunciar_disputa(lider.name, segundo.name)
+            elif tipo == "placar":
+                self.narrador.anunciar_placar(
+                    lider.name, segundo.name, terceiro.name
+                )
+            else:
+                self.narrador.anunciar_reta_final(lider.name, segundo.name)
+
+    def _foto_finish_apertada(self) -> bool:
+        """A chegada foi decidida no detalhe (menos de MARGEM_FOTO_FINISH_MS)?
+
+        A margem sai dos TEMPOS de chegada (não das distâncias): é a mesma
+        medida que diz se a corrida foi um duelo de verdade — em ~1/3 delas
+        é, e é aí que a exclamação da foto-finish entra.
+        """
+        if len(self.podium_data) < 2:
+            return False
+        return (
+            self.podium_data[1]["finish_time_ms"] - self.podium_data[0]["finish_time_ms"]
+        ) < MARGEM_FOTO_FINISH_MS
+
     async def reset_to_new_race(self) -> None:
         """Reinicia o ciclo imediatamente para uma nova corrida."""
         self.race_number += 1
@@ -275,22 +415,44 @@ class EventDirector:
         self.state = DirectorState.VOTING
         self.state_timer = 0.0
         self.last_race_rewards = []
+        self._anunciar_votacao_aberta()
 
     async def tick(self, dt: float) -> None:
         self.state_timer += dt
         
         if self.state == DirectorState.VOTING:
+            # Lembrete de voto: a votação é a fase em que o público precisa
+            # de chamada — uma abertura e 30s de silêncio não puxam ninguém.
+            if (
+                self.state_timer >= self._proxima_chamada_votacao
+                and self.narrador is not None
+            ):
+                self._proxima_chamada_votacao = (
+                    self.state_timer + CHAMADA_VOTACAO_INTERVALO
+                )
+                self.narrador.anunciar_votacao(self.race_number)
             if self.state_timer >= self.config.voting_duration_seconds:
                 # Transiciona para COUNTDOWN
+                logger.info(
+                    f"⏳ Votação encerrada — {self._resumo_votos()}. "
+                    f"Largada em {self.config.countdown_duration_seconds:.0f}s!"
+                )
                 self.state = DirectorState.COUNTDOWN
                 self.state_timer = 0.0
-                
+
         elif self.state == DirectorState.COUNTDOWN:
             if self.state_timer >= self.config.countdown_duration_seconds:
                 # Inicia corrida real
                 self.state = DirectorState.RACING
                 self.state_timer = 0.0
+                self._marcos_falados = set()
                 self.engine.start_race()
+                logger.info(
+                    f"🏁 CORRIDA #{self.race_number} COMEÇOU! "
+                    f"Clima: {self.engine.weather_system.current_weather.value}"
+                )
+                if self.narrador is not None:
+                    self.narrador.anunciar_largada(self.race_number)
                 
                 # Registra corrida no banco SQLite
                 self.current_db_race_id = await self.repository.create_race(self.race_number)
@@ -306,12 +468,29 @@ class EventDirector:
                         
         elif self.state == DirectorState.RACING:
             self.engine.update(dt)
+            self._locucao_da_corrida()
             if self.engine.is_finished():
                 self.state = DirectorState.PODIUM
                 self.state_timer = 0.0
                 snapshot = self.engine.get_snapshot()
                 self.podium_data = snapshot.get("final_results", [])[:3]
-                
+                if self.podium_data:
+                    top = self.podium_data[0]
+                    resto = ", ".join(f"{p['final_position']}º #{p['horse_id']}" for p in self.podium_data[1:])
+                    logger.info(
+                        f"🏆 Corrida #{self.race_number}: venceu o #{top['horse_id']} {top['name']}!"
+                        + (f" ({resto})" if resto else "")
+                    )
+                    if self.narrador is not None:
+                        # Chegada apertada ganha a exclamação ANTES do anúncio
+                        # do campeão: a fila da voz é FIFO — primeiro o susto,
+                        # depois o veredito.
+                        if self._foto_finish_apertada():
+                            self.narrador.anunciar_foto_finish(
+                                top["name"], self.podium_data[1]["name"]
+                            )
+                        self.narrador.anunciar_vencedor(top["horse_id"], top["name"])
+
                 # Salva resultados no banco
                 if self.current_db_race_id and snapshot.get("winner_horse_id"):
                     await self.repository.finish_race(
@@ -337,12 +516,20 @@ class EventDirector:
                         xp_win=self.config.xp.win,
                         xp_top3=self.config.xp.top_3
                     )
-                    
+                    subiram = [r["display_name"] for r in self.last_race_rewards if r.get("level_up")]
+                    logger.info(
+                        f"⭐ XP distribuído para {len(self.last_race_rewards)} torcedor(es)"
+                        + (f" — subiram de nível: {', '.join(subiram)}" if subiram else "")
+                    )
+
         elif self.state == DirectorState.XP_REWARDS:
             if self.state_timer >= self.config.xp_duration_seconds:
                 self.state = DirectorState.LEADERBOARD
                 self.state_timer = 0.0
                 self.leaderboard_data = await self.repository.get_leaderboard(limit=10)
+                if self.leaderboard_data:
+                    lider = self.leaderboard_data[0]
+                    logger.info(f"🏅 Ranking: {lider['display_name']} lidera com {lider['xp']} XP.")
                 
         elif self.state == DirectorState.LEADERBOARD:
             if self.state_timer >= self.config.leaderboard_duration_seconds:
@@ -354,6 +541,7 @@ class EventDirector:
                 self.state = DirectorState.VOTING
                 self.state_timer = 0.0
                 self.last_race_rewards = []
+                self._anunciar_votacao_aberta()
 
     def get_state_payload(self) -> Dict[str, Any]:
         engine_snap = self.engine.get_snapshot()

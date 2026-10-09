@@ -66,6 +66,8 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
   background: var(--bg-dark-glass);
   backdrop-filter: blur(16px);
   border: 1px solid var(--border-glass);
@@ -78,20 +80,81 @@ html, body {
 .race-badge {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
+/* O troféu vira um chip com moldura dourada e brilho — o cantinho mais
+   "broadcast" da barra. */
 .race-badge .trophy {
-  font-size: 26px;
+  font-size: 24px;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(251, 191, 36, 0.28), rgba(217, 119, 6, 0.12));
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  box-shadow: 0 0 18px rgba(251, 191, 36, 0.22), inset 0 0 12px rgba(251, 191, 36, 0.14);
+}
+
+.race-badge-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  gap: 3px;
+}
+
+.race-badge .label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 3.5px;
+  color: var(--text-sub);
 }
 
 .race-badge .title {
-  font-size: 20px;
+  font-size: 30px;
   font-weight: 900;
-  letter-spacing: 0.8px;
-  color: var(--primary-gold);
-  text-transform: uppercase;
+  letter-spacing: 1px;
+  background: linear-gradient(180deg, #fde68a, #f59e0b 55%, #b45309);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.45));
 }
+
+/* Corrida nova: o número salta na tela — o olho do espectador vai pra ele. */
+.race-badge.flash .title {
+  animation: raceFlash 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes raceFlash {
+  0% { transform: scale(1.7); filter: drop-shadow(0 0 26px rgba(251, 191, 36, 1)); }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* O clima da pista — a informação que decide aposta (o sorteio acontece
+   antes da votação abrir). Cada clima tem a sua cor. */
+.weather-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  padding: 4px 11px;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.06);
+  color: #7dd3fc;
+}
+
+.weather-chip.weather-sunset { color: #fb923c; }
+.weather-chip.weather-night_lights { color: #c4b5fd; }
+.weather-chip.weather-rain { color: #60a5fa; }
+.weather-chip.weather-storm { color: #f87171; }
+.weather-chip.weather-wind { color: #5eead4; }
 
 .status-pill {
   display: flex;
@@ -105,6 +168,50 @@ html, body {
   font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.5px;
+}
+
+/* A pill muda de cor com a FASE da transmissão: votação é dourada (é a vez
+   do público), a corrida é VERMELHA de ao vivo, XP é verde... O estado deixa
+   de ser só um texto e passa a ser lido de longe. */
+.status-pill.betting {
+  background: rgba(251, 191, 36, 0.16);
+  border-color: var(--primary-gold);
+  color: var(--primary-gold);
+}
+
+.status-pill.countdown {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: var(--primary-gold);
+  color: #fde68a;
+}
+.status-pill.countdown .pulse-dot { animation-duration: 0.8s; }
+
+.status-pill.live {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #f87171;
+}
+.status-pill.live .pulse-dot {
+  animation-duration: 0.9s;
+  box-shadow: 0 0 12px currentColor;
+}
+
+.status-pill.podium {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: var(--primary-gold);
+  color: var(--primary-gold);
+}
+
+.status-pill.rewards {
+  background: rgba(52, 211, 153, 0.16);
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.status-pill.leaderboard {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
 }
 
 .pulse-dot {
@@ -139,6 +246,22 @@ html, body {
   font-size: 14px;
   color: var(--text-sub);
   font-weight: 700;
+}
+
+/* Aperto: últimos segundos da votação/contagem ou o líder passando dos 900m
+   — o relógio fica vermelho e pisca de leve (opacidade, sem balançar o
+   número — texto que muda de tamanho a cada segundo cansa a vista). */
+.timer-box.urgent .num {
+  color: #f87171;
+  text-shadow: 0 0 18px rgba(239, 68, 68, 0.65);
+  animation: urgentBlink 0.9s ease-in-out infinite;
+}
+
+.timer-box.urgent .unit { color: #f87171; }
+
+@keyframes urgentBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .audio-toggle-btn {
@@ -361,6 +484,13 @@ html, body {
 }
 
 /* CARTELA DE VOTAÇÃO COMPACTA & ELEGANTE */
+/* O fadeIn era referenciado pela cartela desde sempre, mas nunca tinha sido
+   declarado — a animação simplesmente não acontecia. */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .voting-overlay {
   width: 100%;
   max-width: 980px;

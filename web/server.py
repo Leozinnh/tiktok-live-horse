@@ -67,9 +67,12 @@ def create_app(
     config: Settings,
     director: EventDirector,
     mock_adapter: MockTikTokAdapter,
-    repository: DatabaseRepository
+    repository: DatabaseRepository,
+    lifespan=None
 ) -> FastAPI:
-    app = FastAPI(title="TikTok LIVE Horse Racing")
+    # O lifespan é montado pelo main.py (startup/shutdown); nos testes ele vem
+    # ausente de propósito — o TestClient não dispara eventos de ciclo de vida.
+    app = FastAPI(title="TikTok LIVE Horse Racing", lifespan=lifespan)
     manager = ConnectionManager()
     
     # Armazena estado no app
