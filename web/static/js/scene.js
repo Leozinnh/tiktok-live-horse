@@ -846,10 +846,6 @@ class TrackScene {
     const cabecaGeo = new THREE.SphereGeometry(0.23, 7, 6);
     const corpoMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
     const cabecaMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    // Sem isto as cores de camisa/pele por instância não pintavam: a torcida
-    // inteira saía branca (ver prepararCoresDeInstancia).
-    this.prepararCoresDeInstancia(corpoGeo, corpoMat);
-    this.prepararCoresDeInstancia(cabecaGeo, cabecaMat);
 
     const fans = [];
     const porNivel = 288;
@@ -1525,16 +1521,6 @@ class TrackScene {
     this.buildBlimp();
   }
 
-  // Cor por instância (InstancedMesh.setColorAt): no three r128 ela é calculada
-  // no vértice (USE_INSTANCING_COLOR) mas só chega ao fragmento se o material
-  // tiver vertexColors ligado (USE_COLOR) — sem isso a malha instanciada inteira
-  // sai branca. Um atributo de cor neutro na geometria liga o define sem tingir.
-  prepararCoresDeInstancia(geo, mat) {
-    const total = geo.attributes.position.count;
-    geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(total * 3).fill(1.0), 3));
-    mat.vertexColors = true;
-  }
-
   // Pista de treino: um oval de areia concêntrico dentro do infield, com
   // obstáculos, que dá "cara de hipódromo" ao gramado central nas tomadas
   // abertas. Raio 120m e retas de 480m deixam 52m de gramado até a cerca
@@ -1723,7 +1709,6 @@ class TrackScene {
     const dummy = new THREE.Object3D();
     const cor = new THREE.Color();
     partesArvore.forEach((parte, k) => {
-      this.prepararCoresDeInstancia(parte.geo, parte.mat);
       const malha = new THREE.InstancedMesh(parte.geo, parte.mat, Math.max(1, arvores.length));
       malha.count = arvores.length;
       malha.castShadow = true;
@@ -1747,7 +1732,6 @@ class TrackScene {
     // instâncias o custo do shadow map não se paga) ---
     const moitaGeo = new THREE.IcosahedronGeometry(1.7, 0);
     const moitaMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    this.prepararCoresDeInstancia(moitaGeo, moitaMat);
     const moitas = new THREE.InstancedMesh(moitaGeo, moitaMat, Math.max(1, arbustos.length));
     moitas.count = arbustos.length;
     moitas.frustumCulled = false;
