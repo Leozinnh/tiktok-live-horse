@@ -71,6 +71,11 @@ def test_gift_power_scales_with_value_and_count(test_app):
     def last_boost(horse_id=1):
         return _boosts_of_horse(client, horse_id)[-1]
 
+    # O doador ESCOLHE o cavalo 1: sem escolha, o presente cai num cavalo
+    # sorteado (ver test_director.py) e o teste não teria onde ler o boost.
+    client.post("/api/test/inject_comment", json={
+        "username": "doador", "display_name": "Doador", "text": "1"})
+
     # Rosa x1 -> 1.20 | Rosa x10: +10% do delta por unidade extra (teto de 5) -> 1.30
     client.post("/api/test/inject_gift", json={
         "username": "doador", "display_name": "Doador", "gift_name": "Rose", "count": 1})
@@ -91,16 +96,27 @@ def test_gift_power_scales_with_value_and_count(test_app):
     assert last_boost()["power"] == 1.8
 
 
+def _like_boosts(client):
+    """Todos os boosts de curtida da pista — sem autor identificável, o
+    empurrão cai num cavalo SORTEADO, então o teste procura em toda a pista."""
+    achados = []
+    for horse_id in range(1, 9):
+        achados += [
+            b for b in _boosts_of_horse(client, horse_id) if b["name"] == "GALERA CURTIU"
+        ]
+    return achados
+
+
 def test_like_burst_gives_light_boost(test_app):
     client = TestClient(test_app)
 
-    # Rajada de 5+ curtidas: empurrão bem leve no cavalo do apoiador (líder/1 se não escolheu)
+    # Rajada de 5+ curtidas de quem não escolheu cavalo: empurrão bem leve
     res = client.post("/api/test/inject_like", json={
         "username": "torcedor", "display_name": "Torcedor", "count": 5})
     assert res.status_code == 200
     assert res.json()["status"] == "ok"
 
-    like_boosts = [b for b in _boosts_of_horse(client, 1) if b["name"] == "GALERA CURTIU"]
+    like_boosts = _like_boosts(client)
     assert len(like_boosts) == 1
     assert like_boosts[0]["power"] == 1.02
     assert like_boosts[0]["emoji"] == "❤️"
@@ -108,15 +124,14 @@ def test_like_burst_gives_light_boost(test_app):
     # Rajada maior empurra um pouco mais, mas nunca passa do teto (1.05)
     client.post("/api/test/inject_like", json={
         "username": "torcedor", "display_name": "Torcedor", "count": 30})
-    like_boosts = [b for b in _boosts_of_horse(client, 1) if b["name"] == "GALERA CURTIU"]
-    assert like_boosts[-1]["power"] == 1.04
-    assert like_boosts[-1]["power"] <= 1.05
+    potencias = sorted(b["power"] for b in _like_boosts(client))
+    assert potencias == [1.02, 1.04]
+    assert max(potencias) <= 1.05
 
     # Menos de 5 de uma vez: nenhum boost
-    before = len(_boosts_of_horse(client, 1))
     client.post("/api/test/inject_like", json={
         "username": "torcedor", "display_name": "Torcedor", "count": 4})
-    assert len(_boosts_of_horse(client, 1)) == before
+    assert len(_like_boosts(client)) == 2
 
     # Curtida não cria usuário nem rende XP/estatística
     names = [v["tiktok_username"] for v in client.get("/api/test/viewers").json()["viewers"]]

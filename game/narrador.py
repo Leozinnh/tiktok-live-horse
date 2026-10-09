@@ -20,6 +20,12 @@ A VOZ também varia: `tts.vozes` é a lista de vozes por onde as falas rodiziam
 um robô lendo avisos; o rodízio faz cada fala soar como alguém diferente
 chamando na tela.
 
+E quando a corrida ACABA, a locução que ainda estava na fila é descartada
+(`descartar_locucao`): prova decidida não se narra — o que sobrava na fila
+era passado e saía depois do vencedor, como se a corrida ainda estivesse
+rolando. Cada fala da fila carrega a categoria (a locução da prova é
+`CORRIDA`); presente, entrada, foto-finish e campeão são da live e ficam.
+
 Falha aqui nunca derruba o jogo: sem internet, sem a biblioteca, sem placa de
 som — o que acontece é um log, e o jogo segue em frente.
 """
@@ -39,6 +45,8 @@ from typing import Callable
 from config.settings import TtsConfig
 from game.falas import (
     BOAS_VINDAS,
+    CLIMA,
+    CLIMA_VIRADA,
     CORRIDA_ABERTURA,
     CORRIDA_DISPUTA,
     CORRIDA_PLACAR,
@@ -86,6 +94,17 @@ DISPUTA_PADRAO = CORRIDA_DISPUTA[0]
 PLACAR_PADRAO = CORRIDA_PLACAR[0]
 RETA_FINAL_PADRAO = RETA_FINAL[0]
 FOTO_FINISH_PADRAO = FOTO_FINISH[0]
+
+# O clima também tem plano B: a primeira frase de verdade de cada lista.
+CLIMA_PADRAO = CLIMA[0]
+CLIMA_VIRADA_PADRAO = CLIMA_VIRADA[0]
+
+# A marca da LOCUÇÃO DA CORRIDA na fila — a abertura, os placares, a disputa,
+# a reta final, o clima e a virada do tempo. Quando a prova termina, o que
+# ainda está na fila com esta marca é passado e sai em bloco (ver
+# `descartar_locucao`); o resto (presente, entrada, foto-finish, campeão) é
+# da live e fica.
+CORRIDA = "corrida"
 
 # O teto da fila. Numa chuva de rosas, falas atrasadas viram ruído: é melhor
 # calar o presente antigo do que narrar o que já passou.
@@ -185,9 +204,9 @@ class Narrador:
         # As frases do jogo vivem em `game/falas.py`; as chaves equivalentes
         # do config (`tts.falas`, `tts.boas_vindas`, `tts.votacao`,
         # `tts.largada`, `tts.vencedor`, `tts.corrida_abertura`,
-        # `tts.corrida_disputa`, `tts.reta_final`, `tts.foto_finish`)
-        # substituem as listas inteiras para quem quiser improvisar sem mexer
-        # no código.
+        # `tts.corrida_disputa`, `tts.reta_final`, `tts.foto_finish`,
+        # `tts.clima`, `tts.clima_virada`) substituem as listas inteiras para
+        # quem quiser improvisar sem mexer no código.
         self.falas = _frases_do_config(cfg.falas, FALAS)
         self.boas_vindas = _frases_do_config(cfg.boas_vindas, BOAS_VINDAS)
         self.votacao = _frases_do_config(cfg.votacao, VOTACAO_ABERTA)
@@ -198,10 +217,17 @@ class Narrador:
         self.corrida_placar = _frases_do_config(cfg.corrida_placar, CORRIDA_PLACAR)
         self.reta_final = _frases_do_config(cfg.reta_final, RETA_FINAL)
         self.foto_finish = _frases_do_config(cfg.foto_finish, FOTO_FINISH)
+        self.clima = _frases_do_config(cfg.clima, CLIMA)
+        self.clima_virada = _frases_do_config(cfg.clima_virada, CLIMA_VIRADA)
 
         self._gerar = gerar or self._gerar_edge
         self._tocar = tocar or self._tocar_mci
-        self._fila: queue.Queue[str | None] = queue.Queue(maxsize=FILA_MAXIMA)
+        # Cada item é (texto, categoria): a categoria marca a locução da
+        # corrida, que pode ser descartada em bloco (CORRIDA); None = fala da
+        # live, que fica. O None solto é o sentinela de desligamento.
+        self._fila: queue.Queue[tuple[str, str | None] | None] = queue.Queue(
+            maxsize=FILA_MAXIMA
+        )
         self._parar = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -428,6 +454,50 @@ class Narrador:
             "Locução de foto-finish",
         )
 
+    # ------------------------------------------------------------------
+    # O clima
+    # ------------------------------------------------------------------
+
+    def _lista_falada(self, nomes: list[str]) -> str:
+        """Os nomes como a voz lê: "A, B e C" — falados e sem sobra."""
+        falados = [self._nome_falado(n) for n in nomes if n]
+        if not falados:
+            return ""
+        if len(falados) == 1:
+            return falados[0]
+        return ", ".join(falados[:-1]) + f" e {falados[-1]}"
+
+    def _quem_se_da_bem(self, nomes: list[str]) -> str:
+        """A cláusula de favoritos do clima — VAZIA quando não há nenhum.
+
+        As frases terminam em `{quem}`: céu limpo não favorece ninguém, e a
+        fala tem que fechar inteira ("...na pista!" e ponto), sem sobra.
+        """
+        lista = self._lista_falada(nomes)
+        return f" Quem se dá bem nisso: {lista}!" if lista else ""
+
+    def texto_do_clima(self, clima: str, nomes: list[str]) -> str:
+        """O anúncio do clima da corrida que vai começar.
+
+        `clima` é o rótulo já com a força ("chuva forte"); `nomes` são os
+        cavalos que o clima favorece (vazio = ninguém).
+        """
+        return self._sorteada(
+            self.clima,
+            CLIMA_PADRAO,
+            {"clima": clima, "quem": self._quem_se_da_bem(nomes)},
+            "Anúncio de clima",
+        )
+
+    def texto_da_virada_do_clima(self, clima: str, nomes: list[str]) -> str:
+        """O aviso de que o tempo virou no meio da prova."""
+        return self._sorteada(
+            self.clima_virada,
+            CLIMA_VIRADA_PADRAO,
+            {"clima": clima, "quem": self._quem_se_da_bem(nomes)},
+            "Anúncio de virada do clima",
+        )
+
     def anunciar_presente(
         self, nome: str, quantidade: int, presente: str, cavalo: str
     ) -> str | None:
@@ -489,7 +559,9 @@ class Narrador:
             return None
 
         return self._enfileirar(
-            self.texto_da_abertura(lider, segundo), f"a abertura ({lider} na frente)"
+            self.texto_da_abertura(lider, segundo),
+            f"a abertura ({lider} na frente)",
+            categoria=CORRIDA,
         )
 
     def anunciar_disputa(self, lider: str, segundo: str) -> str | None:
@@ -498,7 +570,9 @@ class Narrador:
             return None
 
         return self._enfileirar(
-            self.texto_da_disputa(lider, segundo), f"a disputa ({lider} na frente)"
+            self.texto_da_disputa(lider, segundo),
+            f"a disputa ({lider} na frente)",
+            categoria=CORRIDA,
         )
 
     def anunciar_placar(self, lider: str, segundo: str, terceiro: str) -> str | None:
@@ -509,6 +583,7 @@ class Narrador:
         return self._enfileirar(
             self.texto_do_placar(lider, segundo, terceiro),
             f"o placar ({lider}, {segundo}, {terceiro})",
+            categoria=CORRIDA,
         )
 
     def anunciar_reta_final(self, lider: str, segundo: str) -> str | None:
@@ -519,6 +594,29 @@ class Narrador:
         return self._enfileirar(
             self.texto_da_reta_final(lider, segundo),
             f"a reta final ({lider} na frente)",
+            categoria=CORRIDA,
+        )
+
+    def anunciar_clima(self, clima: str, nomes: list[str]) -> str | None:
+        """Enfileira o anúncio do clima da corrida que vai começar."""
+        if not self.ativo:
+            return None
+
+        return self._enfileirar(
+            self.texto_do_clima(clima, nomes),
+            f"o clima ({clima})",
+            categoria=CORRIDA,
+        )
+
+    def anunciar_virada_do_clima(self, clima: str, nomes: list[str]) -> str | None:
+        """Enfileira o aviso da virada do tempo no meio da prova."""
+        if not self.ativo:
+            return None
+
+        return self._enfileirar(
+            self.texto_da_virada_do_clima(clima, nomes),
+            f"a virada do clima ({clima})",
+            categoria=CORRIDA,
         )
 
     def anunciar_foto_finish(self, vencedor: str, segundo: str) -> str | None:
@@ -531,21 +629,58 @@ class Narrador:
             f"a foto-finish ({vencedor} na frente de {segundo})",
         )
 
-    def _enfileirar(self, texto: str, nome: str) -> str:
+    def _enfileirar(self, texto: str, nome: str, categoria: str | None = None) -> str:
         """Põe na fila sem bloquear. Cheia, a fala mais antiga sai.
 
         Num pico, narrar o que está acontecendo agora vale mais do que o
         atrasado — e o aviso no log diz quem ficou sem voz.
+
+        `categoria` marca a fala para o descarte: a locução da corrida
+        (CORRIDA) pode sair em bloco quando a prova termina; o resto
+        (None) é sempre da live e fica.
         """
+        item = (texto, categoria)
         try:
-            self._fila.put_nowait(texto)
+            self._fila.put_nowait(item)
         except queue.Full:
             try:
                 self._fila.get_nowait()
-                self._fila.put_nowait(texto)
+                self._fila.put_nowait(item)
             except (queue.Empty, queue.Full):
                 logger.warning("Fila de falas cheia; %s ficou sem voz", nome)
         return texto
+
+    def descartar_locucao(self) -> int:
+        """Tira da fila a locução da corrida que ainda não falou.
+
+        Quando a prova já está decidida (o líder cruzou, o painel pulou pro
+        pódio, o ciclo reiniciou), o que sobrou na fila com a marca CORRIDA
+        é PASSADO: sairia depois do vencedor, narrando uma corrida que
+        acabou. O que não é locução da prova (presente, entrada, foto-finish,
+        campeão) fica, na mesma ordem — a fila é FIFO e o descarte não pode
+        bagunçar o que sobra.
+
+        Devolve quantas falas saíram; quem chama decide o que fazer com o
+        número (na prática, só avisar no log).
+        """
+        guardadas = []
+        descartadas = 0
+        while True:
+            try:
+                item = self._fila.get_nowait()
+            except queue.Empty:
+                break
+            # O sentinela de desligamento (None) nunca é descartado: ele
+            # acorda a thread, não é fala.
+            if item is None or item[1] != CORRIDA:
+                guardadas.append(item)
+            else:
+                descartadas += 1
+        # Só devolvemos o que saiu da própria fila: não tem como estourar o
+        # teto (a thread só consome, nunca põe).
+        for item in guardadas:
+            self._fila.put_nowait(item)
+        return descartadas
 
     # ------------------------------------------------------------------
     # O trabalho da thread
@@ -554,11 +689,12 @@ class Narrador:
     def _trabalhar(self) -> None:
         while not self._parar.is_set():
             try:
-                texto = self._fila.get(timeout=0.5)
+                item = self._fila.get(timeout=0.5)
             except queue.Empty:
                 continue
-            if texto is None:
+            if item is None:
                 return
+            texto, _ = item
 
             caminho: str | None = None
             try:

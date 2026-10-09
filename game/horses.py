@@ -94,36 +94,40 @@ class HorseState:
         """
         Modulador comportamental (0.0 a 1.0 de progresso na pista).
 
-        Regra de ouro: para cada personalidade, a MÉDIA HARMÔNICA do fator é
-        ~1.00 — soma da fração da corrida dividida pelo fator (a conta está
-        anotada em cada faixa). Média harmônica e não aritmética porque o que
-        decide a corrida é o TEMPO (tempo = distância/velocidade): um fator
-        baixo no início custa mais tempo do que a média simples sugere. Sem
-        essa conta, personalidade virava vantagem fixa de verdade e as mesmas
-        posições se repetiam em toda corrida.
+        Regra de ouro: para cada personalidade, Σ (fração da pista / fator)
+        tem que dar 1.00 — a conta está anotada em cada faixa e é travada
+        pelo teste `test_personalidade_decide_quando_vence_nao_se_vence`.
+
+        Por que essa conta: o que decide a corrida é o TEMPO
+        (tempo = distância / velocidade), então cada fração da pista entra
+        DIVIDIDA pelo fator. E por que 1.00 cravado, não "≈1.00": uma soma
+        em 0.99 parecia inofensiva, mas valia +0.77% de velocidade fixa ao
+        RELÂMPAGO — um multiplicador grátis, a corrida inteira, invisível.
+        Personalidade decide QUANDO cada um é forte; nunca se é mais rápido
+        no total.
         """
         p = self.personality
         factor = 1.0
 
         if p == "FRONT_RUNNER":  # Relâmpago
             # Explode na largada e paga a conta na reta final
-            # 0.40/1.075 + 0.35/1.00 + 0.25/0.925 = 0.99
+            # 0.40/1.075 + 0.35/1.00 + 0.25/0.90 = 1.00
             if progress_ratio < 0.4:
                 factor = 1.075
             elif progress_ratio < 0.75:
                 factor = 1.00
             else:
-                factor = 0.925
+                factor = 0.90
 
         elif p == "CLOSER":  # Trovão
             # Economiza e dispara nos últimos 250m
-            # 0.50/0.945 + 0.25/1.00 + 0.25/1.145 = 1.00
+            # 0.50/0.945 + 0.25/1.00 + 0.25/1.135 = 1.00
             if progress_ratio < 0.5:
                 factor = 0.945
             elif progress_ratio < 0.75:
                 factor = 1.00
             else:
-                factor = 1.145
+                factor = 1.135
 
         elif p == "PACER":  # Furacão
             # Metrônomo: o mesmo ritmo do início ao fim
@@ -141,17 +145,17 @@ class HorseState:
 
         elif p == "CORNER_SPECIALIST":  # Pantera
             # Pista oval tem curvas em 20%-40% e 70%-90% do traçado
-            # 0.40/1.06 (curvas) + 0.60/0.97 (retas) = 1.00
+            # 0.40/1.06 (curvas) + 0.60/0.964 (retas) = 1.00
             in_curve = (0.20 <= progress_ratio <= 0.40) or (0.70 <= progress_ratio <= 0.90)
-            factor = 1.06 if in_curve else 0.97
+            factor = 1.06 if in_curve else 0.964
 
         elif p == "JUGGERNAUT":  # Titã
             # Arrancada pesada, mas depois não para mais
-            # 0.20/0.90 + 0.80/1.03 = 1.00
+            # 0.20/0.90 + 0.80/1.029 = 1.00
             if progress_ratio < 0.2:
                 factor = 0.90
             else:
-                factor = 1.03
+                factor = 1.029
 
         elif p == "COLD_TACTICIAN":  # Nevasca
             # Ritmo frio e constante; quem decide é o clima (ver weather_events)

@@ -13,6 +13,7 @@ class GameClient {
     this.lastTime = performance.now();
     this.lastState = null;
     this.lastCountdownBeep = -1;
+    this._ultimoClima = undefined;
 
     this.initWebSocket();
     this.startRenderLoop();
@@ -50,10 +51,13 @@ class GameClient {
     this.latestServerState = state;
     this.hud.update(state);
 
-    // Transição de Clima
+    // Transição de Clima: a primeira leitura aplica direto (a página abriu
+    // no clima que estiver rolando); daí em diante o clima VIRA com transição.
     const weather = (state.engine && state.engine.weather) || "CLEAR";
-    if (this.scene.currentWeather !== weather) {
-      this.scene.setWeather(weather);
+    if (this._ultimoClima !== weather) {
+      const primeiraLeitura = this._ultimoClima === undefined;
+      this.scene.setWeather(weather, primeiraLeitura ? { instantaneo: true } : undefined);
+      this._ultimoClima = weather;
     }
 
     // Gatilhos de Áudio e Efeitos de Transição de Estado

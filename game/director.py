@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 from enum import Enum
 from typing import Dict, Any, List, Optional
 from config.settings import Settings
@@ -55,6 +56,18 @@ LIKE_BURST_MIN = 5
 LIKE_DURATION_SECONDS = 3.0
 LIKE_POWER_BASE = 1.02
 LIKE_POWER_MAX = 1.05
+
+# O número digitado com a corrida ROLANDO é torcida: um empurrãozinho leve e
+# curto no cavalo citado, só para o público sentir que o comentário mexeu na
+# prova. Bem leve de propósito: quem quer decidir a corrida manda presente.
+TORCIDA_POWER = 1.03
+TORCIDA_DURATION_SECONDS = 2.5
+
+# A virada do tempo no meio da prova: com essa chance, a corrida sorteia na
+# largada um ponto do trajeto (entre 35% e 70% da pista) em que o clima vira
+# — com aviso da voz e do telão. O visual acompanha (scene.js).
+CLIMA_VIRADA_CHANCE = 0.35
+CLIMA_VIRADA_ENTRE = (0.35, 0.70)
 
 # Locução ao vivo: os marcos de distância do líder (metros) que disparam cada
 # chamada e a margem de chegada (ms) que faz a corrida ganhar a exclamação da
@@ -114,13 +127,53 @@ class EventDirector:
         # Marcos da locução ao vivo já falados NESTA corrida (abertura,
         # disputa, reta final) — zerado na largada, pra nenhum marco repetir.
         self._marcos_falados: set[str] = set()
+        # O líder já cruzou e a locução pendente já foi descartada? (uma vez
+        # por corrida: o descarte não fica varrendo a fila a cada tick)
+        self._locucao_encerrada: bool = False
+        # Distância do líder em que o tempo VIRA nesta corrida (None = clima
+        # estável) — sorteada na largada, ver `_sortear_hora_da_virada`.
+        self._virada_clima_em: Optional[float] = None
 
         self._anunciar_votacao_aberta()
 
     def _nome_cavalo(self, horse_id: int) -> str:
         return next((h.name for h in self.config.horses if h.id == horse_id), f"#{horse_id}")
 
+    def _sortear_clima_da_corrida(self) -> None:
+        """Sorteia o clima da corrida que está abrindo e conta pro público.
+
+        O sorteio mora AQUI, na abertura da votação, e não no meio do ciclo:
+        é o ponto por onde passam os três caminhos que abrem votação —
+        criação do director, reset e virada do ranking. O clima nunca repete
+        o da corrida anterior (regra do próprio WeatherSystem).
+        """
+        weather = self.engine.weather_system
+        weather.pick_random_weather()
+        rotulo = weather.rotulo()
+        nomes = self._favoritos_do_clima()
+        logger.info(
+            f"🌦️ Clima da corrida #{self.race_number}: {rotulo}."
+            + (f" Favorece: {', '.join(nomes)}." if nomes else "")
+        )
+        if self.narrador is not None:
+            self.narrador.anunciar_clima(rotulo, nomes)
+        self.notifications_queue.append({
+            "type": "WEATHER",
+            "text": f"{weather.emoji()} Clima da corrida: {rotulo}!"
+            + (f" Favorece {', '.join(nomes)}!" if nomes else ""),
+            "horse_id": None,
+            "badge": weather.emoji(),
+        })
+
+    def _favoritos_do_clima(self) -> List[str]:
+        """Os cavalos que o clima atual favorece, pelo NOME (é o que se fala)."""
+        return [
+            next((h.name for h in self.config.horses if h.personality == p), p)
+            for p in self.engine.weather_system.favoritos()
+        ]
+
     def _anunciar_votacao_aberta(self) -> None:
+        self._sortear_clima_da_corrida()
         logger.info(
             f"🗳️ Corrida #{self.race_number} — votação aberta por "
             f"{self.config.voting_duration_seconds:.0f}s! Comenta 1-8 pra escolher teu cavalo."
@@ -154,12 +207,23 @@ class EventDirector:
         return summary
 
     async def handle_viewer_choice(self, tiktok_username: str, display_name: str, horse_id: int) -> bool:
-        if self.state != DirectorState.VOTING:
-            return False
-            
+        """O número do cavalo digitado no chat.
+
+        Na votação é o VOTO (vale XP e entra no banco); com a corrida
+        ROLANDO é torcida — um empurrãozinho leve no cavalo citado, sem
+        tocar em voto nem em banco (ver `_empurrao_da_torcida`). Fora
+        desses dois momentos o comentário chegou tarde: é ignorado.
+        """
         if horse_id not in [h.id for h in self.config.horses]:
             return False
-            
+
+        if self.state == DirectorState.RACING:
+            self._empurrao_da_torcida(tiktok_username, display_name, horse_id)
+            return True
+
+        if self.state != DirectorState.VOTING:
+            return False
+
         viewer = await self.repository.get_or_create_viewer(tiktok_username, display_name)
         self.viewers_cache[viewer["tiktok_username"]] = viewer
         
@@ -188,8 +252,37 @@ class EventDirector:
             "horse_id": horse_id,
             "badge": "🏇"
         })
-        
+
         return True
+
+    def _empurrao_da_torcida(self, tiktok_username: str, display_name: str, horse_id: int) -> None:
+        """O empurrãozinho de quem digita o número com a corrida rolando.
+
+        Leve e curto por escolha: é para o público SENTIR que o comentário
+        mexeu na prova, não para decidir a corrida — quem quer decidir manda
+        presente. Não grava nada (torcida não rende XP) e não fala na voz:
+        a fila do narrador é uma só e a locução da corrida manda nela.
+        """
+        nome = display_name or tiktok_username or "Torcida"
+        h_name = self._nome_cavalo(horse_id)
+        self.engine.apply_boost(
+            horse_id=horse_id,
+            boost_name="TORCIDA NO CHAT",
+            power=TORCIDA_POWER,
+            duration_seconds=TORCIDA_DURATION_SECONDS,
+            is_legendary=False,
+            legendary_kind=None,
+            gift_emoji="💬",
+            donor_name=nome
+        )
+        self.notifications_queue.append({
+            "type": "CHEER",
+            "text": f"{nome} torce pelo {h_name}!",
+            "horse_id": horse_id,
+            "horse_name": h_name,
+            "badge": "💬"
+        })
+        logger.info(f"💬 {nome} torceu pelo #{horse_id} {h_name} ({TORCIDA_POWER:.2f}x)")
 
     async def handle_viewer_gift(
         self,
@@ -201,15 +294,19 @@ class EventDirector:
         viewer = await self.repository.get_or_create_viewer(tiktok_username, display_name)
         self.viewers_cache[viewer["tiktok_username"]] = viewer
         
-        # Determina cavalo do espectador (ou o líder/aleatório se não escolheu)
+        # Determina cavalo do espectador (ou um SORTEADO se não escolheu)
         chosen_horse_id = None
         for hid, sups in self.horse_supporters.items():
             if any(s["tiktok_username"] == viewer["tiktok_username"] for s in sups):
                 chosen_horse_id = hid
                 break
-                
+
         if not chosen_horse_id:
-            chosen_horse_id = self.engine.leader_horse_id or 1
+            # Sem voto do espectador, o presente vai pra um cavalo SORTEADO.
+            # "Pro líder" parecia justo, mas na votação o líder é SEMPRE o
+            # #1 (a engine o inicializa assim): uma live de galera sem voto
+            # empilhava tudo no #1 e o #1 vencia sempre.
+            chosen_horse_id = random.choice(self.config.horses).id
             
         h_name = next(h.name for h in self.config.horses if h.id == chosen_horse_id)
         
@@ -299,9 +396,10 @@ class EventDirector:
         """Rajada de curtidas (>= LIKE_BURST_MIN de uma vez) dá um empurrão leve.
 
         Bem leve de propósito: curtida é gratuita e infinita, então só empurra
-        o cavalo do apoiador (ou o líder, se o autor não for identificável —
-        o TikTok para de mandar o autor depois de muitas curtidas seguidas).
-        Não grava nada no banco: curtida não rende XP nem estatística.
+        o cavalo do apoiador — ou um SORTEADO, quando o autor não é
+        identificável (o TikTok para de mandar o autor depois de muitas
+        curtidas seguidas; o fallback velho, "o líder", empilhava tudo no
+        mesmo cavalo). Não grava nada no banco: curtida não rende XP.
         """
         if count < LIKE_BURST_MIN:
             return
@@ -313,7 +411,7 @@ class EventDirector:
                     chosen_horse_id = hid
                     break
         if chosen_horse_id is None:
-            chosen_horse_id = self.engine.leader_horse_id or 1
+            chosen_horse_id = random.choice(self.config.horses).id
 
         power = min(LIKE_POWER_MAX, LIKE_POWER_BASE + 0.002 * min(count - LIKE_BURST_MIN, 10))
         self.engine.apply_boost(
@@ -353,8 +451,26 @@ class EventDirector:
             self.engine.status = "FINISHED"
             self.state = DirectorState.PODIUM
             self.state_timer = 0.0
+            # A prova acabou por decisão do painel: a locução que sobrou na
+            # fila era passado, e o tempo não vira mais nesta corrida.
+            self._virada_clima_em = None
+            self._descartar_locucao()
             snapshot = self.engine.get_snapshot()
             self.podium_data = snapshot.get("final_results", [])[:3]
+
+    def _descartar_locucao(self) -> None:
+        """Manda a voz jogar fora a locução da prova já decidida.
+
+        A chamada é guardada: sem narrador (jogo mudo) não há fila.
+        """
+        if self.narrador is None:
+            return
+        descartadas = self.narrador.descartar_locucao()
+        if descartadas:
+            logger.info(
+                f"🔇 Locução descartada: {descartadas} fala(s) de uma prova "
+                f"já decidida não vão mais ao ar."
+            )
 
     def _locucao_da_corrida(self) -> None:
         """As chamadas ao vivo da corrida, por MARCO de distância do líder.
@@ -372,7 +488,12 @@ class EventDirector:
             return
         lider = ordenados[0]
         if lider.finished:
-            # Já cruzou: a fila é do vencedor agora, a locução cumpriu o papel.
+            # Já cruzou: a fila é do vencedor agora. O que ainda estava na
+            # fila era passado — prova decidida não se narra — e sai UMA vez
+            # (o pós-corrida cuida do que ainda chegar).
+            if not self._locucao_encerrada:
+                self._locucao_encerrada = True
+                self._descartar_locucao()
             return
         segundo = ordenados[1]
         terceiro = ordenados[2] if len(ordenados) > 2 else segundo
@@ -393,6 +514,50 @@ class EventDirector:
                 )
             else:
                 self.narrador.anunciar_reta_final(lider.name, segundo.name)
+
+    def _sortear_hora_da_virada(self) -> Optional[float]:
+        """A hora (distância do líder) da virada do tempo — ou None.
+
+        Sorteada na largada: com CLIMA_VIRADA_CHANCE de chance, o tempo vira
+        quando o líder alcançar um ponto entre 35% e 70% da pista. A virada
+        é UMA por corrida: depois de acontecer (ou de a prova se decidir),
+        a agenda morre.
+        """
+        if random.random() >= CLIMA_VIRADA_CHANCE:
+            return None
+        return random.uniform(*CLIMA_VIRADA_ENTRE) * self.engine.track_length
+
+    def _talvez_virar_o_clima(self) -> None:
+        """O tempo vira no meio da prova — se a corrida sorteou essa hora.
+
+        A virada muda o clima NA HORA (efeito e visual, o scene.js anima a
+        troca), com aviso da voz e do telão. Só dispara com a prova viva:
+        prova decidida não tem mais "meio de corrida".
+        """
+        if self._virada_clima_em is None:
+            return
+        lider = max(self.engine.horses, key=lambda h: h.distance)
+        if lider.finished:
+            self._virada_clima_em = None
+            return
+        if lider.distance < self._virada_clima_em:
+            return
+
+        self._virada_clima_em = None
+        weather = self.engine.weather_system
+        weather.pick_random_weather()
+        rotulo = weather.rotulo()
+        nomes = self._favoritos_do_clima()
+        logger.info(f"🌦️ O tempo virou na corrida #{self.race_number}: {rotulo}.")
+        if self.narrador is not None:
+            self.narrador.anunciar_virada_do_clima(rotulo, nomes)
+        self.notifications_queue.append({
+            "type": "WEATHER_CHANGE",
+            "text": f"{weather.emoji()} O tempo virou: {rotulo}!"
+            + (f" Favorece {', '.join(nomes)}!" if nomes else ""),
+            "horse_id": None,
+            "badge": weather.emoji(),
+        })
 
     def _foto_finish_apertada(self) -> bool:
         """A chegada foi decidida no detalhe (menos de MARGEM_FOTO_FINISH_MS)?
@@ -415,6 +580,12 @@ class EventDirector:
         self.state = DirectorState.VOTING
         self.state_timer = 0.0
         self.last_race_rewards = []
+        # O ciclo reiniciou (talvez no meio da prova): a locução da corrida
+        # velha e a agenda de virada do tempo morrem aqui, ANTES de abrir a
+        # votação nova (as falas de agora não podem ser descartadas junto).
+        self._virada_clima_em = None
+        self._locucao_encerrada = False
+        self._descartar_locucao()
         self._anunciar_votacao_aberta()
 
     async def tick(self, dt: float) -> None:
@@ -446,6 +617,8 @@ class EventDirector:
                 self.state = DirectorState.RACING
                 self.state_timer = 0.0
                 self._marcos_falados = set()
+                self._locucao_encerrada = False
+                self._virada_clima_em = self._sortear_hora_da_virada()
                 self.engine.start_race()
                 logger.info(
                     f"🏁 CORRIDA #{self.race_number} COMEÇOU! "
@@ -469,6 +642,7 @@ class EventDirector:
         elif self.state == DirectorState.RACING:
             self.engine.update(dt)
             self._locucao_da_corrida()
+            self._talvez_virar_o_clima()
             if self.engine.is_finished():
                 self.state = DirectorState.PODIUM
                 self.state_timer = 0.0
@@ -481,6 +655,11 @@ class EventDirector:
                         f"🏆 Corrida #{self.race_number}: venceu o #{top['horse_id']} {top['name']}!"
                         + (f" ({resto})" if resto else "")
                     )
+                    # Antes de qualquer coisa: o que ficou na fila de locução
+                    # era passado. A fila agora é da CHEGADA — foto-finish e
+                    # campeão entram num canal limpo, e não atrás de uma fala
+                    # de meio de corrida que não aconteceu mais.
+                    self._descartar_locucao()
                     if self.narrador is not None:
                         # Chegada apertada ganha a exclamação ANTES do anúncio
                         # do campeão: a fila da voz é FIFO — primeiro o susto,
@@ -533,10 +712,10 @@ class EventDirector:
                 
         elif self.state == DirectorState.LEADERBOARD:
             if self.state_timer >= self.config.leaderboard_duration_seconds:
-                # Reinicia novo ciclo
+                # Reinicia novo ciclo (o clima novo é sorteado lá dentro,
+                # por `_anunciar_votacao_aberta` — um lugar só para isso).
                 self.race_number += 1
                 self.engine.reset()
-                self.engine.weather_system.pick_random_weather()
                 self.horse_supporters = {h.id: [] for h in self.config.horses}
                 self.state = DirectorState.VOTING
                 self.state_timer = 0.0

@@ -132,7 +132,8 @@ Para calibrar o ritmo da transmissão sem encostar em código Python, edite `con
     // (game/falas.py); preenchida, substitui a lista inteira. Chaves:
     // "falas" (presentes), "boas_vindas", "votacao", "largada", "vencedor" e
     // as da locução ao vivo — "corrida_abertura", "corrida_disputa",
-    // "corrida_placar", "reta_final", "foto_finish".
+    // "corrida_placar", "reta_final", "foto_finish", "clima" (o tempo da
+    // corrida na abertura) e "clima_virada" (o tempo virando na prova).
     "falas": null
   },
   "xp": {
@@ -155,14 +156,16 @@ Os 8 cavalos iniciais são configurados na lista `"horses"` em `config/config.js
 
 | Nº | Nome | Cor Primária | Arquétipo de Personalidade | Comportamento Único na Pista |
 |:---:|:---|:---:|:---|:---|
-| **#1** | **RELÂMPAGO** | `#F59E0B` (Ouro) | `FRONT_RUNNER` | Arrancada inicial explosiva (+12% de velocidade até 40% da pista); cansaço acentuado no terço final (-10%). |
-| **#2** | **TROVÃO** | `#2563EB` (Azul) | `CLOSER` | Ritmo cadenciado no início (-6%); surto avassalador de velocidade (+15%) nos últimos 200 metros. |
-| **#3** | **FURACÃO** | `#10B981` (Verde) | `PACER` | Maratonista inabalável (+1% do início ao fim); quase imune à perda de stamina. |
-| **#4** | **RAIO** | `#EF4444` (Vermelho) | `DRAFTER` | Caçador agressivo no vácuo; ganha +7% de aceleração sempre que corre atrás de outro cavalo. |
-| **#5** | **PANTERA** | `#1E293B` (Preto) | `CORNER_SPECIALIST` | Mestre das curvas; ganha +8% de rendimento ao contornar as duas curvas ovais pelo lado interno. |
-| **#6** | **TITÃ** | `#78350F` (Bronze) | `JUGGERNAUT` | Aceleração inicial pesada (-8%), porém velocidade inabalável e ganho de rendimento na chuva e lama. |
-| **#7** | **NEVASCA** | `#06B6D4` (Ciano) | `COLD_TACTICIAN` | Frio e equilibrado; eficiência máxima quando ocorrem eventos de tempestade ou vento forte. |
-| **#8** | **FANTASMA** | `#8B5CF6` (Roxo) | `WILDCARD` | Fator de sorte extremo (9.8/10); chances de impulsos surpresa de até +18% em qualquer trecho da prova. |
+| **#1** | **RELÂMPAGO** | `#F59E0B` (Ouro) | `FRONT_RUNNER` | Arrancada explosiva (+7,5% até 40% da pista); paga a conta no fim (-10% depois de 75%). |
+| **#2** | **TROVÃO** | `#2563EB` (Azul) | `CLOSER` | Economiza no começo (-5,5% até a metade); surto de +13,5% nos últimos 250 metros. |
+| **#3** | **FURACÃO** | `#10B981` (Verde) | `PACER` | Metrônomo: fator 1.00 do início ao fim, com a 2ª melhor stamina do páreo. |
+| **#4** | **RAIO** | `#EF4444` (Vermelho) | `DRAFTER` | Vive do vácuo (+1,8% enquanto **não** lidera) — mas quando assume a ponta, rende -6%. |
+| **#5** | **PANTERA** | `#1E293B` (Preto) | `CORNER_SPECIALIST` | Mestre das curvas (+6% nas duas curvas ovais); paga -3,6% nas retas. |
+| **#6** | **TITÃ** | `#78350F` (Bronze) | `JUGGERNAUT` | Largada pesada (-10% nos primeiros 20%), depois inabalável (+2,9%) com a melhor stamina. |
+| **#7** | **NEVASCA** | `#06B6D4` (Ciano) | `COLD_TACTICIAN` | Frio e constante; cresce na chuva, no vento e na tempestade (ver tabela do clima). |
+| **#8** | **FANTASMA** | `#8B5CF6` (Roxo) | `WILDCARD` | Sorte 10/10: forma do dia mais volátil e arrancadas surpresa de até +8% em qualquer trecho. |
+
+**Todos os arquétipos são neutros no relógio.** O que decide corrida é o **tempo** ($tempo = distância/velocidade$), então o contrato de cada personalidade é $\sum (fração\ da\ pista / fator) = 1.00$ — média harmônica, não a média dos fatores; é o teste `test_personalidade_decide_quando_vence_nao_se_vence` que trava essa conta. O efeito prático, medido com `python tools/monte_carlo.py 1000`: em clima sorteado, **cada cavalo vence ~12,5%** (todos entre 10% e 15%, margem média de chegada de ~180ms), e o guardião `test_nenhum_cavalo_fica_para_tras` reprova qualquer cavalo fora de **8%–17% em 200 corridas**. Personalidade define **quando** cada um é forte — nunca **se** é mais rápido.
 
 ### Como Adicionar um Novo Cavalo (ex: #9 TITÂNIO):
 1. Adicione um novo objeto na lista `"horses"` em `config/config.json` com `id: 9, number: 9, name: "TITÂNIO"`.
@@ -195,11 +198,17 @@ No topo de `game/director.py` existe a tabela `GIFT_TIERS`, que casa o nome do p
 **Quantidade enviada de uma vez** amplia o bônus: cada unidade extra soma `+10%` do delta do presente (máximo de 5 extras) e o multiplicador final nunca passa do teto `1.80`.
 Exemplo: 10 rosas = `1.30` — mais forte que 1 rosa (`1.20`), porém mais fraco que 1 galáxia (`1.60`).
 
+**Presente sem escolha vai para um cavalo SORTEADO.** Se o presente chega de quem nunca digitou o número de nenhum cavalo, o empurrão cai num cavalo sorteado — e não mais no líder da pista. Sortear mata dois vícios de uma vez: o líder parava de ganhar combustível de graça (era ele que vencia quase sempre) e quem doa sem escolher espalha emoção pelo páreo inteiro.
+
 Para **adicionar um presente novo**, basta inserir uma linha em `GIFT_TIERS` (sem tocar em nenhuma lógica) e, se ele tiver efeitos visuais próprios no 3D, mapear o `legendary` correspondente no front-end.
 
 ### 5.2.1 Curtidas em Rajada (Boost de Torcida)
-Quando alguém manda **5 ou mais curtidas de uma vez** (`LIKE_BURST_MIN`), o cavalo que a pessoa apoia — ou o líder da pista, quando o TikTok não informa o autor — recebe um boost `GALERA CURTIU` de `1.02` a `1.05` por 3 segundos.
+Quando alguém manda **5 ou mais curtidas de uma vez** (`LIKE_BURST_MIN`), o cavalo que a pessoa apoia — ou um cavalo **sorteado**, quando o TikTok não informa o autor — recebe um boost `GALERA CURTIU` de `1.02` a `1.05` por 3 segundos.
 Curtida é gratuita e infinita: o empurrão é de propósito **bem leve**, não rende XP e não grava nada no banco, para nunca competir com os presentes.
+
+### 5.2.2 Torcida no Chat (número digitado com a corrida rolando)
+Quando alguém digita o **número de um cavalo durante a corrida** (fase `RACING`), o cavalo leva um empurrão de torcida `TORCIDA NO CHAT` (`+3%` por 2,5s — `TORCIDA_POWER`/`TORCIDA_DURATION_SECONDS` em `game/director.py`) e o telão anuncia *"{nome} torce pelo {cavalo}!"*.
+É um carinho, não um voto: não vale na apuração, não mexe na lista de apoiadores do cavalo, não rende XP e não fala nada na voz — o chat pode incentivar a cada mensagem sem virar bagunça na fila da narração.
 
 ### 5.3 Presentes Míticos e Super Raros (Leão, Galáxia, Dragão)
 Quando um presente raro é enviado, os seguintes efeitos são ativados simultaneamente:
@@ -289,8 +298,9 @@ O fundo liso de cor única e a luz chapada eram o maior "cheiro de protótipo" d
 * **Luz que modela:** luz **hemisférica** (céu azulado por cima, gramado esverdeado por baixo) + sol direcional com sombras + **preenchimento frio** do lado oposto (nenhuma sombra fica preta). Refletores do estádio acendem só no clima noturno.
 * **Texturas procedurais:** grama com manchas tonais e areia com grãos e estrias longitudinais, geradas em canvas — **nenhum asset externo** para baixar ou versionar.
 * **Clima mexe na pista:** chuva/tempestade **molham a areia** (escurece e ganha espelho); a neblina fecha o horizonte; a **tempestade dispara relâmpagos** — um clarão curto que acende o céu e o ambiente (e a fonte do lago pulsa de verdade).
+* **O clima VIRA com transição:** trocar de clima (inclusive a **virada no meio da prova**) não é um corte seco: a cena caminha da paleta atual para a nova em **1,8s** (`DURACAO_TRANSICAO_CLIMA`), com suavização de entrada e saída — céu, neblina, luzes, nuvens e pista interpolam juntos, e o sol acende/apaga no meio do caminho. Trocar de clima de novo no meio de uma transição parte de onde a cena está (nada de piscar de volta).
 * **Pipeline de cor sRGB:** `outputEncoding` do renderer + texturas de canvas marcadas como sRGB — sem isso o ACES escurece a cena inteira e as cores saem lavadas.
-* **Contraste sob controle:** a exposição do tone mapping fica em **0.92** e ambiente/hemisfério são enxutos (0.33/0.42 no claro) contra um sol forte (1.5). Com a exposição antiga (1.05) os realces — areia, camisas brancas, céu — estouravam e a cena achatava; menos luz de preenchimento devolve sombra de verdade sem perder cor. Cada clima mantém a proporção na sua própria paleta (tabela `PALETAS` em `setWeather`).
+* **Contraste sob controle:** a exposição do tone mapping fica em **0.92** e ambiente/hemisfério são enxutos (0.33/0.42 no claro) contra um sol forte (1.5). Com a exposição antiga (1.05) os realces — areia, camisas brancas, céu — estouravam e a cena achatava; menos luz de preenchimento devolve sombra de verdade sem perder cor. Cada clima mantém a proporção na sua própria paleta (tabela `PALETAS_CLIMA`, ao lado da classe em `scene.js`).
 * **Arquibancada de estádio:** degraus de concreto com **faixa azul de assentos** no espelho, **escadas** dividindo os setores, fachada frontal com **faixa de publicidade iluminada**, camarote VIP de vidro com montantes, colunas, parede de fundo e teto com testa. A torcida é **instanciada** (`InstancedMesh`: corpo + cabeça, 2 draw calls no lugar de ~900) com altura, camisa e tom de pele variados, pulando por fase própria — e cada fã respeita os corredores das escadas.
 * **Vinheta de transmissão (CSS):** escurecimento suave nos cantos e na base, entre o canvas e o HUD — a imagem ganha cara de TV sem escurecer texto ou painel. O degrau do campeão no pódio tem um brilho varrendo, e o líder da torre de posições ganha glow.
 
@@ -423,7 +433,7 @@ Cada subida de nível gera uma notificação animada na tela com estrela dourada
 
 ## 13. Testes Automatizados e Garantia de Qualidade
 
-O projeto possui **43 testes automatizados** cobrindo todos os módulos vitais. Para executar:
+O projeto possui **65 testes automatizados** cobrindo todos os módulos vitais. Para executar:
 
 ```bash
 python -m pytest -v
@@ -434,12 +444,15 @@ Os testes verificam:
 * Ciclo de vida completo do banco SQLite e cálculos atômicos de XP e níveis.
 * Rate limiting por usuário em janela de 1s e sanitização de strings contra ataques.
 * Simulação matemática da corrida, boosts, curvas de personalidade e linha de chegada.
+* **Balanceamento**: todo arquétipo é neutro no relógio ($\sum fração/fator = 1.00$) e, em 200 corridas com clima sorteado, cada cavalo vence entre 8% e 17% — ninguém domina nem fica escanteado.
+* **Clima**: sorteio que nunca repete o clima da corrida anterior, intensidade que escala o efeito de verdade, rótulo falado ("chuva forte"), anúncio na abertura com os favoritos e a virada do tempo no meio da prova (agendada na largada, uma vez por corrida).
 * Máquina de estados do `EventDirector` (VOTING $\to$ COUNTDOWN $\to$ RACING $\to$ PODIUM $\to$ XP $\to$ LEADERBOARD).
 * Parser semântico de comandos do TikTok (números, nomes, presentes e comandos de torcida).
+* Torcida no chat: número digitado com a corrida rolando empurra o cavalo de leve (e nada acontece fora da corrida); presente e curtida de quem não escolheu cavalo caem em **cavalo sorteado**.
 * Endpoints REST do servidor FastAPI e sincronização WebSocket.
-* Voz da live: frases e fila do Narrador com gerador/tocador injetados (sem internet e sem placa de som), incluindo o descarte da fala mais antiga com a fila cheia.
+* Voz da live: frases e fila do Narrador com gerador/tocador injetados (sem internet e sem placa de som), incluindo o descarte da fala mais antiga com a fila cheia e o **descarte da locução de corrida quando a chegada decide** (vencedor e foto-finish nunca são descartados).
 * Locução ao vivo: frases da dupla da frente, queda na frase padrão com placeholder quebrado e todas as frases do jogo formatando sem erro.
-* Fiação da voz no `EventDirector`: votação (com lembrete a cada 12s), largada, vencedor, presente e entrada falados nos momentos certos — e a locução disparando abertura, disputa, reta final e os três placares UMA vez cada, na ordem da prova.
+* Fiação da voz no `EventDirector`: votação (com lembrete a cada 12s), largada, vencedor, presente, entrada e clima falados nos momentos certos — e a locução disparando abertura, disputa, reta final e os três placares UMA vez cada, na ordem da prova.
 * Margem da foto-finish: a exclamação só entra quando a chegada foi decidida no detalhe.
 * Teste de integração ponta a ponta (E2E) simulando uma prova completa com espectadores reais.
 
@@ -468,12 +481,15 @@ A corrida era o único trecho silencioso da transmissão: saía a largada e depo
 
 E a **votação** (30s parados) não fica muda: a voz lembra a galera de votar a cada **12s** (`CHAMADA_VOTACAO_INTERVALO`) até a largada.
 
+E o **clima** também fala: a votação abre com o tempo da corrida anunciado **junto com quem se dá bem nele** (*"Atenção à pista! A corrida de agora é com chuva forte! Quem se dá bem nisso: Nevasca e Titã!"*), e quando o tempo **vira com a prova rolando** o locutor avisa na hora (*"Olha o tempo virando! Agora é vento forte! ..."*) — listas `clima` e `clima_virada` em `game/falas.py`, trocáveis pelo config (`tts.clima`, `tts.clima_virada`).
+
 Toda frase da locução cita a **dupla da frente** (ou o trio, no placar) — a tensão da fala está no duelo, não num cavalo sozinho.
 
 Detalhes de projeto:
 
 * **Fila máxima de 20 falas:** cheia, a mais antiga sai — narrar o que está acontecendo agora vale mais do que narrar o atrasado.
-* **Frases sorteadas** de `game/falas.py` (dezenas por momento): a voz nunca vira disco riscado. Um `{placeholder}` inválido numa frase editada cai na frase padrão com aviso no log — nunca deixa a live muda. As listas da locução aceitam troca pelo config (`tts.corrida_abertura`, `tts.corrida_disputa`, `tts.corrida_placar`, `tts.reta_final`, `tts.foto_finish`).
+* **Locução de corrida descartada quando a chegada decide:** no instante em que o líder cruza a linha (ou a corrida é encerrada no meio, ou um novo ciclo começa), as falas de meio de prova que ainda estavam na fila são jogadas fora — antes o locutor seguia narrando a corrida como se ninguém tivesse chegado. `descartar_locucao()` no `game/narrador.py` limpa só o que é de corrida: chegada, vencedor, votação e presentes **nunca** são descartados.
+* **Frases sorteadas** de `game/falas.py` (dezenas por momento): a voz nunca vira disco riscado. Um `{placeholder}` inválido numa frase editada cai na frase padrão com aviso no log — nunca deixa a live muda. As listas da locução aceitam troca pelo config (`tts.corrida_abertura`, `tts.corrida_disputa`, `tts.corrida_placar`, `tts.reta_final`, `tts.foto_finish`, `tts.clima`, `tts.clima_virada`).
 * **Rodízio de vozes** (`tts.vozes`): uma live inteira numa voz só soa como robô lendo avisos; a lista vazia volta para a `tts.voz` de sempre.
 * **Nome de cavalo em CAIXA ALTA** (RELÂMPAGO) é falado em caixa normal (Relâmpago): caixa alta na fala soa como grito, e nome curto todo em maiúsculas corre o risco de sair letra por letra.
 * **Chegada de espectador** (`JoinEvent` do TikTok): oi falado com cooldown de 60s por pessoa (o TikTok repete a entrada de quem sai e volta). Entrada não grava no banco nem rende XP — é presença, não voto. `tts.anunciar_entrada: false` cala só a chegada.

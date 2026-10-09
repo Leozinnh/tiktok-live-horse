@@ -17,6 +17,8 @@ from game.falas import (
 )
 from game.narrador import DISPUTA_PADRAO, FALA_PADRAO, VOZ_PADRAO, Narrador
 
+from fakes import FakeNarrador
+
 
 def _narrador(**cfg) -> Narrador:
     """Narrador de teste: nada de edge-tts nem MCI de verdade."""
@@ -136,7 +138,127 @@ def test_fila_cheia_derruba_a_mais_antiga():
         n.anunciar_presente(str(i), 1, "Rose", "RAIO")  # thread não ligada: fila enche
     assert n.pendentes() == 20
     # As cinco primeiras ficaram sem voz (fala atrasada é pior que silêncio).
-    assert n._fila.queue[0] == "5 na fila"
+    # Cada item da fila é (texto, categoria): a categoria marca a locução da
+    # corrida, que pode ser descartada quando a prova termina.
+    assert n._fila.queue[0][0] == "5 na fila"
+
+
+def test_descartar_locucao_tira_so_a_locucao_da_fila():
+    """Prova decidida não se narra: a locução pendente sai da fila.
+
+    Só a locução da corrida é passado — presente, entrada, foto-finish e
+    vencedor são momentos da live e ficam, na ordem (a fila é FIFO: o
+    descarte não pode bagunçar o que sobra).
+    """
+    n = _narrador()
+    n.anunciar_abertura("RAIO", "TITÃ")
+    n.anunciar_placar("RAIO", "TITÃ", "NEVASCA")
+    presente = n.anunciar_presente("leo", 1, "Rose", "RAIO")
+    n.anunciar_clima("chuva forte", ["NEVASCA"])
+    n.anunciar_disputa("RAIO", "TITÃ")
+    entrada = n.anunciar_entrada("leo")
+    n.anunciar_reta_final("RAIO", "TITÃ")
+    chegada = n.anunciar_foto_finish("RAIO", "TITÃ")
+    vencedor = n.anunciar_vencedor(1, "RAIO")
+
+    # Abertura, placar, clima, disputa e reta final: cinco falas da prova.
+    assert n.descartar_locucao() == 5
+
+    assert [texto for texto, _ in n._fila.queue] == [
+        presente,
+        entrada,
+        chegada,
+        vencedor,
+    ]
+    # Descartar de novo não encontra mais nada.
+    assert n.descartar_locucao() == 0
+
+
+@pytest.mark.asyncio
+async def test_director_descarta_a_locucao_quando_a_corrida_e_decidida(tmp_path):
+    """O líder cruzou: o resto da locução era passado — sai da fila.
+
+    Sem isso, a voz narrava uma prova já vencida: as falas de meio de
+    corrida ainda na fila saíam DEPOIS de o vencedor cruzar, como se a
+    corrida estivesse rolando.
+    """
+    from backend.database.repository import DatabaseRepository
+    from game.director import EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+
+    repo = DatabaseRepository(db_path=str(tmp_path / "locucao.db"))
+    await repo.init_db()
+    voz = FakeNarrador()
+    director = EventDirector(
+        config=config, engine=RaceEngine(config), repository=repo, narrador=voz
+    )
+
+    await director.tick(0.15)  # VOTING -> COUNTDOWN
+    await director.tick(0.06)  # COUNTDOWN -> RACING
+    for _ in range(120):
+        await director.tick(1.0)
+        if any(c[0] == "vencedor" for c in voz.chamadas):
+            break
+
+    tipos = [c[0] for c in voz.chamadas]
+    assert "descartar_locucao" in tipos, "a corrida terminou sem descartar a locução"
+
+    # O descarte acontece na chegada do líder; o campeão é anunciado depois.
+    descarte = tipos.index("descartar_locucao")
+    assert tipos.index("vencedor") > descarte
+
+    # E nenhuma locução da prova entra na fila depois do descarte.
+    locucao = {"abertura", "placar", "disputa", "reta_final"}
+    assert not locucao.intersection(tipos[descarte + 1:])
+
+
+async def _director_em_corrida(tmp_path, nome, voz):
+    """Director pronto para largar — atalho para os testes de descarte."""
+    from backend.database.repository import DatabaseRepository
+    from game.director import EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+
+    repo = DatabaseRepository(db_path=str(tmp_path / nome))
+    await repo.init_db()
+    return EventDirector(
+        config=config, engine=RaceEngine(config), repository=repo, narrador=voz
+    )
+
+
+@pytest.mark.asyncio
+async def test_finish_forcado_descarta_a_locucao(tmp_path):
+    """O painel pula direto pro pódio: a locução pendente morre aqui também."""
+    voz = FakeNarrador()
+    director = await _director_em_corrida(tmp_path, "forcado.db", voz)
+
+    await director.tick(0.15)
+    await director.tick(0.06)  # RACING
+    voz.chamadas.clear()
+
+    await director.force_finish_race()
+    assert ("descartar_locucao",) in voz.chamadas
+
+
+@pytest.mark.asyncio
+async def test_reset_no_meio_da_corrida_descarta_a_locucao(tmp_path):
+    """Reiniciar o ciclo no meio da prova: a locução da corrida velha sai."""
+    voz = FakeNarrador()
+    director = await _director_em_corrida(tmp_path, "reset.db", voz)
+
+    await director.tick(0.15)
+    await director.tick(0.06)  # RACING
+    voz.chamadas.clear()
+
+    await director.reset_to_new_race()
+    assert ("descartar_locucao",) in voz.chamadas
 
 
 def test_thread_gera_toca_e_apaga():
@@ -164,41 +286,7 @@ def test_thread_gera_toca_e_apaga():
 # A fiação no director
 # ---------------------------------------------------------------------------
 
-class _FakeNarrador:
-    """Anota o que o director pediu para falar, sem gerar áudio."""
-
-    def __init__(self):
-        self.chamadas = []
-
-    def anunciar_votacao(self, numero):
-        self.chamadas.append(("votacao", numero))
-
-    def anunciar_largada(self, numero):
-        self.chamadas.append(("largada", numero))
-
-    def anunciar_vencedor(self, numero, nome):
-        self.chamadas.append(("vencedor", numero, nome))
-
-    def anunciar_presente(self, nome, quantidade, presente, cavalo):
-        self.chamadas.append(("presente", nome, quantidade, presente, cavalo))
-
-    def anunciar_entrada(self, nome):
-        self.chamadas.append(("entrada", nome))
-
-    def anunciar_abertura(self, lider, segundo):
-        self.chamadas.append(("abertura", lider, segundo))
-
-    def anunciar_placar(self, lider, segundo, terceiro):
-        self.chamadas.append(("placar", lider, segundo, terceiro))
-
-    def anunciar_disputa(self, lider, segundo):
-        self.chamadas.append(("disputa", lider, segundo))
-
-    def anunciar_reta_final(self, lider, segundo):
-        self.chamadas.append(("reta_final", lider, segundo))
-
-    def anunciar_foto_finish(self, vencedor, segundo):
-        self.chamadas.append(("foto_finish", vencedor, segundo))
+# O dublê da voz mora em `tests/fakes.py` (compartilhado com test_clima.py).
 
 
 @pytest.mark.asyncio
@@ -216,7 +304,7 @@ async def test_director_chama_a_voz_nos_momentos_certos(tmp_path):
 
     repo = DatabaseRepository(db_path=str(tmp_path / "test_voz.db"))
     await repo.init_db()
-    voz = _FakeNarrador()
+    voz = FakeNarrador()
     director = EventDirector(
         config=config, engine=RaceEngine(config), repository=repo, narrador=voz
     )
@@ -280,7 +368,7 @@ async def test_votacao_lembra_a_galera_no_meio_do_caminho(tmp_path):
 
     repo = DatabaseRepository(db_path=str(tmp_path / "lembrete.db"))
     await repo.init_db()
-    voz = _FakeNarrador()
+    voz = FakeNarrador()
     director = EventDirector(
         config=config, engine=RaceEngine(config), repository=repo, narrador=voz
     )

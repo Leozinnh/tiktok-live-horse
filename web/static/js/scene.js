@@ -1,3 +1,65 @@
+// Uma paleta por clima. Cada linha vira céu (topo/horizonte), neblina,
+// luzes, sol/estrelas, nuvens e o estado da pista (molhada = escura e
+// espelhada). Tudo num lugar só — antes cada clima mexia em um subconjunto
+// das luzes e sobrava estado velho do clima anterior.
+// Ambiente/hemisfério baixos + sol forte = contraste. Antes tudo era alto
+// e a cena saía estourada, sem sombra de verdade.
+// `fill` é a luz de modelagem (sol * 0.16), com a noite forçando 0.
+const PALETAS_CLIMA = {
+  CLEAR: {
+    ceuTopo: 0x2f7ddb, horizonte: 0xc9ecff, neblina: 0.0012,
+    ambiente: 0.32, hemi: 0.4, sol: 1.5, solCor: 0xfffaed, torres: 0.0,
+    fill: 0.24,
+    nuvemCor: 0xffffff, nuvemOpacidade: 0.85,
+    solVisivel: true, solBrilho: 0xfff2c4, estrelas: 0.0,
+    pistaCor: 0xffffff, pistaRugosidade: 0.92, pistaMetal: 0.04,
+  },
+  WIND: {
+    ceuTopo: 0x3b82f6, horizonte: 0xdbeafe, neblina: 0.0010,
+    ambiente: 0.32, hemi: 0.4, sol: 1.45, solCor: 0xfffaed, torres: 0.0,
+    fill: 0.232,
+    nuvemCor: 0xf1f5f9, nuvemOpacidade: 0.7,
+    solVisivel: true, solBrilho: 0xfff2c4, estrelas: 0.0,
+    pistaCor: 0xffffff, pistaRugosidade: 0.92, pistaMetal: 0.04,
+  },
+  SUNSET: {
+    ceuTopo: 0x4c1d95, horizonte: 0xfb923c, neblina: 0.0016,
+    ambiente: 0.3, hemi: 0.34, sol: 1.4, solCor: 0xffb066, torres: 0.7,
+    fill: 0.224,
+    nuvemCor: 0xffc9a3, nuvemOpacidade: 0.8,
+    solVisivel: true, solBrilho: 0xff9d4d, estrelas: 0.15,
+    pistaCor: 0xffd9b3, pistaRugosidade: 0.92, pistaMetal: 0.04,
+  },
+  NIGHT_LIGHTS: {
+    ceuTopo: 0x020617, horizonte: 0x0f172a, neblina: 0.0017,
+    ambiente: 0.16, hemi: 0.18, sol: 0.1, solCor: 0x93c5fd, torres: 2.6,
+    fill: 0.0,
+    nuvemCor: 0x475569, nuvemOpacidade: 0.55,
+    solVisivel: false, solBrilho: 0xffffff, estrelas: 1.0,
+    pistaCor: 0xcfd8e8, pistaRugosidade: 0.9, pistaMetal: 0.06,
+  },
+  RAIN: {
+    ceuTopo: 0x475569, horizonte: 0x94a3b8, neblina: 0.0026,
+    ambiente: 0.3, hemi: 0.34, sol: 0.34, solCor: 0xfffaed, torres: 1.2,
+    fill: 0.054,
+    nuvemCor: 0x94a3b8, nuvemOpacidade: 0.9,
+    solVisivel: false, solBrilho: 0xffffff, estrelas: 0.0,
+    pistaCor: 0x7f8ea3, pistaRugosidade: 0.42, pistaMetal: 0.18,
+  },
+  STORM: {
+    ceuTopo: 0x1e293b, horizonte: 0x64748b, neblina: 0.0032,
+    ambiente: 0.24, hemi: 0.26, sol: 0.26, solCor: 0xfffaed, torres: 1.6,
+    fill: 0.042,
+    nuvemCor: 0x64748b, nuvemOpacidade: 0.95,
+    solVisivel: false, solBrilho: 0xffffff, estrelas: 0.0,
+    pistaCor: 0x6b7a90, pistaRugosidade: 0.36, pistaMetal: 0.22,
+  },
+};
+
+// A virada do clima em segundos: tempo da cena caminhar da paleta antiga
+// para a nova. A voz anuncia junto — imagem e locução caem no mesmo compasso.
+const DURACAO_TRANSICAO_CLIMA = 1.8;
+
 class TrackScene {
   constructor(containerElement) {
     this.container = containerElement;
@@ -55,6 +117,10 @@ class TrackScene {
     this.finishLinePosition = new THREE.Vector3(-this.straightLen / 2.0, 0, this.radius);
 
     this.currentWeather = "CLEAR";
+    // Paleta que está NA TELA agora (a virada de clima parte dela) e a
+    // transição em andamento, se houver.
+    this._paletaAtual = null;
+    this._transicao = null;
     this.init();
   }
 
@@ -1064,61 +1130,29 @@ class TrackScene {
     });
   }
 
-  setWeather(weatherType) {
+  setWeather(weatherType, opcoes = {}) {
     this.currentWeather = weatherType;
+    const nova = PALETAS_CLIMA[weatherType] || PALETAS_CLIMA.CLEAR;
 
-    // Uma paleta por clima. Cada linha vira céu (topo/horizonte), neblina,
-    // luzes, sol/estrelas, nuvens e o estado da pista (molhada = escura e
-    // espelhada). Tudo num lugar só — antes cada clima mexia em um subconjunto
-    // das luzes e sobrava estado velho do clima anterior.
-    // Ambiente/hemisfério baixos + sol forte = contraste. Antes tudo era alto
-    // e a cena saía estourada, sem sombra de verdade.
-    const PALETAS = {
-      CLEAR: {
-        ceuTopo: 0x2f7ddb, horizonte: 0xc9ecff, neblina: 0.0012,
-        ambiente: 0.32, hemi: 0.4, sol: 1.5, solCor: 0xfffaed, torres: 0.0,
-        nuvemCor: 0xffffff, nuvemOpacidade: 0.85,
-        solVisivel: true, solBrilho: 0xfff2c4, estrelas: 0.0,
-        pistaCor: 0xffffff, pistaRugosidade: 0.92, pistaMetal: 0.04,
-      },
-      WIND: {
-        ceuTopo: 0x3b82f6, horizonte: 0xdbeafe, neblina: 0.0010,
-        ambiente: 0.32, hemi: 0.4, sol: 1.45, solCor: 0xfffaed, torres: 0.0,
-        nuvemCor: 0xf1f5f9, nuvemOpacidade: 0.7,
-        solVisivel: true, solBrilho: 0xfff2c4, estrelas: 0.0,
-        pistaCor: 0xffffff, pistaRugosidade: 0.92, pistaMetal: 0.04,
-      },
-      SUNSET: {
-        ceuTopo: 0x4c1d95, horizonte: 0xfb923c, neblina: 0.0016,
-        ambiente: 0.3, hemi: 0.34, sol: 1.4, solCor: 0xffb066, torres: 0.7,
-        nuvemCor: 0xffc9a3, nuvemOpacidade: 0.8,
-        solVisivel: true, solBrilho: 0xff9d4d, estrelas: 0.15,
-        pistaCor: 0xffd9b3, pistaRugosidade: 0.92, pistaMetal: 0.04,
-      },
-      NIGHT_LIGHTS: {
-        ceuTopo: 0x020617, horizonte: 0x0f172a, neblina: 0.0017,
-        ambiente: 0.16, hemi: 0.18, sol: 0.1, solCor: 0x93c5fd, torres: 2.6,
-        nuvemCor: 0x475569, nuvemOpacidade: 0.55,
-        solVisivel: false, solBrilho: 0xffffff, estrelas: 1.0,
-        pistaCor: 0xcfd8e8, pistaRugosidade: 0.9, pistaMetal: 0.06,
-      },
-      RAIN: {
-        ceuTopo: 0x475569, horizonte: 0x94a3b8, neblina: 0.0026,
-        ambiente: 0.3, hemi: 0.34, sol: 0.34, solCor: 0xfffaed, torres: 1.2,
-        nuvemCor: 0x94a3b8, nuvemOpacidade: 0.9,
-        solVisivel: false, solBrilho: 0xffffff, estrelas: 0.0,
-        pistaCor: 0x7f8ea3, pistaRugosidade: 0.42, pistaMetal: 0.18,
-      },
-      STORM: {
-        ceuTopo: 0x1e293b, horizonte: 0x64748b, neblina: 0.0032,
-        ambiente: 0.24, hemi: 0.26, sol: 0.26, solCor: 0xfffaed, torres: 1.6,
-        nuvemCor: 0x64748b, nuvemOpacidade: 0.95,
-        solVisivel: false, solBrilho: 0xffffff, estrelas: 0.0,
-        pistaCor: 0x6b7a90, pistaRugosidade: 0.36, pistaMetal: 0.22,
-      },
-    };
+    // Primeira paleta da página (ou pedido direto) aplica de uma vez; das
+    // outras, o clima VIRA: a cena caminha da paleta que está na tela para
+    // a nova, em DURACAO_TRANSICAO_CLIMA — é a virada do tempo no meio da
+    // corrida, anunciada pela voz; a imagem acompanha no mesmo compasso.
+    if (!this._paletaAtual || opcoes.instantaneo) {
+      this._transicao = null;
+      this._aplicarPaleta(nova);
+      return;
+    }
+    // Parte da paleta ATUAL (se já havia uma virada em andamento, parte dela
+    // — trocar de clima de novo no meio não faz a cena piscar de volta).
+    this._transicao = { de: { ...this._paletaAtual }, para: nova, t: 0.0 };
+    // Sair da tempestade apaga o clarão pendente
+    this.flashIntensity = 0.0;
+  }
 
-    const p = PALETAS[weatherType] || PALETAS.CLEAR;
+  _aplicarPaleta(p) {
+    // O que foi para a tela vira o ponto de partida da próxima virada.
+    this._paletaAtual = { ...p };
 
     // Céu + neblina na cor do horizonte (os objetos distantes se dissolvem
     // dentro do céu em vez de recortar contra ele).
@@ -1135,7 +1169,7 @@ class TrackScene {
     this.hemiLight.intensity = p.hemi;
     this.sunLight.color.setHex(p.solCor);
     this.sunLight.intensity = p.sol;
-    this.fillLight.intensity = weatherType === "NIGHT_LIGHTS" ? 0.0 : p.sol * 0.16;
+    this.fillLight.intensity = p.fill;
     this.floodlights.forEach((f) => (f.intensity = p.torres));
 
     // Sol, estrelas e nuvens
@@ -1149,9 +1183,34 @@ class TrackScene {
     this.trackMat.color.setHex(p.pistaCor);
     this.trackMat.roughness = p.pistaRugosidade;
     this.trackMat.metalness = p.pistaMetal;
+  }
 
-    // Sair da tempestade apaga o clarão pendente
-    this.flashIntensity = 0.0;
+  _paletaInterpolada(de, para, t) {
+    // Suaviza a saída e a chegada (a virada não arranca nem trava no fim).
+    const e = t * t * (3 - 2 * t);
+    const num = (a, b) => a + (b - a) * e;
+    const cor = (a, b) => new THREE.Color(a).lerp(new THREE.Color(b), e).getHex();
+    return {
+      ceuTopo: cor(de.ceuTopo, para.ceuTopo),
+      horizonte: cor(de.horizonte, para.horizonte),
+      neblina: num(de.neblina, para.neblina),
+      ambiente: num(de.ambiente, para.ambiente),
+      hemi: num(de.hemi, para.hemi),
+      sol: num(de.sol, para.sol),
+      solCor: cor(de.solCor, para.solCor),
+      torres: num(de.torres, para.torres),
+      fill: num(de.fill, para.fill),
+      nuvemCor: cor(de.nuvemCor, para.nuvemCor),
+      nuvemOpacidade: num(de.nuvemOpacidade, para.nuvemOpacidade),
+      // O sol é aceso/apagado no meio da virada (não dá para interpolar um
+      // botão liga/desliga).
+      solVisivel: e < 0.5 ? de.solVisivel : para.solVisivel,
+      solBrilho: cor(de.solBrilho, para.solBrilho),
+      estrelas: num(de.estrelas, para.estrelas),
+      pistaCor: cor(de.pistaCor, para.pistaCor),
+      pistaRugosidade: num(de.pistaRugosidade, para.pistaRugosidade),
+      pistaMetal: num(de.pistaMetal, para.pistaMetal),
+    };
   }
 
   update(timeSeconds) {
@@ -1185,7 +1244,22 @@ class TrackScene {
       jet.material.opacity = 0.55 + 0.25 * Math.abs(onda);
     }
 
-    // 5. Relâmpago da tempestade: clarão curto que acende o céu e o ambiente
+    // 5. Virada de clima: a paleta caminha da antiga para a nova. Pinta
+    // ANTES do relâmpago: o clarão da tempestade acende por cima do estado
+    // interpolado do frame.
+    if (this._transicao) {
+      this._transicao.t += dt / DURACAO_TRANSICAO_CLIMA;
+      if (this._transicao.t >= 1.0) {
+        this._transicao = null;
+        this._aplicarPaleta(PALETAS_CLIMA[this.currentWeather] || PALETAS_CLIMA.CLEAR);
+      } else {
+        this._aplicarPaleta(
+          this._paletaInterpolada(this._transicao.de, this._transicao.para, this._transicao.t)
+        );
+      }
+    }
+
+    // 6. Relâmpago da tempestade: clarão curto que acende o céu e o ambiente
     if (this.currentWeather === "STORM") {
       this.lightningTimer -= dt;
       if (this.lightningTimer <= 0) {

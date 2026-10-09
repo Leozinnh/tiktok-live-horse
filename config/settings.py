@@ -63,6 +63,10 @@ class TtsConfig(BaseModel):
     corrida_placar: Optional[List[str]] = None
     reta_final: Optional[List[str]] = None
     foto_finish: Optional[List[str]] = None
+    # O clima: o anúncio da abertura da votação e o aviso da virada do tempo
+    # no meio da prova — mesmas regras de troca das listas acima.
+    clima: Optional[List[str]] = None
+    clima_virada: Optional[List[str]] = None
 
 class Settings(BaseModel):
     race_duration_seconds: float = 35.0

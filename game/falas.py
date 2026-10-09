@@ -24,6 +24,10 @@ Os valores de cada lista:
 - `FOTO_FINISH`: `{vencedor}` e `{segundo}` — só entra no ar quando a
   chegada foi decidida por menos de 50ms (ver `MARGEM_FOTO_FINISH_MS` no
   director); em corrida decidida com folga, a exclamação não faria sentido.
+- `CLIMA` e `CLIMA_VIRADA`: `{clima}` (o rótulo já com a força — "chuva
+  forte") e `{quem}` (a cláusula de quem o clima favorece, pronta para
+  encostar no fim da frase: vem VAZIA quando o clima não favorece ninguém
+  — céu limpo, por exemplo — e as frases precisam fechar sem ela).
 
 Escreva pensando no texto FALADO: acento e pontuação importam (é o que faz a
 voz do edge-tts ler certo), e evite frase longa demais — a fala entra no meio
@@ -32,8 +36,8 @@ corrida cada frase tem poucos segundos de janela antes do próximo marco.
 Quem quiser trocar as frases sem mexer no código aponta `tts.falas`,
 `tts.boas_vindas`, `tts.votacao`, `tts.largada`, `tts.vencedor`,
 `tts.corrida_abertura`, `tts.corrida_disputa`, `tts.corrida_placar`,
-`tts.reta_final` e `tts.foto_finish` no `config.json` para as próprias
-listas; as daqui são o padrão do jogo.
+`tts.reta_final`, `tts.foto_finish`, `tts.clima` e `tts.clima_virada` no
+`config.json` para as próprias listas; as daqui são o padrão do jogo.
 """
 
 FALAS = [
@@ -522,4 +526,42 @@ FOTO_FINISH = [
     "Decidido na foto! {vencedor} ganhou e {segundo} chegou logo depois!",
     "Os juízes confirmam! {vencedor} bateu o {segundo} por um nariz!",
     "Resultado por foto! {vencedor} campeão, {segundo} vice colado!",
+]
+
+# ---------------------------------------------------------------------------
+# O clima: anunciado na abertura da votação (CLIMA) e quando o tempo VIRA no
+# meio da prova (CLIMA_VIRADA, ver `_talvez_virar_o_clima` no director).
+# `{clima}` já vem com a força ("chuva forte"); `{quem}` é a cláusula de quem
+# o clima favorece — pronta para encostar no FIM da frase, e vazia quando o
+# clima não favorece ninguém. Por isso toda frase termina em `{quem}`.
+# ---------------------------------------------------------------------------
+
+CLIMA = [
+    # --- Originais ---
+    "Atenção à pista! A corrida de agora é com {clima}!{quem}",
+    "Olha o tempo, família! {clima} na pista pra corrida de hoje!{quem}",
+    "Boletim do tempo! A prova vai ser com {clima}!{quem}",
+    "A pista tá com {clima} hoje! Isso pode mudar tudo!{quem}",
+    "De olho no tempo! {clima} na pista da corrida de agora!{quem}",
+    "Prepara o palpite com {clima} na pista! A corrida vai ser boa!{quem}",
+    "O tempo deu a cara dele: {clima} na pista hoje!{quem}",
+    "Corrida de hoje é com {clima}! Escolhe bem o teu cavalo!{quem}",
+
+    # --- Climões ---
+    "Eita, {clima} na pista! A corrida promete!{quem}",
+    "A pista pediu {clima} hoje! E a corrida agradece!{quem}",
+    "Vem aí uma corrida com {clima}! Segura a emoção!{quem}",
+    "O tempo caprichou: {clima} pra corrida de agora!{quem}",
+]
+
+CLIMA_VIRADA = [
+    # --- Originais ---
+    "Olha o tempo virando! Agora é {clima} na pista!{quem}",
+    "A prova virou! Agora é {clima} na pista!{quem}",
+    "Mudou tudo, família! O tempo virou pra {clima}!{quem}",
+    "Eita! {clima} na pista no meio da corrida!{quem}",
+    "O tempo não perdoou! Vira pra {clima} e a prova muda!{quem}",
+    "Vira, vira! A pista agora é com {clima}!{quem}",
+    "Atualizando o tempo! Agora é {clima}! A corrida continua!{quem}",
+    "Isso muda a corrida! O tempo virou pra {clima}!{quem}",
 ]

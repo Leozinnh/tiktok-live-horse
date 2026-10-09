@@ -58,6 +58,127 @@ async def test_director_state_transitions(tmp_path):
     assert director.state == DirectorState.RACING
 
 
+async def _director_votando(tmp_path, nome):
+    """Director em VOTING (votação longa: quem manda no relógio é o teste)."""
+    from game.director import EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    repo = DatabaseRepository(db_path=str(tmp_path / nome))
+    await repo.init_db()
+    return EventDirector(config=config, engine=RaceEngine(config), repository=repo)
+
+
+@pytest.mark.asyncio
+async def test_numero_digitado_com_a_corrida_rodando_empurra_o_cavalo(tmp_path):
+    """Com a corrida rodando, o número digitado vira torcida: um empurrão
+    LEVE no cavalo citado — e o voto (já travado na largada) não muda."""
+    from game.director import (
+        TORCIDA_DURATION_SECONDS,
+        TORCIDA_POWER,
+        DirectorState,
+    )
+    from game.director import EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+
+    repo = DatabaseRepository(db_path=str(tmp_path / "torcida.db"))
+    await repo.init_db()
+    director = EventDirector(config=config, engine=RaceEngine(config), repository=repo)
+
+    await director.handle_viewer_choice("leo", "Leonardo", 3)  # voto de verdade
+    await director.tick(0.15)  # VOTING -> COUNTDOWN
+    await director.tick(0.06)  # COUNTDOWN -> RACING
+    assert director.state == DirectorState.RACING
+
+    assert await director.handle_viewer_choice("ana", "Ana", 5) is True
+
+    cavalo = next(h for h in director.engine.horses if h.id == 5)
+    boost = next(b for b in cavalo.active_boosts if b.name == "TORCIDA NO CHAT")
+    assert boost.power == TORCIDA_POWER
+    assert boost.remaining_seconds == TORCIDA_DURATION_SECONDS
+
+    # Torcida de chat não é voto: a votação fechou na largada e ninguém
+    # entrou como apoiador novo.
+    apoiadores = [
+        s["tiktok_username"]
+        for sups in director.horse_supporters.values()
+        for s in sups
+    ]
+    assert apoiadores == ["leo"]
+
+    assert any(
+        n["type"] == "CHEER" and "Ana" in n["text"] and n["horse_id"] == 5
+        for n in director.notifications_queue
+    )
+
+
+@pytest.mark.asyncio
+async def test_numero_digitado_fora_da_corrida_nao_empurra(tmp_path):
+    """Número digitado só vale na votação (voto) ou na corrida (torcida):
+    comentário atrasado no pódio não empurra mais ninguém."""
+    from game.director import DirectorState, EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.track_length_meters = 120.0
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+    config.podium_duration_seconds = 30.0  # não sai do pódio durante o teste
+
+    repo = DatabaseRepository(db_path=str(tmp_path / "atrasado.db"))
+    await repo.init_db()
+    director = EventDirector(config=config, engine=RaceEngine(config), repository=repo)
+
+    await director.tick(0.15)
+    await director.tick(0.06)
+    for _ in range(400):
+        await director.tick(0.1)
+        if director.state == DirectorState.PODIUM:
+            break
+    assert director.state == DirectorState.PODIUM
+
+    assert await director.handle_viewer_choice("ana", "Ana", 5) is False
+    assert not any(n["type"] == "CHEER" for n in director.notifications_queue)
+    assert all(not h.active_boosts for h in director.engine.horses)
+
+
+@pytest.mark.asyncio
+async def test_presente_de_quem_nao_escolheu_cai_em_cavalo_sorteado(tmp_path):
+    """Presente sem dono cai em cavalo SORTEADO, não sempre no #1.
+
+    Era esse o furo do "#1 sempre ganha": quem não votou tinha o presente
+    empurrado pro líder — e na votação o líder é sempre o #1. Uma live de
+    galera sem voto virava uma corrida de um cavalo só.
+    """
+    director = await _director_votando(tmp_path, "presente.db")
+
+    for i in range(40):
+        await director.handle_viewer_gift(f"g{i}", f"G{i}", "Rose", 1)
+
+    empurrados = {h.id for h in director.engine.horses if h.active_boosts}
+    assert len(empurrados) >= 2, "todo presente sem dono foi pro mesmo cavalo"
+
+
+@pytest.mark.asyncio
+async def test_curtida_de_anonimo_cai_em_cavalo_sorteado(tmp_path):
+    """Rajada de curtidas sem autor identificável também espalha.
+
+    O TikTok para de mandar o autor depois de muitas curtidas seguidas —
+    e o fallback velho (o líder/#1) empilhava tudo num cavalo só.
+    """
+    director = await _director_votando(tmp_path, "curtida.db")
+
+    for _ in range(40):
+        await director.handle_viewer_like("", "", 10)
+
+    empurrados = {h.id for h in director.engine.horses if h.active_boosts}
+    assert len(empurrados) >= 2, "toda curtida sem autor foi pro mesmo cavalo"
+
+
 @pytest.mark.asyncio
 async def test_narracao_da_corrida_no_console(tmp_path, caplog):
     """O console conta a história da live: votação, largada, presente, prêmios."""

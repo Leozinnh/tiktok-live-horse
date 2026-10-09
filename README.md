@@ -93,6 +93,8 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
 7. **#7 NEVASCA (Branco):** Frio e técnico; cresce de rendimento na chuva e no vento.
 8. **#8 FANTASMA (Roxo):** Imprevisível; alto fator sorte com arrancadas repentinas.
 
+**A briga é justa:** todo arquétipo é neutro no relógio — personalidade decide **quando** cada um é forte, nunca **se** é mais rápido. Em clima sorteado, cada cavalo vence ~12,5% das corridas (medido com `python tools/monte_carlo.py 1000` e travado pelos testes: nenhum cavalo fora de 8%–17% em 200 corridas). O **clima muda a cada corrida** (nunca repete o anterior), com intensidade sorteada que pesa de verdade, anúncio do locutor com os favoritos daquele tempo — e o tempo pode **virar no meio da prova**, com a cena transicionando suave e a voz avisando.
+
 ---
 
 ## 🔄 Ciclo Autônomo da Transmissão (EventDirector)
@@ -100,7 +102,7 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
 O jogo roda infinitamente sem necessidade de operador humano:
 1. **ESCOLHA SEU CAVALO (30s):** Grade na tela com os 8 cavalos e contadores de torcida ao vivo. O chat comenta `1` a `8` ou o nome do cavalo.
 2. **CONTAGEM REGRESSIVA (5s):** 5.. 4.. 3.. 2.. 1.. com bips sonoros e portões dos boxes se preparando.
-3. **CORRIDA AO VIVO (~35s):** Física a 60 ticks/s, **locução ao vivo** (abertura, disputa e reta final narradas pelo locutor; chegada apertada ganha foto-finish), câmeras cinematográficas inteligentes, galope procedural sincronizado, poeira de cascos, cercas contínuas em 360º e turbos.
+3. **CORRIDA AO VIVO (~35s):** Física a 60 ticks/s, **locução ao vivo** (abertura, disputa e reta final narradas pelo locutor; chegada apertada ganha foto-finish), clima anunciado na abertura e que pode **virar no meio da prova**, câmeras cinematográficas inteligentes, galope procedural sincronizado, poeira de cascos, cercas contínuas em 360º e turbos. **Digitar o número de um cavalo durante a prova dá um empurrãozinho de torcida** nele (só pela farra — não muda apuração nem XP).
 4. **DISPUTA DE CHEGADA E PÓDIO (8s):** Ao cruzar a linha de chegada, a câmera acompanha a disputa pelo 2º e 3º lugares e 3.5s depois avança para o pódio com troféus, fanfarra orquestral e chuva de confetes em órbita 360º.
 5. **XP E NÍVEIS (6s):** Distribuição de XP no banco de dados SQLite e aviso sonoro de "Level Up".
 6. **TOP JOGADORES (10s):** Exibição do ranking geral dos maiores apoiadores da LIVE.
@@ -122,7 +124,7 @@ python main.py --tiktok-user SEU_USUARIO_TIKTOK --test-mode=False
 
 A live ganha locução: presente, chegada, votação aberta, largada, vencedor **e a própria corrida** viram FALA — mesmo motor do `tiktok-live-pixel` (edge-tts gera o mp3 → MCI do Windows toca → arquivo apagado na hora). A voz sabe quem presenteou e qual o cavalo: *"Ana mandou 5x Rose pro Relâmpago!"*. Nome de cavalo em CAIXA ALTA é falado em caixa normal, senão soa grito (e nome curto sai letra por letra).
 
-- **Locução ao vivo:** durante a prova o locutor chama a **abertura** (120m), o **placar** (320m, 620m e 760m — sempre citando o trio da frente), a **disputa** (480m) e a **reta final** (880m) — ~1 fala a cada 5s, e a votação ganha lembrete a cada 12s. Quando a chegada é decidida por menos de 50ms, entra a **foto-finish** antes do anúncio do campeão.
+- **Locução ao vivo:** durante a prova o locutor chama a **abertura** (120m), o **placar** (320m, 620m e 760m — sempre citando o trio da frente), a **disputa** (480m) e a **reta final** (880m) — ~1 fala a cada 5s, e a votação ganha lembrete a cada 12s. Quando a chegada é decidida por menos de 50ms, entra a **foto-finish** antes do anúncio do campeão. O **clima** entra na abertura (com quem se dá bem nele) e quando o tempo vira na prova — e ao cruzar a linha as falas de meio de prova que sobraram na fila são descartadas na hora (o locutor nunca "segue narrando" uma corrida já decidida).
 - **Ligar/desligar:** `config/config.json` → `"tts": { "active": true }`. Vem ligada.
 - **Vozes:** `tts.voz` (padrão `pt-BR-FranciscaNeural`) e `tts.vozes` — lista por onde as falas rodiziam; lista vazia = sempre a `tts.voz`. As três vozes pt-BR do serviço já vêm configuradas no rodízio.
 - **Quem entra na live** ganha um oi falado. `tts.anunciar_entrada: false` cala só a chegada e mantém o resto (útil em live muito cheia).
