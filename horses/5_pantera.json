@@ -1,0 +1,20 @@
+{
+  "id": 5,
+  "number": 5,
+  "name": "PANTERA",
+  "body_model": "armored",
+  "visual_style": "shadow",
+  "color_hex": "#1E293B",
+  "secondary_color_hex": "#94A3B8",
+  "mane_color_hex": "#020617",
+  "hoof_color_hex": "#334155",
+  "jockey_silk_hex": "#334155",
+  "jockey_helmet_hex": "#F1F5F9",
+  "personality": "CORNER_SPECIALIST",
+  "base_speed": 28.05,
+  "acceleration": 8.2,
+  "stamina": 8.1,
+  "luck": 7.0,
+  "aggressiveness": 8.5,
+  "description": "Corpo de guerra blindado com placas de aço e chanfron reforçado."
+}

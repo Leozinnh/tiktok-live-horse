@@ -30,6 +30,12 @@ class HorseState:
         self.name = config.name
         self.color_hex = config.color_hex
         self.secondary_color_hex = config.secondary_color_hex
+        self.mane_color_hex = config.mane_color_hex
+        self.hoof_color_hex = config.hoof_color_hex
+        self.jockey_silk_hex = config.jockey_silk_hex
+        self.jockey_helmet_hex = config.jockey_helmet_hex
+        self.body_model = config.body_model
+        self.visual_style = config.visual_style
         self.personality = config.personality
         self.lane = lane
         
@@ -251,8 +257,14 @@ class HorseState:
             "id": self.id,
             "number": self.number,
             "name": self.name,
+            "body_model": self.body_model,
+            "visual_style": self.visual_style,
             "color_hex": self.color_hex,
             "secondary_color_hex": self.secondary_color_hex,
+            "mane_color_hex": self.mane_color_hex,
+            "hoof_color_hex": self.hoof_color_hex,
+            "jockey_silk_hex": self.jockey_silk_hex,
+            "jockey_helmet_hex": self.jockey_helmet_hex,
             "personality": self.personality,
             "lane": self.lane,
             "distance": round(self.distance, 2),

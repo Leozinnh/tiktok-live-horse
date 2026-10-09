@@ -1,0 +1,20 @@
+{
+  "id": 4,
+  "number": 4,
+  "name": "RAIO",
+  "body_model": "pegasus",
+  "visual_style": "fire",
+  "color_hex": "#EF4444",
+  "secondary_color_hex": "#FEE2E2",
+  "mane_color_hex": "#7F1D1D",
+  "hoof_color_hex": "#0F172A",
+  "jockey_silk_hex": "#EF4444",
+  "jockey_helmet_hex": "#FDE047",
+  "personality": "DRAFTER",
+  "base_speed": 27.72,
+  "acceleration": 8.8,
+  "stamina": 7.6,
+  "luck": 6.4,
+  "aggressiveness": 9.0,
+  "description": "Corpo de Pégaso alado com asas articuladas que batem no galope."
+}

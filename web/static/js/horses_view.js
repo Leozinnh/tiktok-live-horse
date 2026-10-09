@@ -6,9 +6,23 @@ class HorseVisualManager {
   }
 
   createHorseMesh(horseConfig) {
+    const modelKey = (horseConfig.body_model || horseConfig.visual_style || "classic").toLowerCase();
+    const builder = (window.HorseBodyRegistry && window.HorseBodyRegistry[modelKey])
+      || (window.HorseBodyRegistry && window.HorseBodyRegistry["classic"]);
+
+    if (builder) {
+      const obj = builder(horseConfig, this.scene, this.particles);
+      obj.bodyModel = modelKey;
+      return obj;
+    }
+
     const group = new THREE.Group();
     const primaryColor = new THREE.Color(horseConfig.color_hex || "#f59e0b");
     const secondaryColor = new THREE.Color(horseConfig.secondary_color_hex || "#ffffff");
+    const maneColor = new THREE.Color(horseConfig.mane_color_hex || "#1e293b");
+    const hoofColor = new THREE.Color(horseConfig.hoof_color_hex || "#0f172a");
+    const silkColor = new THREE.Color(horseConfig.jockey_silk_hex || horseConfig.secondary_color_hex || "#ffffff");
+    const helmColor = new THREE.Color(horseConfig.jockey_helmet_hex || horseConfig.color_hex || "#f59e0b");
 
     // Materiais
     const coatMat = new THREE.MeshStandardMaterial({
@@ -17,8 +31,10 @@ class HorseVisualManager {
       metalness: 0.1,
     });
     const darkMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 });
-    const silkMat = new THREE.MeshStandardMaterial({ color: secondaryColor, roughness: 0.3 });
-    const hoofMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+    const maneMat = new THREE.MeshStandardMaterial({ color: maneColor, roughness: 0.8 });
+    const silkMat = new THREE.MeshStandardMaterial({ color: silkColor, roughness: 0.3 });
+    const hoofMat = new THREE.MeshStandardMaterial({ color: hoofColor, roughness: 0.9 });
+    const helmMat = new THREE.MeshStandardMaterial({ color: helmColor, roughness: 0.2 });
 
     // 1. Tronco / Corpo do Cavalo
     const bodyGeo = new THREE.BoxGeometry(1.6, 1.4, 3.2);
@@ -41,6 +57,12 @@ class HorseVisualManager {
     neck.rotation.x = -Math.PI / 5;
     neck.castShadow = true;
     body.add(neck);
+
+    // Crina estilizada no dorso do pescoço
+    const maneGeo = new THREE.BoxGeometry(0.25, 1.8, 0.4);
+    const mane = new THREE.Mesh(maneGeo, maneMat);
+    mane.position.set(0, 0.05, -0.55);
+    neck.add(mane);
 
     const headGeo = new THREE.BoxGeometry(0.75, 0.85, 1.4);
     const head = new THREE.Mesh(headGeo, coatMat);
@@ -78,7 +100,6 @@ class HorseVisualManager {
 
     // Capacete do Jockey
     const helmGeo = new THREE.SphereGeometry(0.35, 12, 12);
-    const helmMat = new THREE.MeshStandardMaterial({ color: primaryColor, roughness: 0.2 });
     const helm = new THREE.Mesh(helmGeo, helmMat);
     helm.position.set(0, 1.15, 0.3);
     helm.castShadow = true;
@@ -124,7 +145,7 @@ class HorseVisualManager {
 
     // 5. Cauda
     const tailGeo = new THREE.CylinderGeometry(0.12, 0.04, 1.6, 6);
-    const tail = new THREE.Mesh(tailGeo, darkMat);
+    const tail = new THREE.Mesh(tailGeo, maneMat);
     tail.position.set(0, 0.2, -1.7);
     tail.rotation.x = -Math.PI / 3;
     body.add(tail);
@@ -239,8 +260,12 @@ class HorseVisualManager {
     for (let i = 0; i < horsesData.length; i++) {
       const hData = horsesData[i];
       let horseObj = this.horsesMap.get(hData.id);
+      const modelKey = (hData.body_model || hData.visual_style || "classic").toLowerCase();
 
-      if (!horseObj) {
+      if (!horseObj || horseObj.bodyModel !== modelKey) {
+        if (horseObj && horseObj.group) {
+          this.scene.remove(horseObj.group);
+        }
         horseObj = this.createHorseMesh(hData);
         this.horsesMap.set(hData.id, horseObj);
       }
@@ -292,6 +317,13 @@ class HorseVisualManager {
         if (Math.sin(horseObj.phase) > 0.8) {
           this.particles.emitDust(horseObj.group.position, speed);
         }
+
+        // Animação de asas (Pégaso)
+        if (horseObj.wings) {
+          const wingAngle = Math.sin(horseObj.phase * 2.2) * 0.35;
+          horseObj.wings.left.rotation.z = 0.25 + wingAngle;
+          horseObj.wings.right.rotation.z = -(0.25 + wingAngle);
+        }
       } else {
         // Em repouso nos boxes
         horseObj.body.position.y = 2.4 + Math.sin(Date.now() * 0.003 + horseObj.id) * 0.04;
@@ -300,6 +332,11 @@ class HorseVisualManager {
         horseObj.legs.frontR.upper.rotation.x = 0;
         horseObj.legs.backL.upper.rotation.x = 0;
         horseObj.legs.backR.upper.rotation.x = 0;
+
+        if (horseObj.wings) {
+          horseObj.wings.left.rotation.z = 0.15;
+          horseObj.wings.right.rotation.z = -0.15;
+        }
       }
 
       // Emblema holográfico flutuante para QUALQUER presente recebido (Leão 🦁, Galáxia 🌌, Dragão 🐉, Rosa 🌹, Donut 🍩, etc)
@@ -355,3 +392,5 @@ class HorseVisualManager {
     return h ? h.group.rotation.y : (Math.PI / 2.0);
   }
 }
+
+window.HorseVisualManager = HorseVisualManager;

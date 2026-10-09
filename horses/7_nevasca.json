@@ -1,0 +1,20 @@
+{
+  "id": 7,
+  "number": 7,
+  "name": "NEVASCA",
+  "body_model": "unicorn",
+  "visual_style": "rainbow",
+  "color_hex": "#F8FAFC",
+  "secondary_color_hex": "#F472B6",
+  "mane_color_hex": "#C084FC",
+  "hoof_color_hex": "#FACC15",
+  "jockey_silk_hex": "#A855F7",
+  "jockey_helmet_hex": "#F43F5E",
+  "personality": "COLD_TACTICIAN",
+  "base_speed": 27.75,
+  "acceleration": 8.0,
+  "stamina": 8.4,
+  "luck": 7.2,
+  "aggressiveness": 6.8,
+  "description": "Unicórnio místico com chifre arco-íris espiral iluminado, crina multicolorida e gemas radiantes."
+}

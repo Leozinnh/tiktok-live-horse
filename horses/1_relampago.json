@@ -1,0 +1,20 @@
+{
+  "id": 1,
+  "number": 1,
+  "name": "RELÂMPAGO",
+  "body_model": "slender_racer",
+  "visual_style": "solar",
+  "color_hex": "#F59E0B",
+  "secondary_color_hex": "#FEF3C7",
+  "mane_color_hex": "#D97706",
+  "hoof_color_hex": "#1E293B",
+  "jockey_silk_hex": "#F59E0B",
+  "jockey_helmet_hex": "#FFFFFF",
+  "personality": "FRONT_RUNNER",
+  "base_speed": 28.08,
+  "acceleration": 10.5,
+  "stamina": 8.0,
+  "luck": 6.0,
+  "aggressiveness": 7.5,
+  "description": "Larga em velocidade máxima com corpo de velocista afilado."
+}

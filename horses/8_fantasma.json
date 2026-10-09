@@ -1,0 +1,20 @@
+{
+  "id": 8,
+  "number": 8,
+  "name": "FANTASMA",
+  "body_model": "spectral",
+  "visual_style": "spectral",
+  "color_hex": "#8B5CF6",
+  "secondary_color_hex": "#EDE9FE",
+  "mane_color_hex": "#4C1D95",
+  "hoof_color_hex": "#0F172A",
+  "jockey_silk_hex": "#8B5CF6",
+  "jockey_helmet_hex": "#C084FC",
+  "personality": "WILDCARD",
+  "base_speed": 28.08,
+  "acceleration": 8.0,
+  "stamina": 6.8,
+  "luck": 10.0,
+  "aggressiveness": 7.0,
+  "description": "Corpo de Fantasma Espectral com materiais translúcidos e olhos brilhantes."
+}

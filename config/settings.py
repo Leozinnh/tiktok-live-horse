@@ -1,7 +1,10 @@
 import json
+import logging
 from pathlib import Path
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("config")
 
 PersonalityType = Literal[
     "FRONT_RUNNER",
@@ -20,6 +23,12 @@ class HorseConfig(BaseModel):
     name: str
     color_hex: str
     secondary_color_hex: str = "#FFFFFF"
+    mane_color_hex: str = "#1E293B"
+    hoof_color_hex: str = "#0F172A"
+    jockey_silk_hex: str = ""
+    jockey_helmet_hex: str = ""
+    body_model: str = "classic"
+    visual_style: str = "classic"
     personality: PersonalityType
     base_speed: float = Field(ge=10.0, le=50.0)
     acceleration: float = Field(ge=1.0, le=20.0)
@@ -38,13 +47,6 @@ class XpConfig(BaseModel):
     gift_large: int = 500
 
 class TtsConfig(BaseModel):
-    """A voz da live (motor em game/narrador.py).
-
-    `voz`/`rate`/`pitch` vazios = padrões do narrador (Francisca, "+8%", "+3Hz").
-    `vozes` é o rodízio (vazio = sempre a `voz`). As listas de frases vazias ou
-    ausentes = as frases do jogo (game/falas.py); preenchidas, substituem a
-    lista inteira. `anunciar_entrada` cala só o oi de quem chega.
-    """
     active: bool = True
     voz: str = ""
     vozes: List[str] = Field(default_factory=list)
@@ -56,15 +58,11 @@ class TtsConfig(BaseModel):
     votacao: Optional[List[str]] = None
     largada: Optional[List[str]] = None
     vencedor: Optional[List[str]] = None
-    # A locução ao vivo da corrida (abertura, disputa, placar, reta final e
-    # a exclamação da foto-finish) — mesmas regras de troca das listas acima.
     corrida_abertura: Optional[List[str]] = None
     corrida_disputa: Optional[List[str]] = None
     corrida_placar: Optional[List[str]] = None
     reta_final: Optional[List[str]] = None
     foto_finish: Optional[List[str]] = None
-    # O clima: o anúncio da abertura da votação e o aviso da virada do tempo
-    # no meio da prova — mesmas regras de troca das listas acima.
     clima: Optional[List[str]] = None
     clima_virada: Optional[List[str]] = None
 
@@ -81,14 +79,54 @@ class Settings(BaseModel):
     xp: XpConfig = Field(default_factory=XpConfig)
     horses: List[HorseConfig] = Field(default_factory=list)
 
-def load_config(config_path: Path | None = None) -> Settings:
+def _find_horses_directory(config_path: Path, explicit_dir: Path | None = None) -> Optional[Path]:
+    if explicit_dir is not None:
+        p = Path(explicit_dir)
+        return p if p.exists() and p.is_dir() else None
+
+    # Candidatos padrão para a pasta 'horses'
+    candidates = [
+        config_path.parent.parent / "horses",
+        Path("horses").resolve(),
+        config_path.parent / "horses"
+    ]
+    for c in candidates:
+        if c.exists() and c.is_dir():
+            return c
+    return None
+
+def load_horses_from_dir(horses_dir: Path) -> List[HorseConfig]:
+    loaded = []
+    json_files = sorted(list(horses_dir.glob("*.json")))
+    for jf in json_files:
+        try:
+            with open(jf, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                horse = HorseConfig.model_validate(data)
+                loaded.append(horse)
+        except Exception as e:
+            logger.warning(f"Erro ao carregar cavalo do arquivo {jf.name}: {e}")
+            
+    # Ordena por número e depois ID
+    loaded.sort(key=lambda h: (h.number, h.id))
+    return loaded
+
+def load_config(config_path: Path | None = None, horses_dir: Path | None = None) -> Settings:
     if config_path is None:
         config_path = Path(__file__).resolve().parent / "config.json"
     
     if not config_path.exists():
-        # Retorna configuração padrão caso não exista
-        return Settings()
+        settings = Settings()
+    else:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        settings = Settings.model_validate(data)
     
-    with open(config_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return Settings.model_validate(data)
+    # Busca e carrega cavalos individuais da pasta 'horses' se existir
+    h_dir = _find_horses_directory(config_path, explicit_dir=horses_dir)
+    if h_dir is not None:
+        horses_from_files = load_horses_from_dir(h_dir)
+        if horses_from_files:
+            settings.horses = horses_from_files
+            
+    return settings

@@ -82,7 +82,9 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
 
 ---
 
-## 🐎 Os 8 Cavalos e Personalidades
+## 🐎 Os 8 Cavalos e Personalidades (Pasta `horses/`)
+
+Cada cavalo possui seu arquivo de configuração próprio dentro da pasta **`horses/`** (`1_relampago.json` até `8_fantasma.json`), permitindo personalizar cores da pelagem, crina, cascos, farda e capacete do jóquei, estilo visual, nome e atributos:
 
 1. **#1 RELÂMPAGO (Dourado):** Arrancada explosiva; lidera no início e perde fôlego na reta final.
 2. **#2 TROVÃO (Azul):** Arrancada final avassaladora nos últimos 150 metros.

@@ -150,27 +150,102 @@ Para calibrar o ritmo da transmissão sem encostar em código Python, edite `con
 
 ---
 
-## 4. Cavalos, Atributos e Arquétipos de Personalidade
+## 4. Cavalos, Atributos e Arquétipos de Personalidade (Pasta `horses/`)
 
-Os 8 cavalos iniciais são configurados na lista `"horses"` em `config/config.json`:
+Cada cavalo agora possui seu **próprio arquivo JSON de configuração independente** dentro da pasta dedicada **`horses/`** na raiz do projeto. Isso permite customizar individualmente o visual completo de cada animal (corpo, crina, cascos, farda e capacete do jóquei, estilo visual, nome, número e atributos):
 
-| Nº | Nome | Cor Primária | Arquétipo de Personalidade | Comportamento Único na Pista |
-|:---:|:---|:---:|:---|:---|
-| **#1** | **RELÂMPAGO** | `#F59E0B` (Ouro) | `FRONT_RUNNER` | Arrancada explosiva (+7,5% até 40% da pista); paga a conta no fim (-10% depois de 75%). |
-| **#2** | **TROVÃO** | `#2563EB` (Azul) | `CLOSER` | Economiza no começo (-5,5% até a metade); surto de +13,5% nos últimos 250 metros. |
-| **#3** | **FURACÃO** | `#10B981` (Verde) | `PACER` | Metrônomo: fator 1.00 do início ao fim, com a 2ª melhor stamina do páreo. |
-| **#4** | **RAIO** | `#EF4444` (Vermelho) | `DRAFTER` | Vive do vácuo (+1,8% enquanto **não** lidera) — mas quando assume a ponta, rende -6%. |
-| **#5** | **PANTERA** | `#1E293B` (Preto) | `CORNER_SPECIALIST` | Mestre das curvas (+6% nas duas curvas ovais); paga -3,6% nas retas. |
-| **#6** | **TITÃ** | `#78350F` (Bronze) | `JUGGERNAUT` | Largada pesada (-10% nos primeiros 20%), depois inabalável (+2,9%) com a melhor stamina. |
-| **#7** | **NEVASCA** | `#06B6D4` (Ciano) | `COLD_TACTICIAN` | Frio e constante; cresce na chuva, no vento e na tempestade (ver tabela do clima). |
-| **#8** | **FANTASMA** | `#8B5CF6` (Roxo) | `WILDCARD` | Sorte 10/10: forma do dia mais volátil e arrancadas surpresa de até +8% em qualquer trecho. |
+```text
+horses/
+├── 1_relampago.json
+├── 2_trovao.json
+├── 3_furacao.json
+├── 4_raio.json
+├── 5_pantera.json
+├── 6_tita.json
+├── 7_nevasca.json
+└── 8_fantasma.json
+```
+
+### Exemplo de Arquivo de Configuração (`horses/1_relampago.json`):
+```json
+{
+  "id": 1,
+  "number": 1,
+  "name": "RELÂMPAGO",
+  "body_model": "slender_racer",        // Modelo 3D ("classic", "armored", "pegasus", "cyber", "heavy_tank", "unicorn", "spectral", "slender_racer")
+  "visual_style": "solar",              // Estilo temático ("solar", "storm", "fire", "nature", "shadow", "earth", "ice", "spectral")
+  "color_hex": "#F59E0B",               // Cor principal da pelagem do cavalo
+  "secondary_color_hex": "#FEF3C7",     // Cor da manta de sela
+  "mane_color_hex": "#D97706",          // Cor da crina e da cauda do cavalo
+  "hoof_color_hex": "#1E293B",          // Cor dos 4 cascos
+  "jockey_silk_hex": "#F59E0B",         // Cor da jaqueta do jóquei
+  "jockey_helmet_hex": "#FFFFFF",       // Cor do capacete do jóquei
+  "personality": "FRONT_RUNNER",        // Arquétipo comportamental
+  "base_speed": 28.08,                  // Velocidade base em m/s (~101 km/h)
+  "acceleration": 10.5,                 // Aceleração nos primeiros metros
+  "stamina": 8.0,                       // Resistência à fadiga
+  "luck": 6.0,                          // Chance de picos orgânicos
+  "aggressiveness": 7.5,                // Bônus em disputa direta
+  "description": "Larga em velocidade máxima, mas perde fôlego no final."
+}
+```
+
+### 4.1 Catálogo de Corpos 3D Disponíveis (`web/static/js/bodies/`)
+Cada modelo 3D é um arquivo JavaScript independente na pasta `web/static/js/bodies/`. Você escolhe qual corpo o cavalo vai ter simplesmente mudando o campo `"body_model"` no JSON dele:
+
+| Modelo (`body_model`) | Arquivo JS | Descrição Visual e Características 3D |
+|:---|:---|:---|
+| **`classic`** | `classic_body.js` | **Puro Sangue de Turfe:** Proporções atléticas clássicas, manta elegante, pescoço arqueado e jóquei padrão. |
+| **`armored`** | `armored_body.js` | **Cavalo de Guerra Blindado:** Peitoral de aço chanfrado (*gorget*), proteção na garupa, caneleiras de metal nas 4 patas e chanfron reforçado na cabeça. |
+| **`pegasus`** | `pegasus_body.js` | **Pégaso Alado:** Asas celestiais de penas articuladas nas laterais que **batem no ritmo do galope**, cascos dourados e cauda longa sedosa. |
+| **`cyber`** | `cyber_body.js` | **Mecha Cyberpunk:** Painéis metálicos angulares, turbinas propulsoras nos flancos com luzes neon ciano, crina de feixe de LED e viseira holográfica na cabeça. |
+| **`heavy_tank`** | `heavy_tank_body.js` | **Titã Juggernaut:** Tronco maciço e musculatura colossal (1.95m de largura), pescoço grosso, crina densa e patas pesadas estilo *Clydesdale*. |
+| **`unicorn`** | `unicorn_body.js` | **Unicórnio Místico Radiante:** Chifre espiral arco-íris monumental de 1.85m iluminado com gradiente em 6 cores (magenta, violeta, ciano, esmeralda, dourado e diamante), gemas espiraladas, estrela de diamante no topo, crina em 4 mechas multicoloridas pastel e cauda mágica tricolor. |
+| **`spectral`** | `spectral_body.js` | **Fantasma Espectral:** Materiais translúcidos com brilho etéreo próprio, costelas fantasmagóricas visíveis, cauda fluida e olhos azuis brilhantes. |
+| **`slender_racer`** | `slender_racer_body.js` | **Velocista Aerodinâmico:** Corpo afilado e rebaixado (3.5m), pescoço esticado em cunha e jóquei deitado em postura ultra-aerodinâmica de dragster. |
+
+### 4.2 Como Criar um Novo Modelo de Corpo 3D
+1. Crie um arquivo em `web/static/js/bodies/meu_modelo.js`.
+2. Registre seu modelo no catálogo global:
+   ```javascript
+   window.HorseBodyRegistry["meu_modelo"] = function buildMeuModelo(cfg, scene, particles) {
+     const group = new THREE.Group();
+     const mats = HorseBodyUtils.createMaterials(cfg);
+     // ... monte suas geometrias Three.js aqui ...
+     return {
+       id: cfg.id, number: cfg.number, name: cfg.name, group: group,
+       body: body, neck: neck, legs: legs, tail: tail,
+       aura: auras.aura, mythicAura: auras.mythicAura,
+       emblem: badgeObj.emblem, setEmblem: badgeObj.setEmblem,
+       badge: badgeObj.badge, phase: Math.random() * Math.PI * 2,
+     };
+   };
+   ```
+3. Adicione a tag `<script src="/static/js/bodies/meu_modelo.js"></script>` em `web/static/index.html`.
+4. Defina `"body_model": "meu_modelo"` no JSON do cavalo que desejar!
+
+---
+
+### 4.3 Tabela Oficial de Cavalos e Configurações Iniciais
+
+| Nº | Nome | Arquivo JSON | Modelo 3D (`body_model`) | Cor / Crina | Arquétipo |
+|:---:|:---|:---:|:---:|:---:|:---|
+| **#1** | **RELÂMPAGO** | `1_relampago.json` | `slender_racer` | Ouro / Âmbar | `FRONT_RUNNER` |
+| **#2** | **TROVÃO** | `2_trovao.json` | `cyber` | Azul / Meia-noite | `CLOSER` |
+| **#3** | **FURACÃO** | `3_furacao.json` | `classic` | Verde / Floresta | `PACER` |
+| **#4** | **RAIO** | `4_raio.json` | `pegasus` | Vermelho / Bordô | `DRAFTER` |
+| **#5** | **PANTERA** | `5_pantera.json` | `armored` | Preto / Carvão | `CORNER_SPECIALIST` |
+| **#6** | **TITÃ** | `6_tita.json` | `heavy_tank` | Bronze / Castanho | `JUGGERNAUT` |
+| **#7** | **NEVASCA** | `7_nevasca.json` | `unicorn` | Prata / Cinza | `COLD_TACTICIAN` |
+| **#8** | **FANTASMA** | `8_fantasma.json` | `spectral` | Roxo / Índigo | `WILDCARD` |
 
 **Todos os arquétipos são neutros no relógio.** O que decide corrida é o **tempo** ($tempo = distância/velocidade$), então o contrato de cada personalidade é $\sum (fração\ da\ pista / fator) = 1.00$ — média harmônica, não a média dos fatores; é o teste `test_personalidade_decide_quando_vence_nao_se_vence` que trava essa conta. O efeito prático, medido com `python tools/monte_carlo.py 1000`: em clima sorteado, **cada cavalo vence ~12,5%** (todos entre 10% e 15%, margem média de chegada de ~180ms), e o guardião `test_nenhum_cavalo_fica_para_tras` reprova qualquer cavalo fora de **8%–17% em 200 corridas**. Personalidade define **quando** cada um é forte — nunca **se** é mais rápido.
 
 ### Como Adicionar um Novo Cavalo (ex: #9 TITÂNIO):
-1. Adicione um novo objeto na lista `"horses"` em `config/config.json` com `id: 9, number: 9, name: "TITÂNIO"`.
-2. Adicione o nome no dicionário `HORSE_NAME_MAP` em `tiktok/parser.py`: `"titanio": 9`.
-3. Pronto! O cavalo já terá seu box, farda 3D, placa numerada e participará automaticamente do ciclo.
+1. Crie um novo arquivo JSON dentro da pasta `horses/`, por exemplo: `horses/9_titanio.json`.
+2. Preencha com os dados desejados (`id: 9`, `number: 9`, `name: "TITÂNIO"`, cores, jockey, etc.).
+3. Adicione o nome no dicionário `HORSE_NAME_MAP` em `tiktok/parser.py`: `"titanio": 9`.
+4. Pronto! O sistema carrega dinamicamente qualquer quantidade de cavalos da pasta `horses/`.
 
 ---
 

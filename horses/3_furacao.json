@@ -1,0 +1,20 @@
+{
+  "id": 3,
+  "number": 3,
+  "name": "FURACÃO",
+  "body_model": "classic",
+  "visual_style": "nature",
+  "color_hex": "#10B981",
+  "secondary_color_hex": "#D1FAE5",
+  "mane_color_hex": "#064E3B",
+  "hoof_color_hex": "#1E293B",
+  "jockey_silk_hex": "#10B981",
+  "jockey_helmet_hex": "#047857",
+  "personality": "PACER",
+  "base_speed": 27.95,
+  "acceleration": 7.6,
+  "stamina": 9.6,
+  "luck": 6.0,
+  "aggressiveness": 6.0,
+  "description": "Corpo clássico de puro sangue com proporções perfeitas de turfe."
+}

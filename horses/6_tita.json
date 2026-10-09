@@ -1,0 +1,20 @@
+{
+  "id": 6,
+  "number": 6,
+  "name": "TITÃ",
+  "body_model": "heavy_tank",
+  "visual_style": "earth",
+  "color_hex": "#78350F",
+  "secondary_color_hex": "#FEF3C7",
+  "mane_color_hex": "#451A03",
+  "hoof_color_hex": "#1E293B",
+  "jockey_silk_hex": "#B45309",
+  "jockey_helmet_hex": "#F59E0B",
+  "personality": "JUGGERNAUT",
+  "base_speed": 27.83,
+  "acceleration": 6.2,
+  "stamina": 10.0,
+  "luck": 5.2,
+  "aggressiveness": 7.0,
+  "description": "Corpo de Titã Juggernaut com tronco maciço e patas reforçadas de Clydesdale."
+}
