@@ -199,7 +199,7 @@ async def test_director_descarta_a_locucao_quando_a_corrida_e_decidida(tmp_path)
 
     await director.tick(0.15)  # VOTING -> COUNTDOWN
     await director.tick(0.06)  # COUNTDOWN -> RACING
-    for _ in range(120):
+    for _ in range(200):
         await director.tick(1.0)
         if any(c[0] == "vencedor" for c in voz.chamadas):
             break
@@ -323,8 +323,8 @@ async def test_director_chama_a_voz_nos_momentos_certos(tmp_path):
     await director.tick(0.06)  # COUNTDOWN -> RACING
     assert ("largada", 1) in voz.chamadas
 
-    # A corrida leva ~35s de simulação: avança em passos de 1s até o vencedor.
-    for _ in range(120):
+    # A corrida leva ~1min50 de simulação: avança em passos de 1s até o vencedor.
+    for _ in range(200):
         await director.tick(1.0)
         if any(c[0] == "vencedor" for c in voz.chamadas):
             break
@@ -332,23 +332,14 @@ async def test_director_chama_a_voz_nos_momentos_certos(tmp_path):
     assert vencedor[1] in [h.id for h in config.horses]
     assert vencedor[2]
 
-    # A locução ao vivo cobre a corrida inteira, na ordem da prova: abertura,
-    # três placares, disputa e reta final — cada marco UMA vez.
+    # A locução ao vivo cobre a corrida inteira, na ordem da prova: cada marco
+    # do MARCOS_LOCUCAO dispara UMA vez, na ordem crescente de distância —
+    # largada primeiro, reta final por último, vencedor na linha.
+    from game.director import MARCOS_LOCUCAO
+
     tipos = [c[0] for c in voz.chamadas]
-    for tipo in ("abertura", "disputa", "reta_final"):
-        assert tipos.count(tipo) == 1
-    assert tipos.count("placar") == 3
-    da_corrida = ("largada", "abertura", "placar", "disputa", "reta_final", "vencedor")
-    assert [t for t in tipos if t in da_corrida] == [
-        "largada",
-        "abertura",
-        "placar",
-        "disputa",
-        "placar",
-        "placar",
-        "reta_final",
-        "vencedor",
-    ]
+    da_corrida = ("largada",) + tuple(t for _, t in MARCOS_LOCUCAO) + ("vencedor",)
+    assert [t for t in tipos if t in da_corrida] == list(da_corrida)
     # A foto-finish é sorte da corrida (só nas decididas no detalhe); quando
     # sai, sai UMA vez e antes do anúncio do campeão (a fila é FIFO).
     if "foto_finish" in tipos:
@@ -382,6 +373,30 @@ async def test_votacao_lembra_a_galera_no_meio_do_caminho(tmp_path):
     ]
 
 
+def test_marcos_de_locucao_cobrem_a_prova_inteira():
+    """Os marcos da locução narram a prova do começo ao fim.
+
+    O locutor é a alma da live: silêncio no meio da corrida esvazia o chat.
+    Com a pista de 3000m, os marcos antigos (120m a 880m) narravam só o
+    primeiro terço e deixavam ~75s mudos. O contrato: cadência de transmissão
+    (~200m é o buraco máximo tolerável), abertura na largada e a reta final
+    cravada perto da linha de chegada.
+    """
+    from game.director import MARCOS_LOCUCAO
+
+    config = load_config()
+    distancias = [d for d, _ in MARCOS_LOCUCAO]
+
+    assert distancias == sorted(distancias), "marco fora de ordem no trajeto"
+    assert distancias[0] <= config.track_length_meters * 0.10, "demora a abrir a boca"
+    assert MARCOS_LOCUCAO[-1][1] == "reta_final"
+    assert distancias[-1] >= config.track_length_meters * 0.90, \
+        "a locução morre antes da reta final"
+
+    buracos = [b - a for a, b in zip(distancias, distancias[1:])]
+    assert max(buracos) <= 200.0, f"buraco de {max(buracos):.0f}m sem locução"
+
+
 def test_foto_finish_so_quando_a_margem_e_minima(tmp_path):
     """A exclamação da chegada só entra quando foi decidida no detalhe."""
     from backend.database.repository import DatabaseRepository
@@ -395,25 +410,25 @@ def test_foto_finish_so_quando_a_margem_e_minima(tmp_path):
         repository=DatabaseRepository(db_path=str(tmp_path / "voz.db")),
     )
     director.podium_data = [
-        {"final_position": 1, "finish_time_ms": 36100.0},
-        {"final_position": 2, "finish_time_ms": 36130.0},  # 30ms: no detalhe
+        {"final_position": 1, "finish_time_ms": 107100.0},
+        {"final_position": 2, "finish_time_ms": 107220.0},  # 120ms: no detalhe
     ]
     assert director._foto_finish_apertada() is True
 
     director.podium_data = [
-        {"final_position": 1, "finish_time_ms": 36100.0},
-        {"final_position": 2, "finish_time_ms": 36800.0},  # 700ms: com folga
+        {"final_position": 1, "finish_time_ms": 107100.0},
+        {"final_position": 2, "finish_time_ms": 107800.0},  # 700ms: com folga
     ]
     assert director._foto_finish_apertada() is False
 
     # Corrida sem segundo lugar (não deveria acontecer, mas não pode estourar).
-    director.podium_data = [{"final_position": 1, "finish_time_ms": 36100.0}]
+    director.podium_data = [{"final_position": 1, "finish_time_ms": 107100.0}]
     assert director._foto_finish_apertada() is False
 
 
 @pytest.mark.asyncio
 async def test_anuncio_imediato_na_linha_de_chegada_sem_esperar_timeout(tmp_path):
-    """Assim que o líder cruza a linha de chegada, o vencedor é anunciado IMEDIATAMENTE (sem esperar os 3.5s)."""
+    """Assim que o líder cruza a linha de chegada, o vencedor é anunciado IMEDIATAMENTE (sem esperar os 10,5s)."""
     from game.director import DirectorState
 
     voz = FakeNarrador()
@@ -427,10 +442,10 @@ async def test_anuncio_imediato_na_linha_de_chegada_sem_esperar_timeout(tmp_path
     lider = director.engine.horses[0]
     lider.distance = director.engine.track_length
     lider.finished = True
-    lider.finish_time_ms = 35000.0
+    lider.finish_time_ms = 107000.0
     director.engine.winner_horse_id = lider.id
 
-    # O engine ainda NÃO terminou (falta o timeout de 3.5s)
+    # O engine ainda NÃO terminou (falta a janela de 10,5s)
     assert director.engine.is_finished() is False
 
     # Tick durante a corrida
@@ -554,4 +569,6 @@ def test_anunciar_follow_e_curtidas():
     curtidas = n.anunciar_curtidas("ana_clara", 25)
     assert curtidas is not None
     assert "anaclara" in curtidas.lower()
-    assert "curtida" in curtidas.lower()
+    # O radical cobre "curtida", "curtidas" e "curtindo" — as frases variam
+    # com o sorteio do baralho, então a asserção não pode exigir uma flexão só.
+    assert "curtid" in curtidas.lower()

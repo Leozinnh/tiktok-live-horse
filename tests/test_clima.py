@@ -214,15 +214,15 @@ async def test_cada_corrida_troca_o_clima_e_anuncia(tmp_path, monkeypatch):
 async def test_tempo_vira_no_meio_da_prova(tmp_path):
     """O clima pode virar com a corrida rolando: voz avisa e o telão acende."""
     voz = FakeNarrador()
-    _, director = await _director_pronto(tmp_path, "virada.db", voz, track=1000.0)
+    _, director = await _director_pronto(tmp_path, "virada.db", voz, track=3000.0)
 
     await director.tick(0.25)  # VOTING -> COUNTDOWN
     await director.tick(0.15)  # COUNTDOWN -> RACING
     antes = director.engine.weather_system.current_weather
 
-    # Na live a hora é sorteada na largada; aqui, agendada na mão — 400m do
-    # líder é o meio da prova de 1000m.
-    director._virada_clima_em = 400.0
+    # Na live a hora é sorteada na largada; aqui, agendada na mão — 1.200m do
+    # líder é o meio da prova de 3000m.
+    director._virada_clima_em = 1200.0
     for _ in range(60):
         await director.tick(1.0)
         if director.engine.weather_system.current_weather != antes:

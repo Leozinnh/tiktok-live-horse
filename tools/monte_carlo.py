@@ -44,7 +44,7 @@ def rodar(n_corridas: int = 300, seed: int = 1234) -> None:
         engine.reset()
         clima = engine.weather_system.pick_random_weather()
         engine.start_race()
-        for _ in range(4000):
+        for _ in range(8000):
             engine.update(dt)
             if engine.is_finished():
                 break
@@ -78,8 +78,8 @@ def rodar(n_corridas: int = 300, seed: int = 1234) -> None:
 
     if margens:
         media = sum(margens) / len(margens)
-        apertadas = sum(1 for m in margens if m <= 300)
-        print(f"\nMargem média 1o/2o lugar: {media:>7.0f} ms | chegadas apertadas (<=300ms): {apertadas}/{len(margens)} "
+        apertadas = sum(1 for m in margens if m <= 900)
+        print(f"\nMargem média 1o/2o lugar: {media:>7.0f} ms | chegadas apertadas (<=900ms): {apertadas}/{len(margens)} "
               f"({100*apertadas/len(margens):.1f}%)")
 
     print("\nVencedor por clima:")

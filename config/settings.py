@@ -67,13 +67,13 @@ class TtsConfig(BaseModel):
     clima_virada: Optional[List[str]] = None
 
 class Settings(BaseModel):
-    race_duration_seconds: float = 35.0
+    race_duration_seconds: float = 120.0
     voting_duration_seconds: float = 30.0
     countdown_duration_seconds: float = 5.0
     podium_duration_seconds: float = 8.0
     xp_duration_seconds: float = 6.0
     leaderboard_duration_seconds: float = 10.0
-    track_length_meters: float = 1000.0
+    track_length_meters: float = 3000.0
     tick_rate: int = 60
     tts: TtsConfig = Field(default_factory=TtsConfig)
     xp: XpConfig = Field(default_factory=XpConfig)

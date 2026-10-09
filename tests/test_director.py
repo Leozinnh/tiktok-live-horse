@@ -165,6 +165,52 @@ async def test_presente_de_quem_nao_escolheu_cai_em_cavalo_sorteado(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_aviso_de_presente_leva_o_que_a_tela_precisa(tmp_path):
+    """O cartão de presente do HUD monta o aviso com o que vem na notificação.
+
+    Sem esses campos o aviso da live volta a ser uma linha de texto crua: quem
+    mandou, o que mandou, quantos e em qual cavalo o boost caiu.
+    """
+    director = await _director_votando(tmp_path, "aviso.db")
+
+    await director.handle_viewer_gift("leo", "Leonardo", "Rose", 3)
+
+    avisos = [n for n in director.notifications_queue if n["type"] == "GIFT"]
+    assert avisos, "presente não gerou aviso na tela"
+    aviso = avisos[-1]
+    assert aviso["sender_name"] == "Leonardo"
+    assert aviso["gift_name"] == "Rose"
+    assert aviso["gift_emoji"] == "🌹"
+    assert aviso["gift_count"] == 3
+    assert aviso["boost_label"] == "TURBO"
+    assert aviso["horse_name"], "o aviso precisa dizer em qual cavalo o boost caiu"
+    assert aviso["horse_id"] in {h.id for h in director.engine.horses}
+
+
+def test_presente_dura_uma_fatia_visivel_da_prova():
+    """Presente não pode ser um piscar: a aura no cavalo tem de durar.
+
+    Quando a pista triplicou (1000m→3000m, ~35s→~110s), as durações dos
+    presentes ficaram com o valor da prova velha: uma rosa de 4s, que antes
+    era 11% da corrida, virou 3% — o efeito sumia antes de a live ver.
+    Piso: todo presente dura ao menos 10% da prova; lendário, ao menos 20%.
+    """
+    from game.director import GIFT_DEFAULT, GIFT_TIERS
+
+    prova = load_config().race_duration_seconds
+    for tier in GIFT_TIERS + [GIFT_DEFAULT]:
+        assert tier["duration"] >= prova * 0.10, (
+            f"{tier['label']} ({tier['duration']}s) pisca rápido demais "
+            f"para uma prova de {prova}s"
+        )
+    for tier in GIFT_TIERS:
+        if tier["legendary"]:
+            assert tier["duration"] >= prova * 0.20, (
+                f"{tier['label']} é lendário e devia segurar a aura por mais tempo"
+            )
+
+
+@pytest.mark.asyncio
 async def test_curtida_de_anonimo_cai_em_cavalo_sorteado(tmp_path):
     """Rajada de curtidas sem autor identificável também espalha.
 

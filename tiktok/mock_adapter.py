@@ -26,6 +26,8 @@ class MockTikTokAdapter:
             
         parsed = self.parser.parse_comment(text)
         if not parsed:
+            # Mesma sonda da live: o painel de teste reproduz o log do console.
+            self.parser.avisar_voto_perdido(text)
             return {"status": "ignored", "message": "Comentário não reconhecido como comando."}
             
         action = parsed["action"]

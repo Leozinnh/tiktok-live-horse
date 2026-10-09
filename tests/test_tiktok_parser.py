@@ -32,6 +32,43 @@ def test_command_parser_choices():
     assert parser.parse_comment("vai trovaooo") == {"action": "CHOOSE_HORSE", "horse_id": 2}
     assert parser.parse_comment("cavalo 5") == {"action": "CHOOSE_HORSE", "horse_id": 5}
 
+def test_voto_por_nome_sobrevive_a_texto_corrompido():
+    """O nome do cavalo vale mesmo com o texto quebrado no caminho.
+
+    Na live apareceu gente digitando "relâmpago" e ficando sem voto: o
+    comentário chega do TikTok com o acento corrompido ("relÃ¢mpago") ou com
+    invisíveis no meio da palavra. Tirando do texto o que não é letra,
+    número ou espaço, o nome digitado volta a aparecer inteiro.
+    """
+    from tiktok.parser import CommandParser
+
+    parser = CommandParser()
+
+    # Acento corrompido no caminho (UTF-8 lido como latin-1)
+    assert parser.parse_comment("relÃ¢mpago") == {"action": "CHOOSE_HORSE", "horse_id": 1}
+    assert parser.parse_comment("TrovÃ£o") == {"action": "CHOOSE_HORSE", "horse_id": 2}
+    # Invisível no meio da palavra (o TikTok enfia em comentário repetido)
+    invisivel = "rel" + chr(0x200B) + "âmpago"  # ZWSP no meio da palavra
+    assert parser.parse_comment(invisivel) == {"action": "CHOOSE_HORSE", "horse_id": 1}
+    # Emoji colado nas letras
+    assert parser.parse_comment("relâmpago🔥") == {"action": "CHOOSE_HORSE", "horse_id": 1}
+
+
+def test_palpite_de_voto_para_o_log():
+    """O que ainda escapar do parser vira palpite no LOG, nunca voto.
+
+    É a sonda para a próxima quebra: se alguém digitar o nome de um jeito
+    que a gente ainda não previu, o console mostra o comentário cru e o
+    nome mais parecido — sem inventar voto que ninguém deu.
+    """
+    from tiktok.parser import CommandParser
+
+    parser = CommandParser()
+    assert parser.parece_voto("relanpago") == "relampago"  # letra trocada
+    assert parser.parece_voto("relampag") == "relampago"  # letra faltando
+    assert parser.parece_voto("bom dia galera, tudo bem?") is None
+
+
 def test_command_parser_cheers_and_fun_commands():
     from tiktok.parser import CommandParser
     

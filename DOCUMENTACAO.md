@@ -94,7 +94,7 @@ tiktok_live_cavalo/
 │       └── test.html            # Interface de controle do streamer no navegador (/test)
 ├── tools/
 │   └── smoke_audio.py           # Teste de ouvido da voz, sem abrir live
-├── tests/                       # 75 testes automatizados (pytest) com 100% de aprovação
+├── tests/                       # 77 testes automatizados (pytest) com 100% de aprovação
 ├── main.py                      # Ponto de entrada do sistema (`python main.py`)
 ├── requirements.txt             # Dependências Python (fastapi, uvicorn, aiosqlite, etc.)
 ├── README.md                    # Guia rápido de inicialização
@@ -109,13 +109,13 @@ Para calibrar o ritmo da transmissão sem encostar em código Python, edite `con
 
 ```json
 {
-  "race_duration_seconds": 35.0,        // Duração máxima da corrida (segundos)
+  "race_duration_seconds": 120.0,       // Duração máxima da corrida (segundos)
   "voting_duration_seconds": 30.0,      // Tempo para os espectadores escolherem os cavalos
   "countdown_duration_seconds": 5.0,    // Contagem regressiva antes da largada (5.. 4.. 3..)
   "podium_duration_seconds": 8.0,       // Duração da tela de pódio dos vencedores
   "xp_duration_seconds": 6.0,           // Duração da tela de distribuição de XP
   "leaderboard_duration_seconds": 10.0, // Duração da tela de TOP jogadores da LIVE
-  "track_length_meters": 1000.0,        // Comprimento da pista oval em metros virtuais
+  "track_length_meters": 3000.0,        // Comprimento da pista oval em metros virtuais
   "tick_rate": 60,                      // Taxa de atualização física por segundo (60 Hz)
   "tts": {
     "active": true,                     // Narração por voz ligada/desligada
@@ -239,7 +239,7 @@ Cada modelo 3D é um arquivo JavaScript independente na pasta `web/static/js/bod
 | **#7** | **NEVASCA** | `7_nevasca.json` | `unicorn` | Prata / Cinza | `COLD_TACTICIAN` |
 | **#8** | **FANTASMA** | `8_fantasma.json` | `spectral` | Roxo / Índigo | `WILDCARD` |
 
-**Todos os arquétipos são neutros no relógio.** O que decide corrida é o **tempo** ($tempo = distância/velocidade$), então o contrato de cada personalidade é $\sum (fração\ da\ pista / fator) = 1.00$ — média harmônica, não a média dos fatores; é o teste `test_personalidade_decide_quando_vence_nao_se_vence` que trava essa conta. O efeito prático, medido com `python tools/monte_carlo.py 1000`: em clima sorteado, **cada cavalo vence ~12,5%** (todos entre 10% e 15%, margem média de chegada de ~180ms), e o guardião `test_nenhum_cavalo_fica_para_tras` reprova qualquer cavalo fora de **8%–17% em 200 corridas**. Personalidade define **quando** cada um é forte — nunca **se** é mais rápido.
+**Todos os arquétipos são neutros no relógio.** O que decide corrida é o **tempo** ($tempo = distância/velocidade$), então o contrato de cada personalidade é $\sum (fração\ da\ pista / fator) = 1.00$ — média harmônica, não a média dos fatores; é o teste `test_personalidade_decide_quando_vence_nao_se_vence` que trava essa conta. O efeito prático, medido com `python tools/monte_carlo.py 1000` na pista de 3000m: em clima sorteado, **cada cavalo vence ~12,5%** (todos entre 9,8% e 16,9%, margem média de chegada de ~488ms — as margens triplicaram junto com a pista), e o guardião `test_nenhum_cavalo_fica_para_tras` reprova qualquer cavalo fora de **6%–21% em 200 corridas** (envelope de ~2σ do placar real). Personalidade define **quando** cada um é forte — nunca **se** é mais rápido.
 
 ### Como Adicionar um Novo Cavalo (ex: #9 TITÂNIO):
 1. Crie um novo arquivo JSON dentro da pasta `horses/`, por exemplo: `horses/9_titanio.json`.
@@ -266,14 +266,16 @@ No topo de `game/director.py` existe a tabela `GIFT_TIERS`, que casa o nome do p
 
 | Presente | Multiplicador | Duração | XP |
 |---|---|---|---|
-| 🦁 Leão (`lion`, `leao`) | `1.70` | 9.0s | 2000 |
-| 🐉 Dragão (`dragon`, `dragao`) | `1.65` | 8.5s | 1800 |
-| 🌌 Galáxia (`galaxy`, `galaxia`, `universe`) | `1.60` | 8.0s | 1500 |
-| 🧢 Boné (`cap`, `bone`) | `1.35` | 5.5s | 250 (config) |
-| 🍩 Donut (`donut`) | `1.35` | 5.5s | 250 (config) |
-| ☕ Café (`coffee`, `cafe`) | `1.20` | 4.5s | 100 (config) |
-| 🌹 Rosa (`rose`, `rosa`, `heart`, `coracao`) | `1.20` | 4.0s | 100 (config) |
-| 🎁 Qualquer outro (padrão) | `1.12` | 3.0s | 100 (config) |
+| 🦁 Leão (`lion`, `leao`) | `1.70` | 27.0s | 2000 |
+| 🐉 Dragão (`dragon`, `dragao`) | `1.65` | 25.5s | 1800 |
+| 🌌 Galáxia (`galaxy`, `galaxia`, `universe`) | `1.60` | 24.0s | 1500 |
+| 🧢 Boné (`cap`, `bone`) | `1.35` | 16.5s | 250 (config) |
+| 🍩 Donut (`donut`) | `1.35` | 16.5s | 250 (config) |
+| ☕ Café (`coffee`, `cafe`) | `1.20` | 13.5s | 100 (config) |
+| 🌹 Rosa (`rose`, `rosa`, `heart`, `coracao`) | `1.20` | 12.0s | 100 (config) |
+| 🎁 Qualquer outro (padrão) | `1.12` | 12.0s | 100 (config) |
+
+As durações são ~3x as originais: elas tinham sido calibradas para a prova de 1000m (~35s) e continuaram valendo quando a pista triplicou (3000m, ~110s) — a rosa de 4s, que era 11% da corrida, virou um piscar de 3% e a aura no cavalo sumia antes de a live ver. Piso atual: todo presente dura **≥10% da prova** e o lendário **≥20%** (travado por `tests/test_director.py`).
 
 **Quantidade enviada de uma vez** amplia o bônus: cada unidade extra soma `+10%` do delta do presente (máximo de 5 extras) e o multiplicador final nunca passa do teto `1.80`.
 Exemplo: 10 rosas = `1.30` — mais forte que 1 rosa (`1.20`), porém mais fraco que 1 galáxia (`1.60`).
@@ -310,32 +312,32 @@ Se um espectador enviar presentes durante a fase de **Votação (`VOTING`)** ou 
 
 ## 6. Mecânica Física, Pista Oval e Raias (`game/physics.py`)
 
-A pista é modelada como uma oval clássica de hipódromo com 1.000 metros de comprimento percorrível:
+A pista é modelada como uma oval clássica de hipódromo com 3.000 metros de comprimento percorrível (3x o oval original de 1.000m — mesma forma, retas e curvas escaladas juntas):
 
 ```text
-               Curva 2 [800m - 1000m]          Curva 1 [300m - 500m]
-                   (Raio: 63.66m)                  (Raio: 63.66m)
+               Curva 2 [2400m - 3000m]         Curva 1 [900m - 1500m]
+                  (Raio: 190.99m)                 (Raio: 190.99m)
                   ┌───────────────┐               ┌───────────────┐
                   │               │               │               │
                   │   Reta Oposta │               │               │
-                  │   [500m - 800m, z = -63.66m]  │               │
+                  │  [1500m - 2400m, z = -190.99m]│               │
                   │                               │               │
                   │   Infield (Lago, Telão LED,   │               │
                   │   Gramado, Árvores)           │               │
                   │                               │               │
                   │   Reta Principal              │               │
-                  │   [0m - 300m, z = +63.66m]    │               │
-                  │   Largada: x=-150             │               │
-                  │   Chegada: x=+150             │               │
+                  │  [0m - 900m, z = +190.99m]    │               │
+                  │   Largada: x=-450             │               │
+                  │   Chegada: x=-450             │               │
                   └───────────────┘               └───────────────┘
 ```
 
 ### 6.1 Distribuição Exata das Raias
-* A pista tem **28 metros de largura** (se estendendo de $z = 49.66\text{m}$ até $z = 77.66\text{m}$).
+* A pista tem **28 metros de largura** (se estendendo de $z = 176.99\text{m}$ até $z = 204.99\text{m}$).
 * As 8 raias foram distribuídas com **3.2 metros de largura por raia** a partir da base $R_{\text{base}} = \text{radius} - 11.2\text{m}$:
-  $$\text{Raia}(i) = 52.46\text{m} + (i - 1) \times 3.2\text{m}$$
-  * Raia 1 (Interna) = **$52.46\text{m}$** $\to$ perfeitamente alinhada com o Box #1.
-  * Raia 8 (Externa) = **$74.86\text{m}$** $\to$ perfeitamente alinhada com o Box #8.
+  $$\text{Raia}(i) = 179.79\text{m} + (i - 1) \times 3.2\text{m}$$
+  * Raia 1 (Interna) = **$179.79\text{m}$** $\to$ perfeitamente alinhada com o Box #1.
+  * Raia 8 (Externa) = **$202.19\text{m}$** $\to$ perfeitamente alinhada com o Box #8.
 * Margem de segurança de ~2.8m de cada lado em relação às cercas interna e externa: **zero cavalos escapam da pista ou atravessam cercas**, com muito mais espaço lateral para ultrapassagens e exibição dos modelos 3D.
 * **Cabines dos Boxes:** Cada box de espera tem **6.6 metros de comprimento** por **3.2 metros de largura** e **3.2 metros de altura**, acomodando perfeitamente qualquer modelo de corpo (inclusive Titã Juggernaut e Dragster) com folga na frente e atrás.
 
@@ -368,7 +370,7 @@ O partidor foi desenhado com arquitetura **tubular aberta de alta tecnologia (*o
 * **Placas Numeradas na Altura dos Olhos:** As placas 3D com as cores e números de cada cavalo ficam montadas no poste frontal a 2.3m de altura, sem cobrir o focinho nem os crachás flutuantes.
 * **Semáforo de Partida em Mastro Lateral:** Os 3 holofotes sincronizados ficam montados em um mastro estilizado na lateral do partidor ($z = zMin - 1.2$), visíveis pela câmera e sem sobrecarregar a visão dos boxes.
 * **Reboque Automático do Partidor Móvel (Towing System):** Reproduzindo os tratores dos hipódromos internacionais, o partidor móvel desliza suavemente sobre seus 4 conjuntos de pneus industriais para **fora da pista** (`z = -42.0m` no Infield) durante a corrida (`RACING`), pódio e rankings, deixando a reta final **100% livre e aberta para a chegada**. Ao iniciar uma nova prova (`VOTING`), o partidor retorna suavemente para a posição oficial da pista para acomodar os animais nos boxes.
-* **Chegada Integral dos Retardatários:** Quando o líder vence e a corrida encerra, a engine garante que todos os cavalos que ainda estavam correndo cruzem a marca de 1000m, posicionando todos os 8 animais alinhados ordenadamente na reta de chegada, sem que nenhum fique congelado ou abandonado nas curvas.
+* **Chegada Integral dos Retardatários:** Quando o líder vence e a corrida encerra, a engine garante que todos os cavalos que ainda estavam correndo cruzem a marca de 3000m, posicionando todos os 8 animais alinhados ordenadamente na reta de chegada, sem que nenhum fique congelado ou abandonado nas curvas.
 
 ### 7.2 Cercas de Turfe de Trilho Duplo com Flores
 * **Cercas de Trilho Duplo (360 Graus):** Malha paramétrica contínua com **trilho superior a 1.35m** e **trilho intermediário a 0.75m**, além de tampas arredondadas no topo de cada poste vertical em PVC branco puro.
@@ -382,7 +384,7 @@ O partidor foi desenhado com arquitetura **tubular aberta de alta tecnologia (*o
   * Faixas laterais com bandeiras quadriculadas de turfe (*checkered flags*).
   * Subtítulo em dourado: `"★ TIKTOK LIVE GRAND PRIX DERBY ★"`.
   * Título monumental em branco incandescente com sombra 3D: `"🏁 LINHA DE CHEGADA 🏁"`.
-  * Indicação métrica: `"FINISH LINE • 1000 METROS"`.
+  * Indicação métrica: `"FINISH LINE • 3000 METROS"`.
 
 ### 7.4 Movimento Cinético Contínuo e Fluidez 60-144 FPS (Dead Reckoning)
 Para eliminar qualquer sensação de travamento (*stuttering*) ou engasgos decorrentes de variações naturais de latência nos pacotes de rede WebSocket:
@@ -409,22 +411,22 @@ Ao término da prova, a tela de Pódio ganha um espetáculo visual cinematográf
 * **Tendas Brancas de Paddock VIP & Hospitality:** 3 gazebos brancos de evento com cúpulas cônicas, colunas brancas e mesas redondas posicionadas na área de hospitalidade à beira da reta.
 * **Cais de Madeira no Lago Ornamental:** Deck rústico de madeira com postes de amarração náuticos avançando sobre a água límpida do lago central.
 * **Jumbotron LED de 34 Metros:** Telão no centro do Infield com suporte metálico treliçado exibindo o logotipo esportivo e avisos ao vivo.
-* **Arquibancada Monumental:** 10 degraus de concreto com faixas de assentos, escadas entre os setores e fachada com faixa de publicidade; **~900 torcedores instanciados** (corpo + cabeça, cores e alturas variadas, pulando em fases próprias), camarote VIP de vidro espelhado com montantes, colunas, parede de fundo e 12 bandeiras no telhado que balançam com o vento.
+* **Arquibancada Monumental:** 10 degraus de concreto com faixas de assentos, escadas entre os setores e fachada com faixa de publicidade; **~2.880 torcedores instanciados** (corpo + cabeça, cores e alturas variadas, pulando em fases próprias), camarote VIP de vidro espelhado com montantes, colunas, parede de fundo e 12 bandeiras no telhado que balançam com o vento.
 * **Floresta Periférica:** Pinheiros e carvalhos 3D posicionados exclusivamente fora da pista (raio $\ge 92\text{m}$ nas curvas e $z \le -96\text{m}$ na reta oposta).
-* **Placas de Distância Oficiais:** Marcadores verticais de turfe ao longo da pista: `800m`, `600m`, `400m`, `200m`, `100m` e `FINAL`.
+* **Placas de Distância Oficiais:** Marcadores verticais de turfe ao longo da pista: `2400m`, `1800m`, `1200m`, `600m`, `300m` e `FINAL`.
 
 ### 7.6 Céu, Luz e Clima (o passe visual)
 
 O fundo liso de cor única e a luz chapada eram o maior "cheiro de protótipo" da cena. Agora:
 
 * **Céu com gradiente:** domo com shader próprio (cor do topo → cor do horizonte) + **sol em sprite** com brilho radial desenhado em canvas + **estrelas** que aparecem à noite. Cada clima tem a sua paleta (o pôr do sol tem céu roxo com horizonte laranja; a tempestade, chumbo).
-* **Luz que modela:** luz **hemisférica** (céu azulado por cima, gramado esverdeado por baixo) + sol direcional com sombras + **preenchimento frio** do lado oposto (nenhuma sombra fica preta). Refletores do estádio acendem só no clima noturno.
+* **Luz que modela:** luz **hemisférica** (céu azulado por cima, gramado esverdeado por baixo) + sol direcional com sombras + **preenchimento frio** do lado oposto (nenhuma sombra fica preta). Refletores do estádio acendem só no clima noturno. A luz do sol (e o alvo dela) **acompanha o pelotão** durante a corrida: o recorte de sombra de 260m não cobre os 3000m de pista, e alargá-lo borraria a sombra inteira — mover a luz mantém a sombra nítida em cima de quem está correndo sem mudar o ângulo solar.
 * **Texturas procedurais:** grama com manchas tonais e areia com grãos e estrias longitudinais, geradas em canvas — **nenhum asset externo** para baixar ou versionar.
 * **Clima mexe na pista:** chuva/tempestade **molham a areia** (escurece e ganha espelho); a neblina fecha o horizonte; a **tempestade dispara relâmpagos** — um clarão curto que acende o céu e o ambiente (e a fonte do lago pulsa de verdade).
 * **O clima VIRA com transição:** trocar de clima (inclusive a **virada no meio da prova**) não é um corte seco: a cena caminha da paleta atual para a nova em **1,8s** (`DURACAO_TRANSICAO_CLIMA`), com suavização de entrada e saída — céu, neblina, luzes, nuvens e pista interpolam juntos, e o sol acende/apaga no meio do caminho. Trocar de clima de novo no meio de uma transição parte de onde a cena está (nada de piscar de volta).
 * **Pipeline de cor sRGB:** `outputEncoding` do renderer + texturas de canvas marcadas como sRGB — sem isso o ACES escurece a cena inteira e as cores saem lavadas.
 * **Contraste sob controle:** a exposição do tone mapping fica em **0.92** e ambiente/hemisfério são enxutos (0.33/0.42 no claro) contra um sol forte (1.5). Com a exposição antiga (1.05) os realces — areia, camisas brancas, céu — estouravam e a cena achatava; menos luz de preenchimento devolve sombra de verdade sem perder cor. Cada clima mantém a proporção na sua própria paleta (tabela `PALETAS_CLIMA`, ao lado da classe em `scene.js`).
-* **Arquibancada de estádio:** degraus de concreto com **faixa azul de assentos** no espelho, **escadas** dividindo os setores, fachada frontal com **faixa de publicidade iluminada**, camarote VIP de vidro com montantes, colunas, parede de fundo e teto com testa. A torcida é **instanciada** (`InstancedMesh`: corpo + cabeça, 2 draw calls no lugar de ~900) com altura, camisa e tom de pele variados, pulando por fase própria — e cada fã respeita os corredores das escadas.
+* **Arquibancada de estádio:** degraus de concreto com **faixa azul de assentos** no espelho, **escadas** dividindo os setores, fachada frontal com **faixa de publicidade iluminada**, camarote VIP de vidro com montantes, colunas, parede de fundo e teto com testa. A torcida é **instanciada** (`InstancedMesh`: corpo + cabeça, 2 draw calls no lugar de ~2.880) com altura, camisa e tom de pele variados, pulando por fase própria — e cada fã respeita os corredores das escadas.
 * **Vinheta de transmissão (CSS):** escurecimento suave nos cantos e na base, entre o canvas e o HUD — a imagem ganha cara de TV sem escurecer texto ou painel. O degrau do campeão no pódio tem um brilho varrendo, e o líder da torre de posições ganha glow.
 
 ---
@@ -433,14 +435,14 @@ O fundo liso de cor única e a luz chapada eram o maior "cheiro de protótipo" d
 
 A câmera alterna de modo automaticamente conforme os acontecimentos da corrida:
 
-1. **`CAM_START`:** Visão aberta panorâmica e elevada $(-210, 36, 140)$ focando os boxes de largada durante a votação e contagem.
+1. **`CAM_START`:** Visão aberta panorâmica e elevada (portão de largada $-450$ deslocado em $-65, +36, +76$) focando os boxes de largada durante a votação e contagem.
 2. **`CAM_CHASE`:** Câmera aérea esportiva recuada a **44m de distância** e **24m de altura** do cavalo líder, enquadrando os 8 cavalos sem aperto no formato vertical do celular.
 3. **`CAM_SIDE`:** Câmera lateral aberta de helicóptero a **46m de distância lateral** e **28m de altura**, perfeita para acompanhar ultrapassagens nas curvas.
-4. **`CAM_FINISH`:** Câmera angular na reta final $(186, 15, 87)$ focando a aproximação em alta velocidade para cruzar a linha quadriculada.
+4. **`CAM_FINISH`:** Câmera angular na reta final (linha de chegada deslocada em $-42, +17, +34$) focando a aproximação em alta velocidade para cruzar a linha quadriculada.
 5. **`CAM_PODIUM`:** Órbita circular de 360 graus a 22m de raio ao redor do vencedor durante a celebração com chuva de confetes.
 
 ### Transição Contínua Pós-Chegada:
-* Quando o cavalo vencedor cruza a linha de chegada (1000m), a câmera **não congela**: ela foca automaticamente no próximo cavalo ativo disputando o 2º e 3º lugares!
+* Quando o cavalo vencedor cruza a linha de chegada (3000m), a câmera **não congela**: ela foca automaticamente no próximo cavalo ativo disputando o 2º e 3º lugares!
 * A engine fecha a prova 3.5 segundos após a vitória e dispara imediatamente a tela de **PÓDIO** com órbita 360º.
 
 ---
@@ -451,7 +453,7 @@ A interface do usuário foi desenhada no padrão das transmissões da **Fórmula
 
 ```text
 ┌────────────────────────────────────────────────────────┐
-│ [🏇 CORRIDA #42 ⚡TEMPESTADE]  [🔴 AO VIVO]  [847m] [🔊] │  ← Top Bar
+│ [🏇 CORRIDA #42 ⚡TEMPESTADE]  [🔴 AO VIVO]  [2.847m] [🔊]│  ← Top Bar
 ├────────────────────────────────────────────────────────┤
 │ [───1───2──────3─────────4──5──────6──7────8────────🏁] │  ← Régua de Progresso
 ├────────────────────────────────────────────────────────┤
@@ -485,7 +487,7 @@ A interface do usuário foi desenhada no padrão das transmissões da **Fórmula
 * **Badge da corrida:** troféu em chip dourado + rótulo `CORRIDA` + número `#N` com gradiente. Quando uma corrida NOVA abre, o número salta na tela (flash) — o olho do espectador acha o marcador sozinho.
 * **Chip de clima:** ☀️ SOL, 🌅 PÔR DO SOL, 🌃 NOTURNA, 🌧️ CHUVA, ⚡ TEMPESTADE ou 💨 VENTO — cada um com a sua cor. É **informação de aposta**: o clima da pista é sorteado ANTES da votação abrir, e cada cavalo tem o seu clima favorito (ver seção 8) — quem escolhe o cavalo já sabe em que tempo a prova vai ser.
 * **Pill de status por fase:** votação é dourada, **AO VIVO é vermelha** (com pulso mais rápido), pódio dourado, XP verde e ranking azul — a fase se lê de longe, sem precisar ler o texto.
-* **Relógio contextual:** na votação/contagem conta os segundos (fica vermelho e pisca nos últimos 5s); **na corrida vira a distância do líder** (ex.: `847m`, vermelho ao passar dos 900m — reta final); nas telas de resultado some (não há o que contar).
+* **Relógio contextual:** na votação/contagem conta os segundos (fica vermelho e pisca nos últimos 5s); **na corrida vira a distância do líder** (ex.: `2.847m`, vermelho ao passar dos 2.700m — reta final); nas telas de resultado some (não há o que contar).
 
 ### Os modais centrais (votação, contagem, pódio, XP):
 
@@ -561,7 +563,7 @@ Cada subida de nível gera uma notificação animada na tela com estrela dourada
 
 ## 13. Testes Automatizados e Garantia de Qualidade
 
-O projeto possui **75 testes automatizados** cobrindo todos os módulos vitais. Para executar:
+O projeto possui **77 testes automatizados** cobrindo todos os módulos vitais. Para executar:
 
 ```bash
 python -m pytest -v
@@ -572,14 +574,14 @@ Os testes verificam:
 * Ciclo de vida completo do banco SQLite e cálculos atômicos de XP e níveis.
 * Rate limiting por usuário em janela de 1s e sanitização de strings contra ataques.
 * Simulação matemática da corrida, boosts, curvas de personalidade e linha de chegada.
-* **Balanceamento**: todo arquétipo é neutro no relógio ($\sum fração/fator = 1.00$) e, em 200 corridas com clima sorteado, cada cavalo vence entre 8% e 17% — ninguém domina nem fica escanteado.
+* **Balanceamento**: todo arquétipo é neutro no relógio ($\sum fração/fator = 1.00$) e, em 200 corridas com clima sorteado, cada cavalo vence entre 6% e 21% — ninguém domina nem fica escanteado. (Medido em 1.000 corridas na pista de 3000m: RELÂMPAGO 10,7%, TROVÃO 13,3%, FURACÃO 15,3%, RAIO 12,0%, PANTERA 9,8%, TITÃ 16,9%, NEVASCA 11,4%, FANTASMA 10,6%; margem média 1º/2º de 488ms e 82,3% das chegadas em até 900ms. A faixa do teste é o envelope de ~2σ em torno disso.)
 * **Clima**: sorteio que nunca repete o clima da corrida anterior, intensidade que escala o efeito de verdade, rótulo falado ("chuva forte"), anúncio na abertura com os favoritos e a virada do tempo no meio da prova (agendada na largada, uma vez por corrida).
 * Máquina de estados do `EventDirector` (VOTING $\to$ COUNTDOWN $\to$ RACING $\to$ PODIUM $\to$ XP $\to$ LEADERBOARD).
 * Parser semântico de comandos do TikTok (números, nomes, presentes e comandos de torcida).
 * Torcida no chat: número digitado com a corrida rolando soma `+0.4 m/s` no cavalo (e nada acontece fora da corrida); curtida de quem não escolheu cavalo vai para o **último colocado** (nunca o líder; sorteio só sem posição formada) e a torcida leve (curtida + comentário) soma travada no teto de `+0.9 m/s`; presente de quem não escolheu cai em **cavalo sorteado**.
 * Endpoints REST do servidor FastAPI e sincronização WebSocket.
 * Voz da live: frases e fila do Narrador com gerador/tocador injetados (sem internet e sem placa de som), incluindo o descarte da fala mais antiga com a fila cheia e o **descarte da locução de corrida quando a chegada decide** (vencedor e foto-finish nunca são descartados).
-* **Anúncio Imediato na Chegada (Zero Atraso):** assim que o primeiro cavalo cruza a marca de 1000m, a voz dispara o anúncio do campeão na hora (sem aguardar o timeout pós-chegada da física), cortando falas de meio de prova pendentes via `interromper_locucao()`.
+* **Anúncio Imediato na Chegada (Zero Atraso):** assim que o primeiro cavalo cruza a marca de 3000m, a voz dispara o anúncio do campeão na hora (sem aguardar o timeout pós-chegada da física), cortando falas de meio de prova pendentes via `interromper_locucao()`.
 * **Áudio Ducking para Boas-Vindas:** canal prioritário de saudações com reprodução simultânea no MCI que reduz o volume da fala atual em 50% (`volume 500`), reproduz o oi em volume máximo (`volume 1000`) e restaura suavemente o som principal ao término da saudação.
 * Locução ao vivo: frases da dupla da frente, queda na frase padrão com placeholder quebrado e todas as frases do jogo formatando sem erro.
 * Fiação da voz no `EventDirector`: votação (com lembrete a cada 12s), largada, vencedor, presente, entrada e clima falados nos momentos certos — e a locução disparando abertura, disputa, reta final e os três placares UMA vez cada, na ordem da prova.
@@ -600,7 +602,7 @@ Mesmo motor do `tiktok-live-pixel`, portado inteiro e ampliado: uma **thread com
 ### 14.1 Anúncio Imediato do Vencedor com Fade-Out Suave (Zero Corte Seco)
 Antes, o anúncio do vencedor aguardava os 3.5 segundos da desaceleração da engine pós-chegada para só então sintetizar a voz, acumulando até 8 segundos de espera, e um corte abrupto podia acontecer no meio da palavra.
 Agora:
-* **Disparo no Milissegundo do Cruzamento:** No exato instante em que o cavalo cruza a linha de 1000m (`winner_horse_id` detectado em `RACING`), o narrador entra em ação imediatamente.
+* **Disparo no Milissegundo do Cruzamento:** No exato instante em que o cavalo cruza a linha de 3000m (`winner_horse_id` detectado em `RACING`), o narrador entra em ação imediatamente.
 * **Fade-Out Suave da Locução Anterior (`interromper_locucao()`):** Se alguma locução da corrida estiver sendo falada nos alto-falantes (ex: *"Olha o placar..."*), o narrador **não corta o som do nada**. Ele executa um **fade-out musical e suave de ~240ms** (reduzindo o volume de forma exponencial em 6 etapas: 70% $\to$ 45% $\to$ 25% $\to$ 10% $\to$ 2% $\to$ 0%), silenciando a fala anterior com extrema elegância antes de abrir o veredito do campeão.
 * O veredito do campeão e foto-finish são sintetizados instantaneamente, entrando com volume pleno e clareza total na virada para o pódio!
 
@@ -619,15 +621,15 @@ Usuários do TikTok frequentemente possuem emojis em seus nomes de exibição (e
 
 ### A locução ao vivo (o locutor da corrida)
 
-A corrida era o único trecho silencioso da transmissão: saía a largada e depois só o vencedor — ~35s de vazio. Agora o narrador acompanha a prova inteira, disparado por **marco de distância do líder** (`MARCOS_LOCUCAO` no `EventDirector`); cada marco fala **uma vez por corrida** (o placar são três marcos distintos, um por distância). O ritmo ficou de **~1 fala a cada 5s** — medido a 60Hz, o maior buraco entre falas caiu de 10-12s para ~6s:
+A corrida era o único trecho silencioso da transmissão: saía a largada e depois só o vencedor — uma prova inteira de vazio. Agora o narrador acompanha a prova inteira (~1min50 na pista de 3000m), disparado por **marco de distância do líder** (`MARCOS_LOCUCAO` no `EventDirector`); cada marco fala **uma vez por corrida** (o placar são vários marcos distintos, um por distância). O ritmo ficou de **~1 fala a cada 150m (≈5s)** — a mesma cadência da pista antiga, que só espaçava as falas a cada 120-150m; os 19 marcos cobrem a prova toda sem buracos de silêncio:
 
 | Momento | Marco | Frase (exemplo) |
 |---|---|---|
-| **Abertura** | 120m | *"{lider} puxa o ritmo! E olha o {segundo} vindo colado logo atrás!"* |
-| **Placar** | 320m, 620m e 760m | *"Olha o placar! {lider} na frente, {segundo} em segundo e {terceiro} fechando o trio!"* — o placar do turfe: cita o **trio** da frente |
-| **Disputa** | 480m | *"A corrida tá pegada! {lider} e {segundo} lado a lado!"* |
-| **Reta final** | 880m | *"Reta final! {lider} na frente e {segundo} vem voando!"* — cai a ~4s da linha: o tempo de gerar o áudio e a voz entrar no ar antes do cruzamento |
-| **Foto-finish** | chegada | *"Que chegada! {vencedor} levou no fio do bigode na frente do {segundo}!"* — só quando a chegada foi decidida por **menos de 50ms** (`MARGEM_FOTO_FINISH_MS`; acontece em ~1/3 das corridas). Entra na fila ANTES do anúncio do campeão: primeiro o susto, depois o veredito |
+| **Abertura** | 150m | *"{lider} puxa o ritmo! E olha o {segundo} vindo colado logo atrás!"* |
+| **Placar** | a cada 300m (300, 450, 750, 900, 1.200, 1.350, 1.650, 1.800, 2.100, 2.250, 2.550 e 2.700m) | *"Olha o placar! {lider} na frente, {segundo} em segundo e {terceiro} fechando o trio!"* — o placar do turfe: cita o **trio** da frente |
+| **Disputa** | a cada 450m (600, 1.050, 1.500, 1.950 e 2.400m) | *"A corrida tá pegada! {lider} e {segundo} lado a lado!"* |
+| **Reta final** | 2.880m | *"Reta final! {lider} na frente e {segundo} vem voando!"* — cai a ~4s da linha: o tempo de gerar o áudio e a voz entrar no ar antes do cruzamento |
+| **Foto-finish** | chegada | *"Que chegada! {vencedor} levou no fio do bigode na frente do {segundo}!"* — só quando a chegada foi decidida por **menos de 150ms** (`MARGEM_FOTO_FINISH_MS`; as margens triplicaram com a pista, então o limiar acompanhou; acontece em ~30% das corridas). Entra na fila ANTES do anúncio do campeão: primeiro o susto, depois o veredito |
 
 E a **votação** (30s parados) não fica muda: a voz lembra a galera de votar a cada **12s** (`CHAMADA_VOTACAO_INTERVALO`) até a largada.
 

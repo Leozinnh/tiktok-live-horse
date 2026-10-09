@@ -84,6 +84,10 @@ class TikTokLiveAdapter:
                     text = getattr(event, "content", None) or getattr(event, "comment", None) or ""
                     parsed = self.parser.parse_comment(text)
                     if not parsed:
+                        # Sonda da live: nome de cavalo digitado que o parser
+                        # não entendeu aparece no console (comentário cru) em
+                        # vez de sumir sem deixar rastro.
+                        self.parser.avisar_voto_perdido(text)
                         return
                     if parsed["action"] == "CHOOSE_HORSE":
                         # Cooldown de troca de escolha (mesma regra do mock_adapter)

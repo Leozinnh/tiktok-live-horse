@@ -106,15 +106,18 @@ class RaceEngine:
             self.winner_horse_id = fastest.id
             self._winner_crossed_time_ms = self.race_elapsed_ms
             
-        # A corrida é finalizada quando todos terminam, ou 3.5s após o primeiro cruzar a linha, ou timeout de 60s
+        # A corrida é finalizada quando todos terminam, ou 10.5s após o primeiro
+        # cruzar a linha (a janela precisa cobrir a chegada do 2º/3º na pista
+        # de 3000m — com menos, os retardatários eram forçados a um tempo
+        # idêntico e a ordem do pódio virava sorte), ou timeout duro.
         all_finished = all(h.finished for h in self.horses)
-        post_win_timeout = hasattr(self, "_winner_crossed_time_ms") and (self.race_elapsed_ms - self._winner_crossed_time_ms >= 3500)
+        post_win_timeout = hasattr(self, "_winner_crossed_time_ms") and (self.race_elapsed_ms - self._winner_crossed_time_ms >= 10500)
         timeout = self.race_elapsed_ms > int((self.settings.race_duration_seconds + 10) * 1000)
         
         if (all_finished or post_win_timeout or timeout) and self.status == "RACING":
             self.status = "FINISHED"
 
-            # Garante que qualquer cavalo retardatário cruze a linha final de 1000m
+            # Garante que qualquer cavalo retardatário cruze a linha final de 3000m
             # para que nenhum animal fique travado na pista fora da linha de chegada!
             for h in self.horses:
                 if not h.finished:

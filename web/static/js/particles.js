@@ -376,7 +376,7 @@ class ParticleSystem {
     }
   }
 
-  update(dt, weatherType) {
+  update(dt, weatherType, cameraPos = null) {
     // Decaimento suave do screen shake
     if (this.screenShakeIntensity > 0) {
       this.screenShakeIntensity = Math.max(0, this.screenShakeIntensity - dt * 2.5);
@@ -464,9 +464,13 @@ class ParticleSystem {
       }
     }
 
-    // 6. Atualizar Chuva
+    // 6. Atualizar Chuva (o campo acompanha a câmera: fixo em ±200m da
+    // origem, a reta de 900m da pista nova ficava quase toda sem chuva)
     if (this.rainMesh) {
       if (weatherType === "RAIN" || weatherType === "STORM") {
+        if (cameraPos) {
+          this.rainMesh.position.set(cameraPos.x, 0, cameraPos.z);
+        }
         this.rainMesh.material.opacity = weatherType === "STORM" ? 0.75 : 0.45;
         const pos = this.rainMesh.geometry.attributes.position.array;
         for (let i = 1; i < pos.length; i += 3) {

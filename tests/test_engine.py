@@ -39,9 +39,9 @@ def test_engine_race_simulation_and_boost():
     h1 = next(h for h in snapshot["horses"] if h["id"] == 1)
     assert h1["distance"] > 200.0  # Percorreu distância substancial
     
-    # Continua até a corrida finalizar
+    # Continua até a corrida finalizar (pista de 3000m: ~115s no pior caso)
     ticks = 0
-    while not engine.is_finished() and ticks < 3000:
+    while not engine.is_finished() and ticks < 8000:
         engine.update(dt)
         ticks += 1
         

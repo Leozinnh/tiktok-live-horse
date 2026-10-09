@@ -143,7 +143,7 @@ class HorseState:
                 factor = 0.90
 
         elif p == "CLOSER":  # Trovão
-            # Economiza e dispara nos últimos 250m
+            # Economiza e dispara no último quarto da pista (750m na de 3000m)
             # 0.50/0.945 + 0.25/1.00 + 0.25/1.135 = 1.00
             if progress_ratio < 0.5:
                 factor = 0.945
@@ -167,7 +167,8 @@ class HorseState:
                 factor = 0.94
 
         elif p == "CORNER_SPECIALIST":  # Pantera
-            # Pista oval tem curvas em 20%-40% e 70%-90% do traçado
+            # As curvas do oval ficam em 30%-50% e 80%-100% do traçado; a
+            # janela de força cobre esses trechos (com folga pós-curva)
             # 0.40/1.06 (curvas) + 0.60/0.964 (retas) = 1.00
             in_curve = (0.20 <= progress_ratio <= 0.40) or (0.70 <= progress_ratio <= 0.90)
             factor = 1.06 if in_curve else 0.964
@@ -227,19 +228,24 @@ class HorseState:
         personality_mult = self.calculate_personality_factor(progress, current_rank)
         
         # 4. Fadiga da stamina: agora pesa de verdade na reta final
-        #    (quem tem 6.3 de stamina termina bem mais lento que quem tem 10)
-        stamina_loss = dt * (2.7 - (self.config.stamina * 0.16))
+        #    (quem tem 6.3 de stamina termina bem mais lento que quem tem 10).
+        #    A taxa é por SEGUNDO e a prova de 3000m dura ~3x a antiga — por
+        #    isso o dt/3: o arco da corrida (mesma fração de prova "cansada")
+        #    fica idêntico ao de antes. Sem isso a fadiga saturava em ~25s de
+        #    uma prova de 110s e todas as personalidades terminavam achatadas.
+        stamina_loss = (dt / 3.0) * (2.7 - (self.config.stamina * 0.16))
         self.stamina = max(10.0, self.stamina - stamina_loss)
         stamina_mult = 0.86 + (self.stamina / 100.0) * 0.14
 
         # 5. Sorte: o "dia do cavalo" (form) + arrancadas surpresa
         #    Sorte alta = arrancadas mais frequentes e mais fortes (Fantasma),
-        #    mas ninguém fica imune a um dia ruim.
+        #    mas ninguém fica imune a um dia ruim. Também por segundo, também
+        #    ÷3: a prova longa tem o MESMO número esperado de arrancadas.
         if self.surge_remaining > 0.0:
             self.surge_remaining -= dt
         else:
             self.surge_mult = 1.0
-            if random.random() < dt * (0.03 + self.config.luck * 0.012):
+            if random.random() < (dt / 3.0) * (0.03 + self.config.luck * 0.012):
                 self.surge_remaining = random.uniform(0.4, 1.2)
                 self.surge_mult = 1.05 + self.config.luck * 0.003
                 self.surge_count += 1

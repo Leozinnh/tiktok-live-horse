@@ -20,6 +20,13 @@ const STATE_PILL_CLASS = {
   LEADERBOARD: "leaderboard",
 };
 
+// Nome de quem manda presente vem do chat: escapa antes de entrar no HTML.
+function escaparHtml(valor) {
+  return String(valor ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 class BroadcastHUD {
   constructor(audio) {
     this.audio = audio;
@@ -40,20 +47,11 @@ class BroadcastHUD {
     this.notificationContainer = document.getElementById("notification-container");
     this.centerModal = document.getElementById("center-modal");
     this.leaderboardEl = document.getElementById("hudLeaderboard");
-    this.audioToggleBtn = document.getElementById("audioToggleBtn");
 
     // Controle da cartela de votação: qual fase está montada no DOM e qual
     // número da contagem já foi exibido (evita remontar/piscar a cada update).
     this.votingPanelState = null;
     this.countdownShown = null;
-
-    if (this.audioToggleBtn) {
-      this.audioToggleBtn.addEventListener("click", () => {
-        this.audio.init();
-        const muted = this.audio.toggleMute();
-        this.audioToggleBtn.innerText = muted ? "🔇" : "🔊";
-      });
-    }
   }
 
   applyConfig(config) {
@@ -180,10 +178,11 @@ class BroadcastHUD {
       urgente = segundos > 0 && segundos <= 5;
     } else if (state === "RACING") {
       const leaderboard = (stateData.engine && stateData.engine.leaderboard) || [];
+      const trackLength = (stateData.engine && stateData.engine.track_length) || 3000;
       const metros = leaderboard.length ? Math.round(leaderboard[0].distance) : 0;
       valor = metros;
       unidade = "m";
-      urgente = metros >= 900; // reta final: o líder está chegando
+      urgente = metros >= trackLength * 0.9; // reta final: o líder está chegando
     }
 
     if (valor === null) {
@@ -198,8 +197,15 @@ class BroadcastHUD {
   }
 
   showToast(notification) {
-    if (notification.is_legendary) {
-      this.showMythicAnnouncement(notification);
+    // Presente não é aviso comum: ganha o cartão caprichado (mostrarCartaoDePresente).
+    if (notification.type === "GIFT") {
+      if (notification.is_legendary) {
+        this.showMythicAnnouncement(notification);
+      } else {
+        this.audio.playTurbo();
+      }
+      this.mostrarCartaoDePresente(notification);
+      return;
     }
 
     let cleanText = notification.text || "";
@@ -209,13 +215,9 @@ class BroadcastHUD {
     }
 
     const toast = document.createElement("div");
-    toast.className = `toast ${notification.type === "GIFT" ? "gift" : ""}`;
-    toast.innerHTML = `<span>${notification.badge || "🏇"}</span> <span>${cleanText}</span>`;
+    toast.className = "toast";
+    toast.innerHTML = `<span>${notification.badge || "🏇"}</span> <span>${escaparHtml(cleanText)}</span>`;
     this.notificationContainer.appendChild(toast);
-
-    if (notification.type === "GIFT" && !notification.is_legendary) {
-      this.audio.playTurbo();
-    }
 
     setTimeout(() => {
       toast.style.transition = "opacity 0.4s ease, transform 0.4s ease";
@@ -223,6 +225,36 @@ class BroadcastHUD {
       toast.style.transform = "translateX(-30px)";
       setTimeout(() => toast.remove(), 400);
     }, 4500);
+  }
+
+  // O "aviso" de presente da live: emoji enorme, quem mandou, quantos e o boost
+  // que caiu no cavalo. A cor do brilho muda com o tier (rosa = turbo, boné/donut
+  // = super boost, leão/dragão/galáxia = lendário dourado).
+  mostrarCartaoDePresente(n) {
+    const boost = (n.boost_label || "").toUpperCase();
+    const classeTier = n.is_legendary
+      ? "gift-lendario"
+      : (boost.includes("SUPER") ? "gift-super" : "gift-turbo");
+
+    const card = document.createElement("div");
+    card.className = `toast gift-card ${classeTier}`;
+    card.innerHTML = `
+      <div class="gift-brilho"></div>
+      <span class="gift-emoji">${n.gift_emoji || n.badge || "🎁"}</span>
+      <div class="gift-info">
+        <span class="gift-quem"><b>${escaparHtml(n.sender_name || "Apoiador")}</b> mandou ${escaparHtml(n.gift_name || "um presente")}${n.gift_count > 1 ? ` <i>x${n.gift_count}</i>` : ""}</span>
+        <span class="gift-boost">⚡ ${escaparHtml(n.boost_label || "TURBO")} no ${escaparHtml(n.horse_name || "cavalo")}</span>
+      </div>`;
+    this.notificationContainer.appendChild(card);
+
+    // O cartão de presente fica mais tempo na tela que um aviso comum.
+    const duracao = n.is_legendary ? 7000 : 6000;
+    setTimeout(() => {
+      card.style.transition = "opacity 0.5s ease, transform 0.5s ease";
+      card.style.opacity = "0";
+      card.style.transform = "translateX(-40px) scale(0.94)";
+      setTimeout(() => card.remove(), 500);
+    }, duracao);
   }
 
   showMythicAnnouncement(n) {
@@ -488,7 +520,7 @@ class BroadcastHUD {
 
     const leaderboard = (stateData.engine && stateData.engine.leaderboard) || [];
     const horses = (stateData.engine && stateData.engine.horses) || [];
-    const trackLength = (stateData.engine && stateData.engine.track_length) || 1000;
+    const trackLength = (stateData.engine && stateData.engine.track_length) || 3000;
 
     // 1. Atualiza Torre Lateral Esquerda (Compacta estilo F1 - não tampa os cavalos)
     let rowsHtml = "";
@@ -513,7 +545,7 @@ class BroadcastHUD {
     this.leaderboardEl.innerHTML = `
       <div class="tower-header">
         <span>🏁 POSIÇÕES</span>
-        <span>1000m</span>
+        <span>${trackLength}m</span>
       </div>
       <div class="tower-list">
         ${rowsHtml}

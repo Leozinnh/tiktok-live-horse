@@ -89,7 +89,7 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
 Cada cavalo possui seu arquivo de configuração próprio dentro da pasta **`horses/`** (`1_relampago.json` até `8_fantasma.json`), permitindo personalizar cores da pelagem, crina, cascos, farda e capacete do jóquei, estilo visual, nome e atributos:
 
 1. **#1 RELÂMPAGO (Dourado):** Arrancada explosiva; lidera no início e perde fôlego na reta final.
-2. **#2 TROVÃO (Azul):** Arrancada final avassaladora nos últimos 150 metros.
+2. **#2 TROVÃO (Azul):** Arrancada final avassaladora no último quarto da pista (750m finais na pista de 3000m).
 3. **#3 FURACÃO (Verde):** Ritmo consistente e imune à fadiga.
 4. **#4 RAIO (Vermelho):** Caçador no vácuo; acelera quando corre atrás dos líderes.
 5. **#5 PANTERA (Preto):** Especialista em curvas e ultrapassagens pelo lado interno da pista.
@@ -97,7 +97,7 @@ Cada cavalo possui seu arquivo de configuração próprio dentro da pasta **`hor
 7. **#7 NEVASCA (Branco):** Frio e técnico; cresce de rendimento na chuva e no vento.
 8. **#8 FANTASMA (Roxo):** Imprevisível; alto fator sorte com arrancadas repentinas.
 
-**A briga é justa:** todo arquétipo é neutro no relógio — personalidade decide **quando** cada um é forte, nunca **se** é mais rápido. Em clima sorteado, cada cavalo vence ~12,5% das corridas (medido com `python tools/monte_carlo.py 1000` e travado pelos testes: nenhum cavalo fora de 8%–17% em 200 corridas). O **clima muda a cada corrida** (nunca repete o anterior), com intensidade sorteada que pesa de verdade, anúncio do locutor com os favoritos daquele tempo — e o tempo pode **virar no meio da prova**, com a cena transicionando suave e a voz avisando.
+**A briga é justa:** todo arquétipo é neutro no relógio — personalidade decide **quando** cada um é forte, nunca **se** é mais rápido. Em clima sorteado, cada cavalo vence ~12,5% das corridas (medido com `python tools/monte_carlo.py 1000` na pista de 3000m: todos entre 9,8% e 16,9%, margem média de chegada de ~488ms; travado pelos testes: nenhum cavalo fora de 6%–21% em 200 corridas). O **clima muda a cada corrida** (nunca repete o anterior), com intensidade sorteada que pesa de verdade, anúncio do locutor com os favoritos daquele tempo — e o tempo pode **virar no meio da prova**, com a cena transicionando suave e a voz avisando.
 
 ---
 
@@ -106,8 +106,8 @@ Cada cavalo possui seu arquivo de configuração próprio dentro da pasta **`hor
 O jogo roda infinitamente sem necessidade de operador humano:
 1. **ESCOLHA SEU CAVALO (30s):** Grade na tela com os 8 cavalos e contadores de torcida ao vivo. O chat comenta `1` a `8` ou o nome do cavalo.
 2. **CONTAGEM REGRESSIVA (5s):** 5.. 4.. 3.. 2.. 1.. com bips sonoros e portões dos boxes se preparando.
-3. **CORRIDA AO VIVO (~35s):** Física a 60 ticks/s, **locução ao vivo** (abertura, disputa e reta final narradas pelo locutor; chegada apertada ganha foto-finish), clima anunciado na abertura e que pode **virar no meio da prova**, câmeras cinematográficas inteligentes, galope procedural sincronizado, poeira de cascos, cercas contínuas em 360º e turbos. **Digitar o número de um cavalo durante a prova dá um empurrãozinho de torcida** nele (só pela farra — não muda apuração nem XP).
-4. **DISPUTA DE CHEGADA E PÓDIO (8s):** Ao cruzar a linha de chegada, a câmera acompanha a disputa pelo 2º e 3º lugares e 3.5s depois avança para o pódio com troféus, fanfarra orquestral e chuva de confetes em órbita 360º.
+3. **CORRIDA AO VIVO (~1min50, oval de 3000m):** Física a 60 ticks/s, **locução ao vivo** (abertura, disputa e reta final narradas pelo locutor; chegada apertada ganha foto-finish), clima anunciado na abertura e que pode **virar no meio da prova**, câmeras cinematográficas inteligentes, galope procedural sincronizado, poeira de cascos, cercas contínuas em 360º e turbos. **Digitar o número de um cavalo durante a prova dá um empurrãozinho de torcida** nele (só pela farra — não muda apuração nem XP).
+4. **DISPUTA DE CHEGADA E PÓDIO (10s):** Ao cruzar a linha de chegada, a câmera acompanha a disputa pelo 2º e 3º lugares e 10,5s depois avança para o pódio com troféus, fanfarra orquestral e chuva de confetes em órbita 360º.
 5. **XP E NÍVEIS (6s):** Distribuição de XP no banco de dados SQLite e aviso sonoro de "Level Up".
 6. **TOP JOGADORES (10s):** Exibição do ranking geral dos maiores apoiadores da LIVE.
 7. *Reinicia automaticamente para a próxima corrida com novo número de prova!*
@@ -128,7 +128,7 @@ python main.py --tiktok-user SEU_USUARIO_TIKTOK --test-mode=False
 
 A live ganha locução: presente, chegada, votação aberta, largada, vencedor **e a própria corrida** viram FALA — mesmo motor do `tiktok-live-pixel` (edge-tts gera o mp3 → MCI do Windows toca → arquivo apagado na hora). A voz sabe quem presenteou e qual o cavalo: *"Ana mandou 5x Rose pro Relâmpago!"*. Nome de cavalo em CAIXA ALTA é falado em caixa normal, senão soa grito (e nome curto sai letra por letra).
 
-- **Locução ao vivo e Chegada Imediata com Fade-Out Suave:** durante a prova o locutor chama a **abertura** (120m), o **placar** (320m, 620m e 760m — sempre citando o trio da frente), a **disputa** (480m) e a **reta final** (880m). **No exato milissegundo em que o cavalo cruza a fita dos 1000m, a voz dispara o anúncio do vencedor sem atraso**, aplicando um **fade-out musical suave em ~240ms** na fala anterior (sem cortes secos no meio da frase) antes de chamar o campeão! Chegada decidida por menos de 50ms ganha foto-finish antes do anúncio do campeão.
+- **Locução ao vivo e Chegada Imediata com Fade-Out Suave:** durante a prova o locutor chama a **abertura** (150m), o **placar** (a cada ~300m, sempre citando o trio da frente), a **disputa** (a cada ~450m) e a **reta final** (2.880m) — 19 marcos cobrindo os 3000m a uma fala a cada ~5s. **No exato milissegundo em que o cavalo cruza a fita dos 3000m, a voz dispara o anúncio do vencedor sem atraso**, aplicando um **fade-out musical suave em ~240ms** na fala anterior (sem cortes secos no meio da frase) antes de chamar o campeão! Chegada decidida por menos de 150ms ganha foto-finish antes do anúncio do campeão.
 - **Áudio Ducking para Boas-Vindas:** quando alguém entra na live durante uma fala, o narrador **reduz automaticamente o som atual em 50%**, reproduz o oi de boas-vindas com **destaque em volume máximo (100%)** e, ao terminar a saudação, **restaura suavemente o som para o volume original (100%)**!
 - **Anti-Repetição Consecutiva (Shuffle Bag):** sistema de baralhos embaralhados que consome todas as dezenas de frases de cada momento antes de repetir, impedindo matematicamente que a mesma frase saia duas vezes seguidas mesmo com as vozes alternando.
 - **Ligar/desligar:** `config/config.json` → `"tts": { "active": true }`. Vem ligada.

@@ -289,6 +289,15 @@ class HorseVisualManager {
       const isWinner = (winnerHorseId !== null && hData.id === winnerHorseId) || (hData.finished && hData.position === 1);
       const isPodiumPhase = (directorState === "PODIUM" || directorState === "XP_REWARDS" || directorState === "LEADERBOARD");
 
+      // Fade do pódio: no fim da corrida só o badge do campeão fica aceso (1.0);
+      // os demais caem para 0.3 e o nome do vencedor salta aos olhos. A transição
+      // é suave (lerp por dt) para não piscar na virada de fase.
+      if (horseObj.badge) {
+        const alvoBadge = (isPodiumPhase && !isWinner) ? 0.3 : 1.0;
+        const matBadge = horseObj.badge.material;
+        matBadge.opacity += (alvoBadge - matBadge.opacity) * Math.min(1.0, dt * 3.0);
+      }
+
       if (speed > 0.5) {
         const vx = speed * Math.sin(horseObj.group.rotation.y);
         const vz = speed * Math.cos(horseObj.group.rotation.y);

@@ -10,6 +10,9 @@ class GameClient {
     this.cameraDirector = new CinematicCameraDirector(this.scene.camera, this.scene, this.horseManager);
 
     this.latestServerState = null;
+    // Ponto que a sombra e a chuva seguem (o líder durante a corrida). Fica
+    // num vetor só para não alocar um por frame.
+    this.focoPelotao = new THREE.Vector3();
     this.lastTime = performance.now();
     this.lastState = null;
     this.lastCountdownBeep = -1;
@@ -103,11 +106,21 @@ class GameClient {
         // 1. Atualizar cavalos e animação de galope / empinar do campeão
         this.horseManager.update(horses, dt, directorState, engineData.winner_horse_id);
 
-        // 2. Atualizar partículas (poeira, faíscas, chuva, confetes, fogos)
-        this.particles.update(dt, engineData.weather || "CLEAR");
+        // 2. Atualizar partículas (poeira, faíscas, chuva, confetes, fogos).
+        // A chuva acompanha a câmera: o campo fixo de ±200m da pista antiga
+        // deixaria a reta de 900m quase toda sem chuva.
+        this.particles.update(dt, engineData.weather || "CLEAR", this.scene.camera.position);
 
-        // 3. Atualizar cena, arquibancadas e portão de largada
-        this.scene.update(now / 1000.0, directorState);
+        // 3. Atualizar cena, arquibancadas e portão de largada. O foco (líder)
+        // faz a luz do sol seguir o pelotão — a sombra não cobre 3000m.
+        let foco = null;
+        if (directorState === "RACING" && horses.length > 0) {
+          const leaderId = engineData.leader_horse_id || 1;
+          const leader = horses.find((h) => h.id === leaderId) || horses[0];
+          this.focoPelotao.set(leader.x || 0, 0, leader.z || 0);
+          foco = this.focoPelotao;
+        }
+        this.scene.update(now / 1000.0, directorState, foco);
 
         // 4. Atualizar câmera cinematográfica
         this.cameraDirector.update(dt, directorState, engineData);
@@ -118,9 +131,11 @@ class GameClient {
           const leader = horses.find((h) => h.id === leaderId) || horses[0];
           this.audio.playGallop(leader.speed || 0);
 
-          // Intensidade da torcida cresce na reta final (> 700m)
+          // Intensidade da torcida cresce nos últimos 60% da pista: o
+          // "> 700m" da pista de 1000m vira 40% da distância total.
           const dist = leader.distance || 0;
-          const intensity = Math.max(0.0, (dist - 400.0) / 600.0);
+          const trackLength = engineData.track_length || 3000.0;
+          const intensity = Math.max(0.0, (dist - trackLength * 0.4) / (trackLength * 0.6));
           this.audio.setCrowdIntensity(intensity);
         } else {
           this.audio.setCrowdIntensity(0.0);

@@ -5,13 +5,18 @@ class CinematicCameraDirector {
     this.horseManager = horseManager;
 
     this.mode = "CAM_START"; // CAM_START, CAM_CHASE, CAM_SIDE, CAM_FINISH, CAM_PODIUM
-    this.targetPos = new THREE.Vector3(-210, 36, 140);
-    this.targetLookAt = new THREE.Vector3(-145, 4.0, 75);
-    this.currentLookAt = new THREE.Vector3(-145, 4.0, 75);
+
+    // A âncora da câmera de largada é o portal de chegada (fim da reta, na
+    // física é onde fica a linha dos 3000m). Os offsets da câmera continuam
+    // os mesmos em metros ABSOLUTOS da pista antiga — só a âncora mudou.
+    this.gate = trackScene.finishLinePosition || { x: -450, y: 0, z: 190.99 };
+    this.targetPos = new THREE.Vector3(this.gate.x - 65, 36, this.gate.z + 76.34);
+    this.targetLookAt = new THREE.Vector3(this.gate.x + 5, 4.0, this.gate.z + 11.34);
+    this.currentLookAt = new THREE.Vector3(this.gate.x + 5, 4.0, this.gate.z + 11.34);
 
     this.timer = 0;
     this.podiumAngle = 0;
-    this.camera.position.set(-210, 36, 140);
+    this.camera.position.set(this.gate.x - 65, 36, this.gate.z + 76.34);
     this.camera.lookAt(this.currentLookAt);
   }
 
@@ -77,12 +82,15 @@ class CinematicCameraDirector {
     } else if (directorState === "RACING") {
       const currentTrackedHorse = horses.find((h) => h.id === targetHorseId);
       const trackedDist = currentTrackedHorse ? currentTrackedHorse.distance : 0;
+      // Gatilhos por fração da pista: 105m finais = ~3,7s (igual ao "895" da
+      // pista de 1000m) e os 200m finais para quem ainda está na disputa.
+      const trackLength = engineData.track_length || this.scene.trackLength || 3000.0;
 
       const winnerDefined = !!engineData.winner_horse_id;
-      if (trackedDist >= 895 && trackedDist < 1000) {
-        // Curva final do cavalo ativo rumo à linha (x=-150)
+      if (trackedDist >= trackLength - 105 && trackedDist < trackLength) {
+        // Curva final do cavalo ativo rumo à linha (x=-450)
         this.mode = "CAM_FINISH";
-      } else if (winnerDefined && activeHorses.length > 0 && trackedDist >= 800) {
+      } else if (winnerDefined && activeHorses.length > 0 && trackedDist >= trackLength - 200) {
         // Vencedor já cruzou: fica na linha mostrando os PRÓXIMOS cruzamentos
         // (o alvo é o cavalo mais adiantado da disputa)
         this.mode = "CAM_FINISH";
@@ -104,12 +112,12 @@ class CinematicCameraDirector {
         // Órbita lenta (~22s por volta) + balanço vertical suave.
         const a = this.timer * 0.28;
         this.targetPos.set(
-          -215.0 + Math.cos(a) * 18.0,
+          this.gate.x - 65 + Math.cos(a) * 18.0,
           33.0 + Math.sin(a * 1.7) * 3.0,
-          128.0 + Math.sin(a) * 14.0
+          this.gate.z + 64.34 + Math.sin(a) * 14.0
         );
         // Olhar passeia devagar pelos boxes, sem perder a área de largada
-        this.targetLookAt.set(-148.0 + Math.sin(a * 0.9) * 4.0, 3.5, 63.66);
+        this.targetLookAt.set(this.gate.x + 2 + Math.sin(a * 0.9) * 4.0, 3.5, this.gate.z);
         break;
       }
 
@@ -142,7 +150,7 @@ class CinematicCameraDirector {
         break;
 
       case "CAM_FINISH": {
-        // Câmera de chegada ancorada na LINHA REAL da pista (x=-150):
+        // Câmera de chegada ancorada na LINHA REAL da pista (x=-450):
         // fica por fora da curva final olhando o portal e o alvo é o cavalo
         // que está cruzando. Quando o vencedor passa, o alvo vira o próximo
         // da disputa e a câmera acompanha — antes ela travava num ponto fixo

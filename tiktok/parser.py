@@ -1,6 +1,11 @@
+import difflib
+import logging
 import re
 import unicodedata
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
+
 
 def normalize_text(text: str) -> str:
     """
@@ -12,6 +17,32 @@ def normalize_text(text: str) -> str:
     nfkd = unicodedata.normalize("NFKD", text)
     cleaned = "".join([c for c in nfkd if not unicodedata.combining(c)])
     return cleaned.strip().lower()
+
+
+def limpar_invisiveis(texto: str) -> str:
+    """Só letra, número e espaço: emoji, invisível e acento quebrado somem.
+
+    O TikTok enfia invisíveis no meio da palavra (truque dele contra
+    comentário repetido) e às vezes entrega o acento corrompido
+    ("relÃ¢mpago" = UTF-8 lido como latin-1). Sem esta limpeza, o nome
+    digitado não aparece inteiro e o voto some — foi o que a live mostrou.
+    """
+    return re.sub(r"[^a-z0-9\s]+", "", texto)
+
+
+# Os nomes que valem voto, na ordem em que são procurados: o padrão tolera
+# letras repetidas ("relampagooo") e a chave é o nome colado, usado também
+# pelo palpite do log (parece_voto).
+PADROES_CAVALOS = [
+    ("relampago", r"\bre+la+m+pa+g+o+\b", 1),
+    ("trovao", r"\btro+va+o+\b", 2),
+    ("furacao", r"\bfu+ra+ca+o+\b", 3),
+    ("raio", r"\bra+i+o+\b", 4),
+    ("pantera", r"\bpa+n+te+ra+\b", 5),
+    ("tita", r"\bti+ta+[no]*\b", 6),
+    ("nevasca", r"\bne+va+s*ca+\b", 7),
+    ("fantasma", r"\bfa+n+ta+s*ma+\b", 8),
+]
 
 HORSE_NAME_MAP = {
     "relampago": 1,
@@ -33,20 +64,13 @@ class CommandParser:
         norm = normalize_text(comment_text)
         if not norm:
             return None
+        # A busca do nome é na versão SEM invisíveis/emoji colados à palavra:
+        # "rel<invisível>âmpago" e "relÃ¢mpago" voltam a ser "relampago".
+        visivel = limpar_invisiveis(norm)
 
         # 1. Checa menção direta ou flexível ao nome do cavalo (inclusive com letras repetidas ex: relampagooo)
-        padroes_cavalos = [
-            ("relampago", r"\bre+la+m+pa+g+o+\b", 1),
-            ("trovao", r"\btro+va+o+\b", 2),
-            ("furacao", r"\bfu+ra+ca+o+\b", 3),
-            ("raio", r"\bra+i+o+\b", 4),
-            ("pantera", r"\bpa+n+te+ra+\b", 5),
-            ("tita", r"\bti+ta+[no]*\b", 6),
-            ("nevasca", r"\bne+va+s*ca+\b", 7),
-            ("fantasma", r"\bfa+n+ta+s*ma+\b", 8),
-        ]
-        for nome_chave, padrao, hid in padroes_cavalos:
-            if re.search(padrao, norm) or (nome_chave in norm):
+        for nome_chave, padrao, hid in PADROES_CAVALOS:
+            if re.search(padrao, norm) or (nome_chave in visivel):
                 if hid in self.valid_horse_ids:
                     return {"action": "CHOOSE_HORSE", "horse_id": hid}
 
@@ -92,6 +116,34 @@ class CommandParser:
             return {"action": "CHEER", "command": "cheer"}
 
         return None
+
+    def parece_voto(self, comment_text: str) -> Optional[str]:
+        """O nome de cavalo que o comentário PARECIA citar (palpite, não voto).
+
+        É a sonda para a próxima quebra: quando alguém digita o nome de um
+        jeito que o parser ainda não entende (letra trocada, acento perdido),
+        o palpite aparece no log com o comentário cru — é assim que a gente
+        descobre o que a live está entregando. Nunca vira voto.
+        """
+        visivel = limpar_invisiveis(normalize_text(comment_text)).replace(" ", "")
+        # Comentário longo é conversa, não voto: o palpite só olha o que
+        # caberia num nome digitado no chat.
+        if not visivel or len(visivel) > 24:
+            return None
+        perto = difflib.get_close_matches(
+            visivel, [nome for nome, _, _ in PADROES_CAVALOS], n=1, cutoff=0.8
+        )
+        return perto[0] if perto else None
+
+    def avisar_voto_perdido(self, comment_text: str) -> None:
+        """Uma linha de log quando o comentário parecia voto e passou em branco.
+
+        Mora aqui porque os DOIS adapters (a live e o simulador do painel)
+        chamam isto quando o parse falha — a sonda é a mesma nas duas pontas.
+        """
+        palpite = self.parece_voto(comment_text)
+        if palpite:
+            logger.info("[voto?] %r não reconhecido (parecia %r)", comment_text, palpite)
 
     def parse_gift(self, gift_name: str, repeat_count: int = 1) -> Dict[str, Any]:
         return {

@@ -854,6 +854,9 @@ class Narrador:
             try:
                 with self._lock_audio:
                     self._categoria_atual = categoria
+                # Uma linha por fala, antes de gerar: é o que a voz vai dizer
+                # AGORA — o log de debug da locução (e do resto da live).
+                logger.info("[voz] %s", texto)
                 caminho = self._gerar(texto)
                 # Se for fala de corrida e foi pedida interrupção enquanto gerava o TTS, não toca!
                 if categoria == CORRIDA and (self._cortar_atual.is_set() or self._fade_out_solicitado.is_set()):
@@ -881,6 +884,8 @@ class Narrador:
 
             caminho: str | None = None
             try:
+                # Mesmo log minificado da fila principal (canal prioritário).
+                logger.info("[voz] %s", texto)
                 caminho = self._gerar(texto)
                 self._tocar_welcome(caminho)
                 self._entradas_faladas.add(texto)

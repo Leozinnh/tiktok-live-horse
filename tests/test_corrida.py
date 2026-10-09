@@ -12,6 +12,7 @@ Histórico dos bugs que estes testes travam:
    e o erro dava ao RELÂMPAGO +0.77% de velocidade fixa, de graça, para
    sempre. Personalidade é QUANDO cada um é forte, nunca vantagem fixa.
 """
+import math
 import random
 
 import pytest
@@ -22,6 +23,38 @@ from game.horses import HorseState
 from game.weather_events import WeatherType
 
 SEED = 20261008
+
+
+def test_pista_3x_e_um_oval_uniforme_de_3000m():
+    """A pista da live é um oval de 3000m: retas de 900m, curvas de 600m
+    (raio ~190,99m) — 3x o oval original, mesma forma.
+
+    Estas medidas são contrato: o front-end 3D desenha o MESMO traçado em
+    metros (consome x/z do servidor 1:1), então se a física encolher ou
+    crescer sozinha o cavalo aparece correndo fora da cerca.
+    """
+    from game.physics import TrackGeometry
+
+    pista = TrackGeometry(3000.0)
+    assert pista.straight_len == 900.0
+    assert pista.curve_len == 600.0
+    assert pista.radius == pytest.approx(600.0 / math.pi)  # ~190,99m
+    assert 2 * pista.straight_len + 2 * pista.curve_len == 3000.0, \
+        "o perímetro do oval tem que fechar 1 volta da pista"
+    assert pista.base_lane_r == pytest.approx(pista.radius - 11.2)  # ~179,79m
+
+    # Pontos-âncora do traçado (raia 1, a interna)
+    raio_raia1 = pista.base_lane_r
+    x, _, z, _ = pista.get_coordinates(0.0, 1)  # largada/chegada, reta principal
+    assert (x, z) == (pytest.approx(-450.0), pytest.approx(raio_raia1))
+    x, _, z, _ = pista.get_coordinates(1200.0, 1)  # ápice da curva 1
+    assert (x, z) == (pytest.approx(450.0 + raio_raia1), pytest.approx(0.0, abs=1e-6))
+    x, _, z, _ = pista.get_coordinates(2400.0, 1)  # entrada da reta final
+    assert (x, z) == (pytest.approx(-450.0), pytest.approx(-raio_raia1))
+
+    # Largura e raias continuam as de sempre — o que cresceu foi o traçado
+    assert pista.lane_width == 3.2
+    assert pista.get_coordinates(0.0, 8)[2] == pytest.approx(raio_raia1 + 7 * 3.2)
 
 
 def test_podio_nao_coloca_quem_nao_terminou_na_frente():
@@ -70,22 +103,22 @@ def test_tempo_de_chegada_usa_fracao_do_tick():
     random.seed(3)
     config = load_config()
     h = HorseState(config.horses[0], lane=1)
-    h.distance = 999.9
+    h.distance = 2999.9
     h.speed = 30.0
 
     dt = 1.0 / 60.0
     h.update_physics(
-        dt=dt, track_length=1000.0, current_rank=1,
-        weather_mult=1.0, race_elapsed_ms=100000,
+        dt=dt, track_length=3000.0, current_rank=1,
+        weather_mult=1.0, race_elapsed_ms=110000,
     )
     assert h.finished
 
     # O passo real do tick sai da velocidade já interpolada pelo update.
     passo = h.speed * dt
     frac = 0.1 / passo
-    esperado = 100000 - (1.0 - frac) * dt * 1000.0
+    esperado = 110000 - (1.0 - frac) * dt * 1000.0
     assert abs(h.finish_time_ms - esperado) < 0.05
-    assert h.finish_time_ms < 100000  # chegou ANTES do fim do tick
+    assert h.finish_time_ms < 110000  # chegou ANTES do fim do tick
 
 
 def test_cada_corrida_tem_o_dia_do_cavalo():
@@ -136,16 +169,22 @@ def test_personalidade_decide_quando_vence_nao_se_vence():
 
 
 def test_sorte_alta_rende_arrancadas_surpresa():
-    """FANTASMA (sorte 10) dá arrancadas; TITÃ (sorte 5.2) quase nunca."""
+    """FANTASMA (sorte 10) dá arrancadas; TITÃ (sorte 5.2) quase nunca.
+
+    A janela é de 100s (uma prova inteira de 3000m): a taxa de arrancada foi
+    dividida por 3 junto com a estamina para o arco da corrida longa ficar
+    igual ao da curta — em 10s de prova agora sai arrancada de menos para
+    separar os dois com folga.
+    """
     random.seed(11)
     config = load_config()
     fantasma = HorseState(config.horses[7], lane=8)
     tita = HorseState(config.horses[5], lane=6)
 
     dt = 1.0 / 60.0
-    for _ in range(600):  # 10 segundos de corrida
-        fantasma.update_physics(dt=dt, track_length=1000.0, current_rank=4, weather_mult=1.0, race_elapsed_ms=0)
-        tita.update_physics(dt=dt, track_length=1000.0, current_rank=4, weather_mult=1.0, race_elapsed_ms=0)
+    for _ in range(6000):  # 100 segundos de corrida
+        fantasma.update_physics(dt=dt, track_length=3000.0, current_rank=4, weather_mult=1.0, race_elapsed_ms=0)
+        tita.update_physics(dt=dt, track_length=3000.0, current_rank=4, weather_mult=1.0, race_elapsed_ms=0)
 
     assert fantasma.surge_count > tita.surge_count, "o cavalo da sorte não recebeu mais arrancadas"
 
@@ -163,7 +202,7 @@ def test_nenhum_cavalo_domina_a_corrida():
         engine.reset()
         engine.weather_system.pick_random_weather()
         engine.start_race()
-        for _ in range(4000):
+        for _ in range(8000):
             engine.update(dt)
             if engine.is_finished():
                 break
@@ -178,19 +217,22 @@ def test_nenhum_cavalo_domina_a_corrida():
 
 def test_nenhum_cavalo_fica_para_tras():
     """A briga tem que ser de verdade: em 200 corridas, cada cavalo vence
-    entre 8% e 17% — ninguém sobra nem fica escanteado.
+    entre 6% e 21% — ninguém sobra nem fica escanteado.
 
-    O guardião antigo (`test_nenhum_cavalo_domina_a_corrida`) só olhava o
-    teto (1/3); por baixo, FANTASMA e FURACÃO ficavam abaixo de 8% enquanto
-    RAIO e NEVASCA passavam dos 19% (1000 corridas, tools/monte_carlo.py).
-    Este placar é o mesmo sorteio da live: clima trocado a cada corrida.
+    A faixa é o envelope de ~2 sigma em torno do medido na pista de 3000m
+    (1000 corridas, tools/monte_carlo.py, seed 1234): RELÂMPAGO 10,7%,
+    TROVÃO 13,3%, FURACÃO 15,3%, RAIO 12,0%, PANTERA 9,8%, TITÃ 16,9%,
+    NEVASCA 11,4%, FANTASMA 10,6% — margem média 1º/2º de 488ms e 82,3%
+    das chegadas em até 900ms. Com 200 corridas o sorteio oscila ~2 pontos
+    para cada lado, então a faixa é mais larga que o placar real.
+    Este teste é o mesmo sorteio da live: clima trocado a cada corrida.
     """
     random.seed(SEED + 2)
     config = load_config()
     engine = RaceEngine(config)
 
     corridas = 200
-    minimo, maximo = int(corridas * 0.08), int(corridas * 0.17)
+    minimo, maximo = int(corridas * 0.06), int(corridas * 0.21)
     vitorias = {h.id: 0 for h in engine.horses}
     nomes = {h.id: h.name for h in engine.horses}
     dt = 1.0 / 60.0
@@ -198,7 +240,7 @@ def test_nenhum_cavalo_fica_para_tras():
         engine.reset()
         engine.weather_system.pick_random_weather()
         engine.start_race()
-        for _ in range(4000):
+        for _ in range(8000):
             engine.update(dt)
             if engine.is_finished():
                 break
@@ -227,7 +269,7 @@ def test_chuva_ajuda_mas_nao_entrega_a_corrida():
         engine.reset()
         engine.set_weather(WeatherType.RAIN)
         engine.start_race()
-        for _ in range(2500):
+        for _ in range(5000):
             engine.update(dt)
             if engine.is_finished():
                 break
@@ -263,7 +305,7 @@ def test_torcida_leve_soma_velocidade_direta_com_teto():
             h.add_boost("TORCIDA NO CHAT", extra, 60.0, additive=True)
         for i in range(240):
             random.seed(1000 + i)
-            h.update_physics(dt, 1000.0, 1, 1.0, int(i * dt * 1000))
+            h.update_physics(dt, 3000.0, 1, 1.0, int(i * dt * 1000))
         return h.speed
 
     base = corre_4s([])

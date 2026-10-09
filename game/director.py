@@ -25,24 +25,30 @@ class DirectorState(str, Enum):
 # `keywords` casa por substring no nome do presente (inglês e português).
 # `xp` aceita "small"/"medium"/"large" (vem do config) ou um número fixo.
 # Calibre power/duration/xp aqui sem tocar na lógica.
+#
+# As durações são ~3x as originais de propósito: elas foram calibradas para a
+# prova de 1000m (~35s) e a pista triplicou (3000m, ~110s). Sem o reescalonamento
+# a rosa de 4s — que era 11% da corrida — virou um piscar de 3%, e o efeito no
+# cavalo (aura, emblema e embalo) sumia antes de a live ver. O piso é: qualquer
+# presente dura >=10% da prova e o lendário >=20% (ver test_director.py).
 # ---------------------------------------------------------------------------
 GIFT_TIERS = [
-    {"keywords": ["lion", "leao", "leão"], "power": 1.70, "duration": 9.0, "xp": 2000,
+    {"keywords": ["lion", "leao", "leão"], "power": 1.70, "duration": 27.0, "xp": 2000,
      "label": "FÚRIA DO LEÃO DOURADO", "legendary": "LION", "emoji": "🦁"},
-    {"keywords": ["dragon", "dragao", "dragão"], "power": 1.65, "duration": 8.5, "xp": 1800,
+    {"keywords": ["dragon", "dragao", "dragão"], "power": 1.65, "duration": 25.5, "xp": 1800,
      "label": "IMPACTO DO DRAGÃO CÓSMICO", "legendary": "DRAGON", "emoji": "🐉"},
-    {"keywords": ["galaxy", "galaxia", "universe", "universo"], "power": 1.60, "duration": 8.0, "xp": 1500,
+    {"keywords": ["galaxy", "galaxia", "universe", "universo"], "power": 1.60, "duration": 24.0, "xp": 1500,
      "label": "OVERDRIVE GALÁCTICO", "legendary": "GALAXY", "emoji": "🌌"},
-    {"keywords": ["cap", "bone", "boné"], "power": 1.35, "duration": 5.5, "xp": "medium",
+    {"keywords": ["cap", "bone", "boné"], "power": 1.35, "duration": 16.5, "xp": "medium",
      "label": "SUPER BOOST", "legendary": None, "emoji": "🧢"},
-    {"keywords": ["donut"], "power": 1.35, "duration": 5.5, "xp": "medium",
+    {"keywords": ["donut"], "power": 1.35, "duration": 16.5, "xp": "medium",
      "label": "SUPER BOOST", "legendary": None, "emoji": "🍩"},
-    {"keywords": ["coffee", "cafe", "café"], "power": 1.20, "duration": 4.5, "xp": "small",
+    {"keywords": ["coffee", "cafe", "café"], "power": 1.20, "duration": 13.5, "xp": "small",
      "label": "TURBO", "legendary": None, "emoji": "☕"},
-    {"keywords": ["rose", "rosa", "heart", "coracao", "coração", "perfume"], "power": 1.20, "duration": 4.0, "xp": "small",
+    {"keywords": ["rose", "rosa", "heart", "coracao", "coração", "perfume"], "power": 1.20, "duration": 12.0, "xp": "small",
      "label": "TURBO", "legendary": None, "emoji": "🌹"},
 ]
-GIFT_DEFAULT = {"keywords": [], "power": 1.12, "duration": 3.0, "xp": "small",
+GIFT_DEFAULT = {"keywords": [], "power": 1.12, "duration": 12.0, "xp": "small",
                 "label": "TURBO", "legendary": None, "emoji": "🎁"}
 
 # Quantidade enviada amplia o bônus: cada unidade extra soma 10% do delta do tier
@@ -78,19 +84,33 @@ CLIMA_VIRADA_ENTRE = (0.35, 0.70)
 # chamada e a margem de chegada (ms) que faz a corrida ganhar a exclamação da
 # foto-finish. Cada marco fala UMA vez por corrida.
 #
-# Os marcos são DENSOS de propósito: a ~28m/s, um a cada ~120-160m dá uma
-# fala a cada ~5s — a corrida fica narrada do começo ao fim, como numa
-# transmissão de turfe de verdade. Com só três marcos (abertura, disputa e
-# reta), sobravam buracos de 10-12s de silêncio no meio da prova.
+# Os marcos são DENSOS de propósito: a ~28m/s, um a cada ~150m dá uma
+# fala a cada ~5s — a corrida de 3000m fica narrada do começo ao fim, como
+# numa transmissão de turfe de verdade. Com só três marcos (abertura, disputa
+# e reta), sobravam buracos de 10-12s de silêncio no meio da prova.
 MARCOS_LOCUCAO = (
-    (120.0, "abertura"),
-    (320.0, "placar"),
-    (480.0, "disputa"),
-    (620.0, "placar"),
-    (760.0, "placar"),
-    (880.0, "reta_final"),
+    (150.0, "abertura"),
+    (300.0, "placar"),
+    (450.0, "placar"),
+    (600.0, "disputa"),
+    (750.0, "placar"),
+    (900.0, "placar"),
+    (1050.0, "disputa"),
+    (1200.0, "placar"),
+    (1350.0, "placar"),
+    (1500.0, "disputa"),
+    (1650.0, "placar"),
+    (1800.0, "placar"),
+    (1950.0, "disputa"),
+    (2100.0, "placar"),
+    (2250.0, "placar"),
+    (2400.0, "disputa"),
+    (2550.0, "placar"),
+    (2700.0, "placar"),
+    # 120m da linha = ~4s, igual aos 880/1000 da pista antiga
+    (2880.0, "reta_final"),
 )
-MARGEM_FOTO_FINISH_MS = 50.0
+MARGEM_FOTO_FINISH_MS = 150.0
 
 # De quanto em quanto tempo a votação é RE-chamada na voz. A chamada de
 # abertura sozinha deixava 30s de silêncio na fase em que o público precisa
@@ -378,6 +398,7 @@ class EventDirector:
             "sender_name": viewer['display_name'],
             "gift_name": gift_name,
             "gift_emoji": gift_emoji,
+            "gift_count": gift_count,
             "boost_label": b_label,
             "text": f"{gift_emoji} {viewer['display_name']} enviou {gift_name}{f' x{gift_count}' if gift_count > 1 else ''}! {b_label} em {h_name}!",
             "horse_id": chosen_horse_id,
@@ -498,7 +519,9 @@ class EventDirector:
                 if not h.finished:
                     h.distance = self.engine.track_length
                     h.finished = True
-                    h.finish_time_ms = self.engine.race_elapsed_ms or 34000
+                    # Fallback do painel: se o relógio da corrida já andou, usa
+                    # ele; senão, um tempo plausível de prova de 3000m.
+                    h.finish_time_ms = self.engine.race_elapsed_ms or 107000.0
             self.engine.status = "FINISHED"
             self.state = DirectorState.PODIUM
             self.state_timer = 0.0

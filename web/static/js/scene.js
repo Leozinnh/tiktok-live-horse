@@ -7,7 +7,7 @@
 // `fill` é a luz de modelagem (sol * 0.16), com a noite forçando 0.
 const PALETAS_CLIMA = {
   CLEAR: {
-    ceuTopo: 0x2f7ddb, horizonte: 0xc9ecff, neblina: 0.0012,
+    ceuTopo: 0x2f7ddb, horizonte: 0xc9ecff, neblina: 0.0004,
     ambiente: 0.32, hemi: 0.4, sol: 1.5, solCor: 0xfffaed, torres: 0.0,
     fill: 0.24,
     nuvemCor: 0xffffff, nuvemOpacidade: 0.85,
@@ -15,7 +15,7 @@ const PALETAS_CLIMA = {
     pistaCor: 0xffffff, pistaRugosidade: 0.92, pistaMetal: 0.04,
   },
   WIND: {
-    ceuTopo: 0x3b82f6, horizonte: 0xdbeafe, neblina: 0.0010,
+    ceuTopo: 0x3b82f6, horizonte: 0xdbeafe, neblina: 0.00033,
     ambiente: 0.32, hemi: 0.4, sol: 1.45, solCor: 0xfffaed, torres: 0.0,
     fill: 0.232,
     nuvemCor: 0xf1f5f9, nuvemOpacidade: 0.7,
@@ -23,7 +23,7 @@ const PALETAS_CLIMA = {
     pistaCor: 0xffffff, pistaRugosidade: 0.92, pistaMetal: 0.04,
   },
   SUNSET: {
-    ceuTopo: 0x4c1d95, horizonte: 0xfb923c, neblina: 0.0016,
+    ceuTopo: 0x4c1d95, horizonte: 0xfb923c, neblina: 0.00053,
     ambiente: 0.3, hemi: 0.34, sol: 1.4, solCor: 0xffb066, torres: 0.7,
     fill: 0.224,
     nuvemCor: 0xffc9a3, nuvemOpacidade: 0.8,
@@ -31,7 +31,7 @@ const PALETAS_CLIMA = {
     pistaCor: 0xffd9b3, pistaRugosidade: 0.92, pistaMetal: 0.04,
   },
   NIGHT_LIGHTS: {
-    ceuTopo: 0x020617, horizonte: 0x0f172a, neblina: 0.0017,
+    ceuTopo: 0x020617, horizonte: 0x0f172a, neblina: 0.00057,
     ambiente: 0.16, hemi: 0.18, sol: 0.1, solCor: 0x93c5fd, torres: 2.6,
     fill: 0.0,
     nuvemCor: 0x475569, nuvemOpacidade: 0.55,
@@ -39,7 +39,7 @@ const PALETAS_CLIMA = {
     pistaCor: 0xcfd8e8, pistaRugosidade: 0.9, pistaMetal: 0.06,
   },
   RAIN: {
-    ceuTopo: 0x475569, horizonte: 0x94a3b8, neblina: 0.0026,
+    ceuTopo: 0x475569, horizonte: 0x94a3b8, neblina: 0.00087,
     ambiente: 0.3, hemi: 0.34, sol: 0.34, solCor: 0xfffaed, torres: 1.2,
     fill: 0.054,
     nuvemCor: 0x94a3b8, nuvemOpacidade: 0.9,
@@ -47,7 +47,7 @@ const PALETAS_CLIMA = {
     pistaCor: 0x7f8ea3, pistaRugosidade: 0.42, pistaMetal: 0.18,
   },
   STORM: {
-    ceuTopo: 0x1e293b, horizonte: 0x64748b, neblina: 0.0032,
+    ceuTopo: 0x1e293b, horizonte: 0x64748b, neblina: 0.00107,
     ambiente: 0.24, hemi: 0.26, sol: 0.26, solCor: 0xfffaed, torres: 1.6,
     fill: 0.042,
     nuvemCor: 0x64748b, nuvemOpacidade: 0.95,
@@ -72,10 +72,12 @@ class TrackScene {
     this.sunLight = null;
     this.floodlights = [];
 
-    // Parâmetros da pista (compatíveis com game/physics.py)
-    this.straightLen = 300.0;
-    this.curveLen = 200.0;
-    this.radius = 200.0 / Math.PI; // ~63.66m
+    // Parâmetros da pista (compatíveis com game/physics.py): oval de 3000m —
+    // 3x o original, mesma forma (retas e curvas escaladas juntas).
+    this.straightLen = 900.0;
+    this.curveLen = 600.0;
+    this.radius = 600.0 / Math.PI; // ~190.99m
+    this.trackLength = 3000.0; // perímetro: 2*900 + 2*600
     this.trackWidth = 28.0; // Pista alargada para 28m (mais espaço entre os cavalos)
     this.laneWidth = 3.2; // 3.2m por raia (total 22.4m para as 8 raias, com margens de 2.8m)
 
@@ -116,8 +118,8 @@ class TrackScene {
     this._ambienteBase = 0.33;
     this._corBranca = new THREE.Color(0xffffff);
 
-    // Posição da linha de chegada REAL da pista (distância 1000 = fim da
-    // curva 4, em x=-150). É a mesma âncora usada pela física — a câmera de
+    // Posição da linha de chegada REAL da pista (distância 3000 = fim da
+    // curva 4, em x=-450). É a mesma âncora usada pela física — a câmera de
     // chegada e o HUD dependem dela, então fica definida já no construtor.
     this.finishLinePosition = new THREE.Vector3(-this.straightLen / 2.0, 0, this.radius);
 
@@ -136,12 +138,16 @@ class TrackScene {
     // 1. Cena e Fog Atmosférico
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x7dd3fc);
-    this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.0014);
+    // Névoa suave: densidade herdada da pista antiga dividida por 3 — com a
+    // mesma densidade de antes a reta de 900m sumia no horizonte.
+    this.scene.fog = new THREE.FogExp2(0xbae6fd, 0.00047);
 
     // 2. Câmera Panorâmica Esportiva para Transmissão Vertical 9:16
-    this.camera = new THREE.PerspectiveCamera(54, width / height, 1.0, 1800.0);
-    this.camera.position.set(-210, 36, 140);
-    this.camera.lookAt(new THREE.Vector3(-145, 4, 75));
+    this.camera = new THREE.PerspectiveCamera(54, width / height, 1.0, 2600.0);
+    // Ancorada na linha de chegada (x=-450): os offsets continuam os mesmos
+    // em metros absolutos, só mudou a âncora (antes era a chegada em x=-150).
+    this.camera.position.set(this.finishLinePosition.x - 65, 33, this.finishLinePosition.z + 64.3);
+    this.camera.lookAt(new THREE.Vector3(this.finishLinePosition.x + 2, 3.5, this.finishLinePosition.z));
 
     // 3. Renderer com Suporte a Sombras Suaves
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -205,6 +211,11 @@ class TrackScene {
     this.sunLight.shadow.camera.bottom = -d;
     this.sunLight.shadow.bias = -0.0004;
     this.scene.add(this.sunLight);
+    // O alvo entra na cena: sombra e luz caminham juntas com o pelotão (ver
+    // update) — o ortho de 260m não cobre os 3000m de pista, e alargá-lo
+    // borraria a sombra inteira.
+    this.scene.add(this.sunLight.target);
+    this._focoSombra = this.finishLinePosition.clone();
 
     // Preenchimento frio vindo do lado oposto ao sol: nenhuma sombra fica
     // preta — o cavalo que corre na sombra continua legível.
@@ -214,10 +225,10 @@ class TrackScene {
 
     // 4 Refletores esportivos nos cantos do estádio
     const towerPositions = [
-      [-180, 65, 130],
-      [180, 65, 130],
-      [180, 65, -130],
-      [-180, 65, -130],
+      [-540, 65, 390],
+      [540, 65, 390],
+      [540, 65, -390],
+      [-540, 65, -390],
     ];
 
     towerPositions.forEach((pos) => {
@@ -226,7 +237,9 @@ class TrackScene {
       spot.target.position.set(pos[0] * 0.45, 0, pos[2] * 0.45);
       spot.angle = Math.PI / 4;
       spot.penumbra = 0.5;
-      spot.distance = 400;
+      // Alcance 3x maior: do canto novo (540, 390) até a reta oposta são
+      // ~1000m — com 400 o círculo de luz morria antes de chegar na pista.
+      spot.distance = 1200;
       this.scene.add(spot);
       this.scene.add(spot.target);
       this.floodlights.push(spot);
@@ -237,7 +250,7 @@ class TrackScene {
   // e as estrelas da noite. Fundo liso de cor única era o maior "cheiro de
   // protótipo" da cena — todo plano de câmera pegava o mesmo azul chapado.
   buildSky() {
-    const skyGeo = new THREE.SphereGeometry(1100, 32, 16);
+    const skyGeo = new THREE.SphereGeometry(1800, 32, 16);
     this.skyUniforms = {
       topColor: { value: new THREE.Color(0x2f7ddb) },
       horizonColor: { value: new THREE.Color(0xc9ecff) },
@@ -386,17 +399,18 @@ class TrackScene {
     }
     const tex = new THREE.CanvasTexture(canvas);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(1, 64); // 1 fita de 22m de largura × ~15m por tile na volta
+    tex.repeat.set(1, 192); // 1 fita de 22m de largura × ~15,6m por tile na volta
     tex.encoding = THREE.sRGBEncoding;
     tex.anisotropy = this.renderer ? this.renderer.capabilities.getMaxAnisotropy() : 4;
     return tex;
   }
 
   buildGroundAndInfield() {
-    // 1. Gramado Base Gigante (com textura procedural de grama uniforme)
-    const grassGeo = new THREE.PlaneGeometry(1600, 1400, 32, 32);
+    // 1. Gramado Base Gigante (com textura procedural de grama uniforme) —
+    // 2400x2400 cobre o oval de 3000m inteiro com folga (antes 1600x1400).
+    const grassGeo = new THREE.PlaneGeometry(2400, 2400, 32, 32);
     const grassMat = new THREE.MeshLambertMaterial({
-      map: this.criarTexturaGrama(48, 42, "#226926"),
+      map: this.criarTexturaGrama(72, 72, "#226926"),
       side: THREE.DoubleSide,
     });
     const grass = new THREE.Mesh(grassGeo, grassMat);
@@ -452,7 +466,9 @@ class TrackScene {
   buildTrack() {
     const pointsInner = [];
     const pointsOuter = [];
-    const segments = 180;
+    // 540 segmentos (~5,5m cada) mantêm as curvas de ~600m sem facetas
+    // visíveis — com os 180 da pista antiga cada segmento viraria ~16,7m.
+    const segments = 540;
     const halfStraight = this.straightLen / 2.0;
 
     for (let i = 0; i <= segments; i++) {
@@ -531,9 +547,11 @@ class TrackScene {
     const halfStraight = this.straightLen / 2.0;
     const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.26 });
 
-    // 7 divisórias entre as 8 raias (centradas perfeitamente entre cada raia)
+    // 7 divisórias entre as 8 raias (centradas perfeitamente entre cada raia:
+    // raia 1 começa em raio-11,2 e cada raia tem 3,2m — a conta agora bate
+    // exatamente com as coordenadas dos cavalos da física)
     for (let line = 1; line <= 7; line++) {
-      const lineOffset = (this.radius - 8.4) + line * 2.4;
+      const lineOffset = (this.radius - 12.8) + line * 3.2;
       const straightLineGeo = new THREE.PlaneGeometry(this.straightLen, 0.12);
       
       // Reta principal
@@ -567,8 +585,8 @@ class TrackScene {
     const finishMat = new THREE.MeshBasicMaterial({ map: checkerTex });
     const finishMesh = new THREE.Mesh(finishLineGeo, finishMat);
     finishMesh.rotation.x = -Math.PI / 2;
-    // A corrida cruza a linha em x=-150 (distância 1000 na física), não em
-    // +150: com a linha desenhada do outro lado a câmera de chegada
+    // A corrida cruza a linha em x=-450 (distância 3000 na física), não em
+    // +450: com a linha desenhada do outro lado a câmera de chegada
     // enquadrava um trecho vazio da reta.
     finishMesh.position.set(-halfStraight, 0.09, this.radius);
     this.scene.add(finishMesh);
@@ -581,37 +599,39 @@ class TrackScene {
     const postCapGeo = new THREE.SphereGeometry(0.14, 8, 8);
     const railMat = fenceMat;
 
-    const halfStraight = this.straightLen / 2.0; // 150m
-    const rIn = this.radius - this.trackWidth * 0.5 - 0.5; // ~52.16m
-    const rOut = this.radius + this.trackWidth * 0.5 + 0.5; // ~75.16m
+    const halfStraight = this.straightLen / 2.0; // 450m
+    const rIn = this.radius - this.trackWidth * 0.5 - 0.5; // ~176.49m
+    const rOut = this.radius + this.trackWidth * 0.5 + 0.5; // ~205.49m
 
-    // Função auxiliar para gerar pontos ovais ao longo de um raio
-    const generatePerimeterPoints = (radiusVal, stepDist = 4.5) => {
+    // Função auxiliar para gerar pontos ovais ao longo de um raio. Os centros
+    // das curvas saem do halfStraight (eram cravados em ±150: com a pista de
+    // 3000m eles desenhavam as curvas no lugar errado).
+    const generatePerimeterPoints = (radiusVal, stepDist = 9.0) => {
       const points = [];
-      // 1. Reta Principal (-150 a +150 em +Z)
+      // 1. Reta Principal (-450 a +450 em +Z)
       for (let x = -halfStraight; x <= halfStraight; x += stepDist) {
         points.push(new THREE.Vector3(x, 0.9, radiusVal));
       }
-      // 2. Curva 1 (ao redor de 150, 0) de pi/2 a -pi/2
+      // 2. Curva 1 (ao redor de +halfStraight, 0) de pi/2 a -pi/2
       const curveSegments = Math.round((Math.PI * radiusVal) / stepDist);
       for (let i = 1; i < curveSegments; i++) {
         const theta = (Math.PI / 2.0) - (i / curveSegments) * Math.PI;
-        points.push(new THREE.Vector3(150.0 + radiusVal * Math.cos(theta), 0.9, radiusVal * Math.sin(theta)));
+        points.push(new THREE.Vector3(halfStraight + radiusVal * Math.cos(theta), 0.9, radiusVal * Math.sin(theta)));
       }
-      // 3. Reta Oposta (+150 a -150 em -Z)
+      // 3. Reta Oposta (+450 a -450 em -Z)
       for (let x = halfStraight; x >= -halfStraight; x -= stepDist) {
         points.push(new THREE.Vector3(x, 0.9, -radiusVal));
       }
-      // 4. Curva 2 (ao redor de -150, 0) de -pi/2 a -3pi/2
+      // 4. Curva 2 (ao redor de -halfStraight, 0) de -pi/2 a -3pi/2
       for (let i = 1; i < curveSegments; i++) {
         const theta = -(Math.PI / 2.0) - (i / curveSegments) * Math.PI;
-        points.push(new THREE.Vector3(-150.0 + radiusVal * Math.cos(theta), 0.9, radiusVal * Math.sin(theta)));
+        points.push(new THREE.Vector3(-halfStraight + radiusVal * Math.cos(theta), 0.9, radiusVal * Math.sin(theta)));
       }
       return points;
     };
 
-    const innerPoints = generatePerimeterPoints(rIn, 4.5);
-    const outerPoints = generatePerimeterPoints(rOut, 4.5);
+    const innerPoints = generatePerimeterPoints(rIn, 9.0);
+    const outerPoints = generatePerimeterPoints(rOut, 9.0);
 
     const placeFenceLoop = (pts, isInner = false) => {
       const flowerColors = [0xef4444, 0xfacc15, 0xffffff, 0xc084fc];
@@ -665,14 +685,16 @@ class TrackScene {
   }
 
   buildDistanceMarkers() {
-    // Marcadores clássicos de turfe ao longo da raia (800m, 600m, 400m, 200m, 100m)
+    // Marcadores clássicos de turfe ao longo da raia — a placa diz a
+    // distância JÁ percorrida (a largada é em x=-450). O 1200m cai no ponto
+    // leste do oval (meio da curva 1), do lado de fora da cerca.
     const markers = [
-      { text: "800m", x: -150, z: -this.radius - 12 },
-      { text: "600m", x: 50, z: -this.radius - 12 },
-      { text: "400m", x: 150, z: -10 },
-      { text: "200m", x: 50, z: this.radius + 13 },
-      { text: "100m", x: -50, z: this.radius + 13 },
-      { text: "FINAL", x: -170, z: this.radius + 13 }
+      { text: "2400m", x: -this.straightLen / 2.0, z: -this.radius - 12 },
+      { text: "1800m", x: 150, z: -this.radius - 12 },
+      { text: "1200m", x: this.straightLen / 2.0 + this.radius + 13, z: 0 },
+      { text: "600m", x: 150, z: this.radius + 13 },
+      { text: "300m", x: -150, z: this.radius + 13 },
+      { text: "FINAL", x: -(this.straightLen / 2.0 + 20), z: this.radius + 13 }
     ];
 
     markers.forEach((m) => {
@@ -766,10 +788,13 @@ class TrackScene {
     const seatColors = [0xef4444, 0x3b82f6, 0xf59e0b, 0x10b981, 0xffffff];
     const peleCores = [0xffdbac, 0xe8b98f, 0xc68642, 0x8d5524];
 
-    const LARGURA = 250;
+    // Largura e divisões crescem 3x com a reta (750m de arquibancada), mas as
+    // alturas de fila (1,5m), a profundidade (3m) e o número de níveis ficam:
+    // esticar as filas deixaria o estádio com cara de maquete.
+    const LARGURA = 750;
     const NIVEIS = 10;
     const zBase = this.radius + 18;
-    const corredores = [-94, -32, 32, 94]; // escadas que dividem os setores
+    const corredores = [-282, -96, 96, 282]; // escadas que dividem os setores
     const emCorredor = (x) => corredores.some((cx) => Math.abs(x - cx) < 2.6);
 
     // 1. Degraus de concreto + faixa azul no espelho (lê como fileira de assentos)
@@ -819,7 +844,7 @@ class TrackScene {
     const cabecaMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
 
     const fans = [];
-    const porNivel = 96;
+    const porNivel = 288;
     for (let tier = 0; tier < NIVEIS; tier++) {
       for (let c = 0; c < porNivel; c++) {
         const x = -LARGURA / 2 + 5 + (c / (porNivel - 1)) * (LARGURA - 10) + (Math.random() - 0.5) * 1.5;
@@ -839,7 +864,7 @@ class TrackScene {
     this.crowdData = fans;
     this.crowdCorpo = new THREE.InstancedMesh(corpoGeo, corpoMat, fans.length);
     this.crowdCabeca = new THREE.InstancedMesh(cabecaGeo, cabecaMat, fans.length);
-    // A esfera da geometria base não cobre a multidão espalhada por 250m: sem
+    // A esfera da geometria base não cobre a multidão espalhada por 750m: sem
     // isso o Three descarta a torcida inteira em certos ângulos de câmera.
     this.crowdCorpo.frustumCulled = false;
     this.crowdCabeca.frustumCulled = false;
@@ -867,7 +892,7 @@ class TrackScene {
     vip.castShadow = true;
     standGroup.add(vip);
 
-    for (let mx = -125; mx <= 125; mx += 25) {
+    for (let mx = -375; mx <= 375; mx += 75) {
       const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.5, 6.4, 0.35), mullionMat);
       mullion.position.set(mx, 18.5, zBase + 28.7); // atravessa a face do vidro
       standGroup.add(mullion);
@@ -875,7 +900,7 @@ class TrackScene {
 
     // 6. Colunas de sustentação + parede de fundo (fecham o estádio por trás)
     const alturaColuna = 23;
-    for (let cx = -105; cx <= 105; cx += 30) {
+    for (let cx = -315; cx <= 315; cx += 90) {
       const coluna = new THREE.Mesh(new THREE.BoxGeometry(1.1, alturaColuna, 1.1), mullionMat);
       coluna.position.set(cx, alturaColuna / 2, zBase + 36);
       coluna.castShadow = true;
@@ -889,21 +914,21 @@ class TrackScene {
     standGroup.add(paredeFundo);
 
     // 7. Teto estendido até a parede + testa na borda da frente
-    const roofGeo = new THREE.BoxGeometry(264, 2.0, 44);
+    const roofGeo = new THREE.BoxGeometry(792, 2.0, 44);
     const roof = new THREE.Mesh(roofGeo, roofMat);
     roof.position.set(0, 26, zBase + 16);
     roof.rotation.x = 0.14;
     roof.castShadow = true;
     standGroup.add(roof);
 
-    const testa = new THREE.Mesh(new THREE.BoxGeometry(268, 2.8, 1.4), roofMat);
+    const testa = new THREE.Mesh(new THREE.BoxGeometry(804, 2.8, 1.4), roofMat);
     testa.position.set(0, 29.0, zBase - 5.6);
     testa.castShadow = true;
     standGroup.add(testa);
 
     // Mastros e Bandeiras Coloridas no Teto
     const flagColors = [0xef4444, 0xf59e0b, 0x10b981, 0x3b82f6, 0x8b5cf6];
-    for (let f = -120; f <= 120; f += 24) {
+    for (let f = -360; f <= 360; f += 72) {
       const pole = new THREE.Mesh(
         new THREE.CylinderGeometry(0.1, 0.12, 6.0, 6),
         new THREE.MeshStandardMaterial({ color: 0xffffff })
@@ -983,20 +1008,25 @@ class TrackScene {
     };
 
     // Árvores no entorno externo do estádio e das curvas (todas fora da pista e das cercas)
-    // A pista ocupa raios de 52m a 75m. As árvores externas ficam com raio >= 90m das curvas ou z <= -95m na reta oposta.
+    // A pista ocupa raios de ~176m a ~206m. As árvores externas ficam com
+    // raio >= 285m dos centros (±450, 0) ou z <= -288m na reta oposta; no
+    // infield o gramado seguro é |x| <= 260m e |z| <= 170m (longe do lago).
     const treeCoords = [
-      // Curva 1 Externa (raio >= 92m de (150, 0))
-      [245, 0], [240, 35], [225, 65], [198, 90], [240, -35], [225, -65], [198, -90],
-      [258, 20], [258, -20],
-      // Curva 2 Externa (raio >= 92m de (-150, 0))
-      [-245, 0], [-240, 35], [-225, 65], [-198, 90], [-240, -35], [-225, -65], [-198, -90],
-      [-258, 20], [-258, -20],
-      // Reta Oposta (Atrás da cerca externa em z <= -96m)
-      [-140, -96], [-105, -96], [-70, -96], [-35, -96], [0, -96], [35, -96], [70, -96], [105, -96], [140, -96],
-      [-120, -112], [-80, -112], [-40, -112], [0, -112], [40, -112], [80, -112], [120, -112],
-      [-140, -128], [-90, -128], [-40, -128], [10, -128], [60, -128], [110, -128],
-      // Infield Central Seguro (Dentro do gramado seguro |z| <= 22m e longe do lago)
-      [-95, 18], [-80, -20], [55, 22], [85, -18], [105, 15], [-105, -10]
+      // Curva 1 Externa (raio >= 285m de (450, 0))
+      [735, 0], [720, 105], [675, 195], [594, 270], [774, 60],
+      [720, -105], [675, -195], [594, -270], [774, -60],
+      // Curva 2 Externa (raio >= 285m de (-450, 0))
+      [-735, 0], [-720, 105], [-675, 195], [-594, 270], [-774, 60],
+      [-720, -105], [-675, -195], [-594, -270], [-774, -60],
+      // Reta Oposta (Atrás da cerca externa em z <= -288m)
+      [0, -288], [105, -288], [210, -288], [315, -288], [420, -288],
+      [-105, -288], [-210, -288], [-315, -288], [-420, -288],
+      [0, -336], [120, -336], [240, -336], [360, -336],
+      [-120, -336], [-240, -336], [-360, -336],
+      [30, -384], [180, -384], [330, -384],
+      [120, -384], [-270, -384], [-420, -384],
+      // Infield Central Seguro (longe do lago ornamental e do telão)
+      [-190, 36], [-160, -40], [110, 44], [170, -36], [210, 30], [-210, -20]
     ];
 
     treeCoords.forEach(([x, z]) => {
@@ -1025,9 +1055,9 @@ class TrackScene {
         cloudGroup.add(puff);
       }
       cloudGroup.position.set(
-        (Math.random() - 0.5) * 800,
+        (Math.random() - 0.5) * 2400,
         90 + Math.random() * 40,
-        (Math.random() - 0.5) * 600
+        (Math.random() - 0.5) * 1800
       );
       this.scene.add(cloudGroup);
       this.clouds.push(cloudGroup);
@@ -1050,8 +1080,8 @@ class TrackScene {
     this.startSignalLights = [];
 
     // Base zOffset das 8 raias alargadas para 3.2m de largura:
-    // Raia 1 = 52.46m, Raia 8 = 74.86m (centro exato em 63.66m)
-    const baseLaneR = this.radius - 11.2; // 52.46m
+    // Raia 1 = 179.79m, Raia 8 = 202.19m (centro exato em 190.99m)
+    const baseLaneR = this.radius - 11.2; // 179.79m
     const zMin = baseLaneR - 1.6; // 50.86m
     const zMax = baseLaneR + 7 * 3.2 + 1.6; // 76.46m
     const totalGateWidth = zMax - zMin; // 25.6m
@@ -1302,7 +1332,7 @@ class TrackScene {
     // Sub-barra informativa
     bCtx.fillStyle = "#38bdf8";
     bCtx.font = "bold 42px 'Segoe UI', Arial, sans-serif";
-    bCtx.fillText("FINISH LINE • 1000 METROS", 1024, 390);
+    bCtx.fillText("FINISH LINE • 3000 METROS", 1024, 390);
 
     const bannerTex = new THREE.CanvasTexture(bannerCanvas);
     bannerTex.encoding = THREE.sRGBEncoding;
@@ -1339,10 +1369,10 @@ class TrackScene {
     const towerGeo = new THREE.CylinderGeometry(1.2, 2.2, 60, 8);
     const towerMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85 });
     const positions = [
-      [-180, 30, 130],
-      [180, 30, 130],
-      [180, 30, -130],
-      [-180, 30, -130],
+      [-540, 30, 390],
+      [540, 30, 390],
+      [540, 30, -390],
+      [-540, 30, -390],
     ];
     positions.forEach((p) => {
       const tower = new THREE.Mesh(towerGeo, towerMat);
@@ -1368,15 +1398,16 @@ class TrackScene {
     const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
     const roofMat = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.4 });
 
-    // Base de madeira rústica e pilares
+    // Base de madeira rústica e pilares — a torre fica junto da nova linha de
+    // chegada (x=-450) e do lado externo da cerca (z=223)
     const basePod = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 6), woodMat);
-    basePod.position.set(-152, 2.5, 96);
+    basePod.position.set(-456, 2.5, 223);
     basePod.castShadow = true;
     towerGroup.add(basePod);
 
     // Cabine Envidraçada dos Juízes (2º Andar)
     const cabin = new THREE.Mesh(new THREE.BoxGeometry(7, 4.2, 7), glassMat);
-    cabin.position.set(-152, 7.1, 96);
+    cabin.position.set(-456, 7.1, 223);
     cabin.castShadow = true;
     towerGroup.add(cabin);
 
@@ -1384,7 +1415,7 @@ class TrackScene {
     for (let cX of [-3.5, 3.5]) {
       for (let cZ of [-3.5, 3.5]) {
         const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 9.5, 8), whiteMat);
-        pillar.position.set(-152 + cX, 4.75, 96 + cZ);
+        pillar.position.set(-456 + cX, 4.75, 223 + cZ);
         pillar.castShadow = true;
         towerGroup.add(pillar);
       }
@@ -1392,23 +1423,23 @@ class TrackScene {
 
     // Telhado Colonial Pontudo em 4 Águas
     const towerRoof = new THREE.Mesh(new THREE.ConeGeometry(5.8, 3.6, 4), roofMat);
-    towerRoof.position.set(-152, 11.0, 96);
+    towerRoof.position.set(-456, 11.0, 223);
     towerRoof.rotation.y = Math.PI / 4;
     towerRoof.castShadow = true;
     towerGroup.add(towerRoof);
 
     // Mastro e Antena Esportiva no Topo
     const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 4.5, 6), whiteMat);
-    antenna.position.set(-152, 14.5, 96);
+    antenna.position.set(-456, 14.5, 223);
     towerGroup.add(antenna);
 
     this.scene.add(towerGroup);
 
     // 2. Tendas Brancas de Paddock VIP & Hospitality
     const tentPositions = [
-      [-170, 96],
-      [-185, 96],
-      [-200, 96]
+      [-470, 223],
+      [-485, 223],
+      [-500, 223]
     ];
     tentPositions.forEach(([tX, tZ]) => {
       const tentGroup = new THREE.Group();
@@ -1543,7 +1574,7 @@ class TrackScene {
     };
   }
 
-  update(timeSeconds, directorState) {
+  update(timeSeconds, directorState, foco = null) {
     // O update recebe o relógio e a fase da prova; o dt sai da diferença entre chamadas.
     const dt = Math.min(0.1, Math.max(0, timeSeconds - this._ultimoTempo));
     this._ultimoTempo = timeSeconds;
@@ -1555,8 +1586,8 @@ class TrackScene {
     for (let i = 0; i < this.clouds.length; i++) {
       const cl = this.clouds[i];
       cl.position.x += 0.77 * dt;
-      if (cl.position.x > 450) {
-        cl.position.x = -450;
+      if (cl.position.x > 1200) {
+        cl.position.x = -1200;
       }
     }
 
@@ -1574,7 +1605,19 @@ class TrackScene {
       jet.material.opacity = 0.55 + 0.25 * Math.abs(onda);
     }
 
-    // 5. Virada de clima: a paleta caminha da antiga para a nova. Pinta
+    // 5. A luz do sol acompanha o pelotão: o ortho de 260m da sombra não
+    // cobre a pista de 3000m. Mover luz e alvo juntos preserva o ângulo
+    // solar (offset -160, 240, 190) e mantém a sombra nítida em cima de quem
+    // está correndo — sem isso metade da prova corria sem sombra. Sem foco
+    // (votação/pódio) a luz fica onde estava.
+    if (foco) {
+      this._focoSombra.lerp(foco, Math.min(1.0, dt * 4.0));
+    }
+    this.sunLight.position.set(this._focoSombra.x - 160, 240, this._focoSombra.z + 190);
+    this.sunLight.target.position.copy(this._focoSombra);
+    this.sunLight.target.updateMatrixWorld();
+
+    // 6. Virada de clima: a paleta caminha da antiga para a nova. Pinta
     // ANTES do relâmpago: o clarão da tempestade acende por cima do estado
     // interpolado do frame.
     if (this._transicao) {
@@ -1589,7 +1632,7 @@ class TrackScene {
       }
     }
 
-    // 6. Relâmpago da tempestade: clarão curto que acende o céu e o ambiente
+    // 7. Relâmpago da tempestade: clarão curto que acende o céu e o ambiente
     if (this.currentWeather === "STORM") {
       this.lightningTimer -= dt;
       if (this.lightningTimer <= 0) {
@@ -1612,7 +1655,7 @@ class TrackScene {
       }
     }
 
-    // 7. Movimento do Portão Móvel de Largada (Reboque Automático para Fora da Pista)
+    // 8. Movimento do Portão Móvel de Largada (Reboque Automático para Fora da Pista)
     // Na largada, o partidor móvel é rebocado para o Infield, liberando totalmente a reta de chegada!
     const corridaOuPodio = (directorState === "RACING" || directorState === "PODIUM" || directorState === "XP_REWARDS" || directorState === "LEADERBOARD");
     this.startGateTargetZ = corridaOuPodio ? -42.0 : 0.0;

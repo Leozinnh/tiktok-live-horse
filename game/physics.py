@@ -3,32 +3,33 @@ from typing import Tuple
 
 class TrackGeometry:
     """
-    Geometria de pista de hipódromo em formato de oval esportivo com 1.000 metros de comprimento.
-    Possui duas retas principais de 300m cada e duas curvas de 200m cada (raio ~63.66m).
+    Geometria de pista de hipódromo em formato de oval esportivo com 3.000 metros de comprimento.
+    Possui duas retas principais de 900m cada e duas curvas de 600m cada (raio ~190.99m).
     """
-    def __init__(self, track_length: float = 1000.0, lane_width: float = 3.2):
+    def __init__(self, track_length: float = 3000.0, lane_width: float = 3.2):
         self.track_length = track_length
         self.lane_width = lane_width
-        
-        # Parâmetros da oval
-        self.straight_len = 300.0
-        self.curve_len = 200.0
-        self.radius = self.curve_len / math.pi  # ~63.66 metros
-        # O centro da pista está em self.radius (63.66m).
-        # A largura total da pista é 28m (de 49.66m a 77.66m).
+
+        # Parâmetros da oval (o triplo do oval original de 1.000m — mesma forma)
+        self.straight_len = 900.0
+        self.curve_len = 600.0
+        self.radius = self.curve_len / math.pi  # ~190.99 metros
+        # O centro da pista está em self.radius (190.99m).
+        # A largura total da pista é 28m (de 176.99m a 204.99m) — a largura NÃO
+        # cresceu junto: retas e curvas triplicaram, as raias continuam 3.2m.
         # Centralizamos as 8 raias (cada uma com 3.2m de largura) a partir de radius - 11.2m:
-        # Raia 1 = 52.46m, Raia 8 = 74.86m (todas 100% dentro dos limites com margem de 2.8m das cercas)
+        # Raia 1 = 179.79m, Raia 8 = 202.19m (todas 100% dentro dos limites com margem de 2.8m das cercas)
         self.base_lane_r = self.radius - 11.2
 
     def _compute_point(self, dist_mod: float, r: float) -> Tuple[float, float]:
-        # Segmento 1: Reta Principal (Largada / Chegada) [0 .. 300]
+        # Segmento 1: Reta Principal (Largada / Chegada) [0 .. 900]
         if dist_mod <= self.straight_len:
             t = dist_mod / self.straight_len
             x = -self.straight_len / 2.0 + t * self.straight_len
             z = r
             return x, z
-            
-        # Segmento 2: Curva 1 [300 .. 500]
+
+        # Segmento 2: Curva 1 [900 .. 1500]
         elif dist_mod <= self.straight_len + self.curve_len:
             curve_dist = dist_mod - self.straight_len
             angle = (curve_dist / self.curve_len) * math.pi
@@ -37,15 +38,15 @@ class TrackGeometry:
             x = center_x + r * math.cos(theta)
             z = r * math.sin(theta)
             return x, z
-            
-        # Segmento 3: Reta Oposta [500 .. 800]
+
+        # Segmento 3: Reta Oposta [1500 .. 2400]
         elif dist_mod <= 2 * self.straight_len + self.curve_len:
             t = (dist_mod - (self.straight_len + self.curve_len)) / self.straight_len
             x = self.straight_len / 2.0 - t * self.straight_len
             z = -r
             return x, z
-            
-        # Segmento 4: Curva 2 (Entrada da Reta Final) [800 .. 1000]
+
+        # Segmento 4: Curva 2 (Entrada da Reta Final) [2400 .. 3000]
         else:
             curve_dist = dist_mod - (2 * self.straight_len + self.curve_len)
             angle = (curve_dist / self.curve_len) * math.pi
