@@ -19,13 +19,13 @@
     "anunciar_entrada": true
   },
   "xp": {
-    "participation": 20,
+    "participation": 15,
     "cheer": 5,
-    "top_3": 50,
-    "win": 150,
-    "gift_small": 100,
-    "gift_medium": 250,
-    "gift_large": 500
+    "top_3": 30,
+    "win": 80,
+    "gift_small": 150,
+    "gift_medium": 300,
+    "gift_large": 700
   },
   "horses": [
     {
