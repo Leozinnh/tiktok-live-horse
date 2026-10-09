@@ -240,6 +240,7 @@ class Narrador:
 
         self._parar = threading.Event()
         self._cortar_atual = threading.Event()
+        self._fade_out_solicitado = threading.Event()
         self._lock_audio = threading.Lock()
         self._alias_principal: str | None = None
         self._categoria_atual: str | None = None
@@ -274,6 +275,7 @@ class Narrador:
         """Encerra as threads. Uma fala no meio é cortada na hora."""
         self._parar.set()
         self._cortar_atual.set()
+        self._fade_out_solicitado.clear()
         try:
             self._fila.put_nowait(None)  # acorda a thread principal
         except queue.Full:
@@ -284,14 +286,10 @@ class Narrador:
             pass
 
     def interromper_locucao(self) -> None:
-        """Interrompe imediatamente qualquer locução de corrida que esteja tocando agora."""
+        """Interrompe qualquer locução de corrida suavemente com fade-out (sem corte abrupto)."""
         with self._lock_audio:
             if self._categoria_atual == CORRIDA and self._alias_principal:
-                self._cortar_atual.set()
-                try:
-                    _enviar(f"stop {self._alias_principal}")
-                except Exception:
-                    pass
+                self._fade_out_solicitado.set()
 
     def pendentes(self) -> int:
         """Quantas falas esperam na fila."""
@@ -883,12 +881,13 @@ class Narrador:
         return caminho
 
     def _tocar_mci(self, caminho: str) -> None:
-        """Toca o mp3 principal gerenciando o alias e volume com suporte a ducking."""
+        """Toca o mp3 principal gerenciando o alias e volume com suporte a ducking e fade-out suave."""
         alias = f"horsetts{next(_ALIASES)}"
         _enviar(f'open "{caminho}" type mpegvideo alias {alias}')
         with self._lock_audio:
             self._alias_principal = alias
             self._cortar_atual.clear()
+            self._fade_out_solicitado.clear()
             vol = 500 if self._ducking_ativo else 1000
             try:
                 _enviar(f"setaudio {alias} volume to {vol}")
@@ -900,6 +899,20 @@ class Narrador:
             while time.monotonic() < limite:
                 if self._parar.is_set() or self._cortar_atual.is_set():
                     _enviar(f"stop {alias}")
+                    return
+                if self._fade_out_solicitado.is_set():
+                    # Fade-out rápido e suave em ~240ms (6 etapas de 40ms) para não cortar o áudio do nada
+                    vol_base = 500 if self._ducking_ativo else 1000
+                    for fator in (0.70, 0.45, 0.25, 0.10, 0.02, 0.0):
+                        if self._parar.is_set() or self._cortar_atual.is_set():
+                            break
+                        try:
+                            _enviar(f"setaudio {alias} volume to {int(vol_base * fator)}")
+                        except Exception:
+                            pass
+                        time.sleep(0.04)
+                    _enviar(f"stop {alias}")
+                    self._fade_out_solicitado.clear()
                     return
                 if _enviar(f"status {alias} mode", 64) == "stopped":
                     return

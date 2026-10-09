@@ -487,3 +487,30 @@ def test_normalizar_para_fala_converte_digitos_e_presentes():
     assert "1" not in normalizado
     assert "Rosa" in normalizado
     assert "Rose" not in normalizado
+
+
+def test_interromper_locucao_ativa_fade_out():
+    """interromper_locucao ativa o sinal de fade-out suave se estiver tocando locução da corrida."""
+    from game.narrador import CORRIDA
+
+    n = _narrador()
+    assert n._fade_out_solicitado.is_set() is False
+
+    # Sem áudio tocando: não ativa
+    n.interromper_locucao()
+    assert n._fade_out_solicitado.is_set() is False
+
+    # Com áudio da corrida tocando: ativa fade-out
+    with n._lock_audio:
+        n._categoria_atual = CORRIDA
+        n._alias_principal = "teste_alias"
+
+    n.interromper_locucao()
+    assert n._fade_out_solicitado.is_set() is True
+
+    # Se a fala atual for da live (ex: vencedor ou presente), não interrompe
+    n._fade_out_solicitado.clear()
+    with n._lock_audio:
+        n._categoria_atual = "vencedor"
+    n.interromper_locucao()
+    assert n._fade_out_solicitado.is_set() is False
