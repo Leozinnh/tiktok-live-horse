@@ -12,8 +12,7 @@
     "voz": "pt-BR-FranciscaNeural",
     "vozes": [
       "pt-BR-FranciscaNeural",
-      "pt-BR-AntonioNeural",
-      "pt-BR-ThalitaMultilingualNeural"
+      "pt-BR-AntonioNeural"
     ],
     "rate": "+8%",
     "pitch": "+3Hz",
@@ -120,10 +119,10 @@
       "color_hex": "#06B6D4",
       "secondary_color_hex": "#E0F2FE",
       "personality": "COLD_TACTICIAN",
-      "base_speed": 27.75,
+      "base_speed": 27.85,
       "acceleration": 8.0,
-      "stamina": 8.4,
-      "luck": 7.2,
+      "stamina": 8.7,
+      "luck": 7.6,
       "aggressiveness": 6.8,
       "description": "Frio e calculista, cresce de rendimento na chuva ou vento."
     },

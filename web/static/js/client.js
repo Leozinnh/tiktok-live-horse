@@ -103,8 +103,8 @@ class GameClient {
         // 2. Atualizar partículas (poeira, faíscas, chuva, confetes)
         this.particles.update(dt, engineData.weather || "CLEAR");
 
-        // 3. Atualizar cena e arquibancadas
-        this.scene.update(now / 1000.0);
+        // 3. Atualizar cena, arquibancadas e portão de largada
+        this.scene.update(now / 1000.0, directorState);
 
         // 4. Atualizar câmera cinematográfica
         this.cameraDirector.update(dt, directorState, engineData);

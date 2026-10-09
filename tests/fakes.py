@@ -50,3 +50,6 @@ class FakeNarrador:
 
     def descartar_locucao(self):
         self.chamadas.append(("descartar_locucao",))
+
+    def interromper_locucao(self):
+        self.chamadas.append(("interromper_locucao",))

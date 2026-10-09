@@ -84,6 +84,9 @@ class TrackScene {
     this.fountains = [];
     this.finishGate = null;
     this.startGate = null;
+    this.startGateDoors = [];
+    this.startSignalLights = [];
+    this.gateOpenAngle = 0.0;
 
     // Torcida instanciada (montada em buildGrandstands)
     this.crowdData = [];
@@ -170,6 +173,7 @@ class TrackScene {
     this.buildClouds();
     this.buildStartAndFinishGates();
     this.buildStadiumTowers();
+    this.buildExtraSceneryDecorations();
 
     window.addEventListener("resize", () => this.onResize());
   }
@@ -569,9 +573,10 @@ class TrackScene {
   }
 
   buildFencesAndHedges() {
-    const fenceMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+    const fenceMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 });
     const hedgeMat = new THREE.MeshLambertMaterial({ color: 0x15803d });
     const postGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.8, 8);
+    const postCapGeo = new THREE.SphereGeometry(0.14, 8, 8);
     const railMat = fenceMat;
 
     const halfStraight = this.straightLen / 2.0; // 150m
@@ -579,7 +584,7 @@ class TrackScene {
     const rOut = this.radius + this.trackWidth * 0.5 + 0.5; // ~75.16m
 
     // Função auxiliar para gerar pontos ovais ao longo de um raio
-    const generatePerimeterPoints = (radiusVal, stepDist = 5.0) => {
+    const generatePerimeterPoints = (radiusVal, stepDist = 4.5) => {
       const points = [];
       // 1. Reta Principal (-150 a +150 em +Z)
       for (let x = -halfStraight; x <= halfStraight; x += stepDist) {
@@ -607,31 +612,48 @@ class TrackScene {
     const outerPoints = generatePerimeterPoints(rOut, 4.5);
 
     const placeFenceLoop = (pts, isInner = false) => {
+      const flowerColors = [0xef4444, 0xfacc15, 0xffffff, 0xc084fc];
       for (let i = 0; i < pts.length; i++) {
         const p1 = pts[i];
         const p2 = pts[(i + 1) % pts.length];
 
-        // Poste vertical
+        // Poste vertical com tampa decorativa de turfe
         const post = new THREE.Mesh(postGeo, fenceMat);
         post.position.copy(p1);
         post.castShadow = true;
         this.scene.add(post);
 
-        // Barra horizontal da cerca
-        const dist = p1.distanceTo(p2);
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, dist), railMat);
-        const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
-        rail.position.set(mid.x, 1.3, mid.z);
-        rail.lookAt(p2);
-        this.scene.add(rail);
+        const cap = new THREE.Mesh(postCapGeo, fenceMat);
+        cap.position.set(p1.x, 1.82, p1.z);
+        this.scene.add(cap);
 
-        // Sebe viva contornando a cerca interna
+        // Barra dupla clássica de hipódromo real (trilho superior a 1.35m e intermediário a 0.75m)
+        const dist = p1.distanceTo(p2);
+        const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+
+        const upperRail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, dist), railMat);
+        upperRail.position.set(mid.x, 1.35, mid.z);
+        upperRail.lookAt(p2);
+        this.scene.add(upperRail);
+
+        const lowerRail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, dist), railMat);
+        lowerRail.position.set(mid.x, 0.75, mid.z);
+        lowerRail.lookAt(p2);
+        this.scene.add(lowerRail);
+
+        // Sebe viva contornando a cerca interna com flores coloridas
         if (isInner && i % 2 === 0) {
-          const hedge = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.9, dist * 2.0), hedgeMat);
-          hedge.position.set(mid.x, 0.45, mid.z);
+          const hedge = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.85, dist * 2.0), hedgeMat);
+          hedge.position.set(mid.x, 0.42, mid.z);
           hedge.lookAt(p2);
           hedge.castShadow = true;
           this.scene.add(hedge);
+
+          // Canteiro de Flores decorativo sobre a sebe
+          const fMat = new THREE.MeshLambertMaterial({ color: flowerColors[i % flowerColors.length] });
+          const flower = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22), fMat);
+          flower.position.set(mid.x, 0.88, mid.z);
+          this.scene.add(flower);
         }
       }
     };
@@ -1013,34 +1035,167 @@ class TrackScene {
   buildStartAndFinishGates() {
     const halfStraight = this.straightLen / 2.0;
 
-    // 1. Portão de Largada (Boxes / Stalls Profissionais)
+    // 1. Portão de Largada Móvel Profissional (Boxes / Stalls Reais de Hipódromo)
     const stallGroup = new THREE.Group();
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.3 });
-    const canopyMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.4 });
+    const steelMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.85, roughness: 0.2 });
+    const darkSteelMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.3 });
+    const paddingGreenMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.6 });
+    const rubberTireMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+    const hazardMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 });
     const stallColors = [0xf59e0b, 0x2563eb, 0x10b981, 0xef4444, 0x1e293b, 0x78350f, 0x06b6d4, 0x8b5cf6];
 
-    for (let lane = 1; lane <= 8; lane++) {
-      const zOffset = (this.radius - 8.4) + (lane - 1) * 2.4;
-      
-      // Postes do box
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 4.5, 2.4), metalMat);
-      post.position.set(-halfStraight, 2.25, zOffset);
-      post.castShadow = true;
-      stallGroup.add(post);
+    this.startGateDoors = [];
+    this.startSignalLights = [];
 
-      // Placa numerada frontal do box
-      const numPlate = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 0.8, 1.2),
-        new THREE.MeshLambertMaterial({ color: stallColors[lane - 1] })
-      );
-      numPlate.position.set(-halfStraight + 0.3, 4.2, zOffset);
-      stallGroup.add(numPlate);
+    // Base zOffset das 8 raias:
+    // Raia 1 = 55.26m, Raia 8 = 72.06m
+    const zMin = (this.radius - 8.4) - 1.2; // 54.06m
+    const zMax = (this.radius - 8.4) + 7 * 2.4 + 1.2; // 73.26m
+    const totalGateWidth = zMax - zMin; // 19.2m
+
+    // 9 Divisórias Acolchoadas Separando os 8 Boxes
+    for (let d = 0; d <= 8; d++) {
+      const zDiv = zMin + d * 2.4;
+      const dividerGroup = new THREE.Group();
+      dividerGroup.position.set(-halfStraight, 0, zDiv);
+
+      // Painel divisor acolchoado
+      const padPanel = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.6, 0.16), paddingGreenMat);
+      padPanel.position.set(0, 1.45, 0);
+      padPanel.castShadow = true;
+      dividerGroup.add(padPanel);
+
+      // Postes de aço prateado nas extremidades da divisória
+      const postBack = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4.8, 8), steelMat);
+      postBack.position.set(-2.0, 2.4, 0);
+      postBack.castShadow = true;
+      dividerGroup.add(postBack);
+
+      const postFront = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4.8, 8), steelMat);
+      postFront.position.set(2.0, 2.4, 0);
+      postFront.castShadow = true;
+      dividerGroup.add(postFront);
+
+      stallGroup.add(dividerGroup);
     }
 
-    // Cobertura do portão de largada
-    const canopy = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.4, this.trackWidth + 1.5), canopyMat);
-    canopy.position.set(-halfStraight, 4.7, this.radius);
-    stallGroup.add(canopy);
+    // 8 Pares de Cancelas Dianteiras Articuladas em V + Placas Numeradas
+    for (let lane = 1; lane <= 8; lane++) {
+      const zLane = (this.radius - 8.4) + (lane - 1) * 2.4;
+      const hColor = stallColors[lane - 1];
+
+      // Placa numerada 3D no topo do box (visível de longe)
+      const plateCanvas = document.createElement("canvas");
+      plateCanvas.width = 128; plateCanvas.height = 128;
+      const pCtx = plateCanvas.getContext("2d");
+      pCtx.fillStyle = `#${hColor.toString(16).padStart(6, "0")}`;
+      pCtx.fillRect(0, 0, 128, 128);
+      pCtx.strokeStyle = "#ffffff";
+      pCtx.lineWidth = 10;
+      pCtx.strokeRect(5, 5, 118, 118);
+      pCtx.fillStyle = "#ffffff";
+      pCtx.font = "bold 78px sans-serif";
+      pCtx.textAlign = "center";
+      pCtx.textBaseline = "middle";
+      pCtx.fillText(`${lane}`, 64, 68);
+
+      const plateTex = new THREE.CanvasTexture(plateCanvas);
+      if (THREE.sRGBEncoding) plateTex.encoding = THREE.sRGBEncoding;
+
+      const numPlate = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2, 1.2, 1.4),
+        new THREE.MeshStandardMaterial({ map: plateTex, roughness: 0.2 })
+      );
+      numPlate.position.set(-halfStraight + 2.05, 4.7, zLane);
+      numPlate.castShadow = true;
+      stallGroup.add(numPlate);
+
+      // PIVÔS E PORTAS DA CANCELA DIANTEIRA (V-DOORS)
+      // Porta Esquerda
+      const leftPivot = new THREE.Group();
+      leftPivot.position.set(-halfStraight + 2.0, 1.25, zLane - 1.12);
+      const leftDoor = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 2.2, 1.15),
+        new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.5 })
+      );
+      leftDoor.position.set(0, 0, 0.58);
+      leftDoor.castShadow = true;
+      leftPivot.add(leftDoor);
+
+      // Porta Direita
+      const rightPivot = new THREE.Group();
+      rightPivot.position.set(-halfStraight + 2.0, 1.25, zLane + 1.12);
+      const rightDoor = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 2.2, 1.15),
+        new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.5 })
+      );
+      rightDoor.position.set(0, 0, -0.58);
+      rightDoor.castShadow = true;
+      rightPivot.add(rightDoor);
+
+      stallGroup.add(leftPivot);
+      stallGroup.add(rightPivot);
+
+      this.startGateDoors.push({
+        lane: lane,
+        left: leftPivot,
+        right: rightPivot
+      });
+    }
+
+    // Treliça Metálica Superior Unindo Todos os Boxes
+    const trussBeam = new THREE.Mesh(
+      new THREE.BoxGeometry(4.4, 0.7, totalGateWidth + 1.2),
+      darkSteelMat
+    );
+    trussBeam.position.set(-halfStraight, 5.0, (zMin + zMax) / 2);
+    trussBeam.castShadow = true;
+    stallGroup.add(trussBeam);
+
+    // Faixa Superior Amarela com Listras de Largada
+    const hazardStripe = new THREE.Mesh(
+      new THREE.BoxGeometry(4.45, 0.35, totalGateWidth + 1.2),
+      hazardMat
+    );
+    hazardStripe.position.set(-halfStraight, 5.4, (zMin + zMax) / 2);
+    stallGroup.add(hazardStripe);
+
+    // 3 Holofotes / Luzes do Semáforo de Partida no Centro
+    for (let l = -1; l <= 1; l++) {
+      const lightHousing = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.28, 0.32, 0.5, 12),
+        new THREE.MeshStandardMaterial({ color: 0x0f172a })
+      );
+      lightHousing.position.set(-halfStraight + 2.2, 5.8, ((zMin + zMax) / 2) + l * 1.5);
+      lightHousing.rotation.z = Math.PI / 2;
+      stallGroup.add(lightHousing);
+
+      const bulbMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), bulbMat);
+      bulb.position.set(-halfStraight + 2.45, 5.8, ((zMin + zMax) / 2) + l * 1.5);
+      stallGroup.add(bulb);
+      this.startSignalLights.push(bulb);
+    }
+
+    // 4 Conjuntos de Rodas Móveis Industriais de Pneu na Base
+    const wheelPositions = [
+      [-halfStraight - 2.0, 0.55, zMin - 0.4],
+      [-halfStraight + 2.0, 0.55, zMin - 0.4],
+      [-halfStraight - 2.0, 0.55, zMax + 0.4],
+      [-halfStraight + 2.0, 0.55, zMax + 0.4]
+    ];
+    wheelPositions.forEach((wp) => {
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.4, 16), rubberTireMat);
+      tire.rotation.x = Math.PI / 2;
+      tire.position.set(wp[0], wp[1], wp[2]);
+      tire.castShadow = true;
+      stallGroup.add(tire);
+
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.45, 12), steelMat);
+      hub.rotation.x = Math.PI / 2;
+      hub.position.set(wp[0], wp[1], wp[2]);
+      stallGroup.add(hub);
+    });
 
     this.startGate = stallGroup;
     this.scene.add(stallGroup);
@@ -1111,6 +1266,106 @@ class TrackScene {
       head.position.set(p[0], 60, p[2]);
       this.scene.add(head);
     });
+  }
+
+  buildExtraSceneryDecorations() {
+    // 1. Torre dos Comissários e Cabine de Transmissão de TV (Stewards Tower)
+    const towerGroup = new THREE.Group();
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.1, metalness: 0.85 });
+    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.4 });
+
+    // Base de madeira rústica e pilares
+    const basePod = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 6), woodMat);
+    basePod.position.set(-152, 2.5, 96);
+    basePod.castShadow = true;
+    towerGroup.add(basePod);
+
+    // Cabine Envidraçada dos Juízes (2º Andar)
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(7, 4.2, 7), glassMat);
+    cabin.position.set(-152, 7.1, 96);
+    cabin.castShadow = true;
+    towerGroup.add(cabin);
+
+    // Colunas e Montantes Brancos
+    for (let cX of [-3.5, 3.5]) {
+      for (let cZ of [-3.5, 3.5]) {
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 9.5, 8), whiteMat);
+        pillar.position.set(-152 + cX, 4.75, 96 + cZ);
+        pillar.castShadow = true;
+        towerGroup.add(pillar);
+      }
+    }
+
+    // Telhado Colonial Pontudo em 4 Águas
+    const towerRoof = new THREE.Mesh(new THREE.ConeGeometry(5.8, 3.6, 4), roofMat);
+    towerRoof.position.set(-152, 11.0, 96);
+    towerRoof.rotation.y = Math.PI / 4;
+    towerRoof.castShadow = true;
+    towerGroup.add(towerRoof);
+
+    // Mastro e Antena Esportiva no Topo
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 4.5, 6), whiteMat);
+    antenna.position.set(-152, 14.5, 96);
+    towerGroup.add(antenna);
+
+    this.scene.add(towerGroup);
+
+    // 2. Tendas Brancas de Paddock VIP & Hospitality
+    const tentPositions = [
+      [-170, 96],
+      [-185, 96],
+      [-200, 96]
+    ];
+    tentPositions.forEach(([tX, tZ]) => {
+      const tentGroup = new THREE.Group();
+      tentGroup.position.set(tX, 0, tZ);
+
+      // Cúpula Cônica da Tenda Branca
+      const canopy = new THREE.Mesh(
+        new THREE.ConeGeometry(3.8, 2.4, 6),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 })
+      );
+      canopy.position.y = 4.2;
+      canopy.castShadow = true;
+      tentGroup.add(canopy);
+
+      // 4 Postes de sustentação
+      for (let p = 0; p < 4; p++) {
+        const ang = (p / 4) * Math.PI * 2;
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.2, 8), whiteMat);
+        pole.position.set(Math.cos(ang) * 2.8, 1.6, Math.sin(ang) * 2.8);
+        pole.castShadow = true;
+        tentGroup.add(pole);
+      }
+
+      // Mesa redonda e cadeiras no interior
+      const table = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.8, 12), woodMat);
+      table.position.y = 0.4;
+      tentGroup.add(table);
+
+      this.scene.add(tentGroup);
+    });
+
+    // 3. Cais de Madeira no Lago Ornamental
+    const pierGroup = new THREE.Group();
+    const plankMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.8 });
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.25, 9.0), plankMat);
+    deck.position.set(-20, 0.35, -16);
+    deck.receiveShadow = true;
+    pierGroup.add(deck);
+
+    // Postes de amarração do cais
+    for (let pz of [-19.5, -16.0, -12.5]) {
+      for (let px of [-22, -18]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 1.2, 8), woodMat);
+        post.position.set(px, 0.7, pz);
+        post.castShadow = true;
+        pierGroup.add(post);
+      }
+    }
+    this.scene.add(pierGroup);
   }
 
   setWeather(weatherType, opcoes = {}) {
@@ -1196,8 +1451,8 @@ class TrackScene {
     };
   }
 
-  update(timeSeconds) {
-    // O update recebe só o relógio; o dt sai da diferença entre chamadas.
+  update(timeSeconds, directorState) {
+    // O update recebe o relógio e a fase da prova; o dt sai da diferença entre chamadas.
     const dt = Math.min(0.1, Math.max(0, timeSeconds - this._ultimoTempo));
     this._ultimoTempo = timeSeconds;
 
@@ -1264,6 +1519,25 @@ class TrackScene {
         this.ambientLight.intensity = this._ambienteBase;
       }
     }
+
+    // 7. Animação das Cancelas do Portão de Largada (Abertura Mecânica Fluida)
+    const portaoAberto = (directorState === "RACING");
+    const anguloAlvo = portaoAberto ? 1.45 : 0.0;
+    this.gateOpenAngle += (anguloAlvo - this.gateOpenAngle) * Math.min(1.0, dt * 8.0);
+
+    for (let i = 0; i < this.startGateDoors.length; i++) {
+      const door = this.startGateDoors[i];
+      door.left.rotation.y = this.gateOpenAngle;
+      door.right.rotation.y = -this.gateOpenAngle;
+    }
+
+    // Luzes do Semáforo de Partida
+    const luzCor = portaoAberto
+      ? 0x22c55e // Verde ao vivo
+      : (directorState === "COUNTDOWN" ? 0xef4444 : 0xfacc15); // Vermelho na contagem, amarelo na votação
+    for (let i = 0; i < this.startSignalLights.length; i++) {
+      this.startSignalLights[i].material.color.setHex(luzCor);
+    }
   }
 
   render() {
@@ -1278,3 +1552,5 @@ class TrackScene {
     this.renderer.setSize(width, height);
   }
 }
+
+window.TrackScene = TrackScene;

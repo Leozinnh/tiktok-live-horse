@@ -105,6 +105,7 @@ CLIMA_VIRADA_PADRAO = CLIMA_VIRADA[0]
 # `descartar_locucao`); o resto (presente, entrada, foto-finish, campeão) é
 # da live e fica.
 CORRIDA = "corrida"
+ENTRADA = "entrada"
 
 # O teto da fila. Numa chuva de rosas, falas atrasadas viram ruído: é melhor
 # calar o presente antigo do que narrar o que já passou.
@@ -222,41 +223,75 @@ class Narrador:
 
         self._gerar = gerar or self._gerar_edge
         self._tocar = tocar or self._tocar_mci
+        self._tocar_welcome = tocar or self._tocar_mci_welcome
         # Cada item é (texto, categoria): a categoria marca a locução da
         # corrida, que pode ser descartada em bloco (CORRIDA); None = fala da
         # live, que fica. O None solto é o sentinela de desligamento.
         self._fila: queue.Queue[tuple[str, str | None] | None] = queue.Queue(
             maxsize=FILA_MAXIMA
         )
+        # Fila e canal prioritário de boas-vindas com áudio ducking
+        self._fila_boas_vindas: queue.Queue[str | None] = queue.Queue(maxsize=10)
+        self._entradas_faladas: set[str] = set()
+
+        # Baralhos (Shuffle Bags) por categoria: impede repetição consecutiva de frases
+        self._baralhos_frases: dict[str, list[str]] = {}
+        self._ultimas_frases: dict[str, str] = {}
+
         self._parar = threading.Event()
+        self._cortar_atual = threading.Event()
+        self._lock_audio = threading.Lock()
+        self._alias_principal: str | None = None
+        self._categoria_atual: str | None = None
+        self._ducking_ativo: bool = False
+
         self._thread: threading.Thread | None = None
+        self._thread_boas_vindas: threading.Thread | None = None
 
     # ------------------------------------------------------------------
     # Ciclo de vida
     # ------------------------------------------------------------------
 
     def ligar(self) -> None:
-        """Sobe a thread da voz. Idempotente, como o `start` do adapter.
-
-        Desligado no config nem sobe thread: não há o que dizer.
-        """
+        """Sobe as threads da voz (principal e boas-vindas). Idempotente."""
         if not self.ativo:
             return
         if self._thread is not None and self._thread.is_alive():
             return
         self._parar.clear()
+        self._cortar_atual.clear()
         self._thread = threading.Thread(
             target=self._trabalhar, name="narrador", daemon=True
         )
         self._thread.start()
 
+        self._thread_boas_vindas = threading.Thread(
+            target=self._trabalhar_entradas, name="narrador_welcome", daemon=True
+        )
+        self._thread_boas_vindas.start()
+
     def parar(self) -> None:
-        """Encerra a thread. Uma fala no meio é cortada na hora."""
+        """Encerra as threads. Uma fala no meio é cortada na hora."""
         self._parar.set()
+        self._cortar_atual.set()
         try:
-            self._fila.put_nowait(None)  # acorda a thread, se ela estiver esperando
+            self._fila.put_nowait(None)  # acorda a thread principal
         except queue.Full:
             pass
+        try:
+            self._fila_boas_vindas.put_nowait(None)  # acorda a thread de boas-vindas
+        except queue.Full:
+            pass
+
+    def interromper_locucao(self) -> None:
+        """Interrompe imediatamente qualquer locução de corrida que esteja tocando agora."""
+        with self._lock_audio:
+            if self._categoria_atual == CORRIDA and self._alias_principal:
+                self._cortar_atual.set()
+                try:
+                    _enviar(f"stop {self._alias_principal}")
+                except Exception:
+                    pass
 
     def pendentes(self) -> int:
         """Quantas falas esperam na fila."""
@@ -265,6 +300,32 @@ class Narrador:
     # ------------------------------------------------------------------
     # A fala
     # ------------------------------------------------------------------
+
+    def _escolher_modelo_sem_repetir(self, lista: list[str], categoria_chave: str) -> str:
+        """Garante que a mesma frase nunca seja repetida consecutivamente.
+
+        Usa um 'baralho' (shuffle bag) embaralhado por categoria: todas as frases
+        da lista são faladas antes de qualquer repetição, e a virada do baralho
+        nunca repete a última frase recém-falada.
+        """
+        if not lista:
+            return ""
+        if len(lista) == 1:
+            return lista[0]
+
+        deck = self._baralhos_frases.get(categoria_chave)
+        if not deck:
+            novo_deck = list(lista)
+            random.shuffle(novo_deck)
+            ultima = self._ultimas_frases.get(categoria_chave)
+            if ultima and novo_deck[-1] == ultima and len(novo_deck) > 1:
+                novo_deck[0], novo_deck[-1] = novo_deck[-1], novo_deck[0]
+            self._baralhos_frases[categoria_chave] = novo_deck
+            deck = novo_deck
+
+        escolhida = deck.pop()
+        self._ultimas_frases[categoria_chave] = escolhida
+        return escolhida
 
     def _sorteada(
         self, lista: list[str], padrao: str, valores: dict[str, str], o_que: str
@@ -278,7 +339,7 @@ class Narrador:
         inválido em uma delas não pode deixar a live muda — vira um aviso no
         log e a frase padrão entra no lugar (ver `FALA_PADRAO`).
         """
-        modelo = random.choice(lista)
+        modelo = self._escolher_modelo_sem_repetir(lista, o_que)
         try:
             return modelo.format(**valores)
         except (KeyError, IndexError, ValueError):
@@ -514,7 +575,7 @@ class Narrador:
         )
 
     def anunciar_entrada(self, nome: str) -> str | None:
-        """Enfileira o oi de quem chegou. Devolve o texto, ou None se calou.
+        """Enfileira o oi de quem chegou com canal prioritário e áudio ducking.
 
         Mesma fila e mesmo ciclo do presente — a diferença é só a lista de
         onde a frase sai. Sem valor mínimo: chegar não rende nada, e o oi é
@@ -523,7 +584,13 @@ class Narrador:
         if not self.ativo or not self.entrada_ativa:
             return None
 
-        return self._enfileirar(self.texto_de_entrada(nome), nome)
+        texto = self.texto_de_entrada(nome)
+        self._enfileirar(texto, nome, categoria=ENTRADA)
+        try:
+            self._fila_boas_vindas.put_nowait(texto)
+        except queue.Full:
+            pass
+        return texto
 
     def anunciar_votacao(self, numero: int) -> str | None:
         """Enfileira o anúncio de votação aberta da corrida `numero`."""
@@ -694,16 +761,45 @@ class Narrador:
                 continue
             if item is None:
                 return
-            texto, _ = item
+            texto, categoria = item
+
+            # Se for entrada e já foi falada com ducking pelo canal prioritário, pula
+            if categoria == ENTRADA and texto in self._entradas_faladas:
+                continue
 
             caminho: str | None = None
             try:
+                with self._lock_audio:
+                    self._categoria_atual = categoria
                 caminho = self._gerar(texto)
                 self._tocar(caminho)
             except Exception as erro:
                 # Áudio é enfeite: um tropeço aqui (internet, codec, placa de
                 # som) não pode nem derrubar a thread nem parar o jogo.
                 logger.warning("Não consegui falar %r: %s", texto, erro)
+            finally:
+                with self._lock_audio:
+                    self._categoria_atual = None
+                if caminho:
+                    self._apagar(caminho)
+
+    def _trabalhar_entradas(self) -> None:
+        """Canal prioritário de boas-vindas com ducking de volume do áudio principal."""
+        while not self._parar.is_set():
+            try:
+                texto = self._fila_boas_vindas.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            if texto is None:
+                return
+
+            caminho: str | None = None
+            try:
+                caminho = self._gerar(texto)
+                self._tocar_welcome(caminho)
+                self._entradas_faladas.add(texto)
+            except Exception as erro:
+                logger.warning("Não consegui falar boas-vindas %r: %s", texto, erro)
             finally:
                 if caminho:
                     self._apagar(caminho)
@@ -716,18 +812,59 @@ class Narrador:
         """A voz da próxima fala: o próximo nome do rodízio."""
         return next(self._rodizio)
 
+    @staticmethod
+    def _normalizar_para_fala(texto: str) -> str:
+        """Normaliza termos em inglês e dígitos para português falado.
+
+        Impede que o modelo neural (especialmente vozes multilíngues)
+        detecte termos em inglês/espanhol e pronuncie 'eight', 'one' ou use
+        sotaque estrangeiro.
+        """
+        import re
+
+        # Nomes de presentes do TikTok que vêm em inglês
+        substituicoes = {
+            r"\bRose\b": "Rosa",
+            r"\bCoffee\b": "Café",
+            r"\bDragon\b": "Dragão",
+            r"\bGalaxy\b": "Galáxia",
+            r"\bLion\b": "Leão",
+            r"\bHeart\b": "Coração",
+            r"\bCap\b": "Boné",
+            r"\bDonut\b": "Dônut",
+        }
+        for padrao, sub in substituicoes.items():
+            texto = re.sub(padrao, sub, texto, flags=re.IGNORECASE)
+
+        # Converte dígitos soltos de 1 a 10 para extenso em português
+        mapa_nums = {
+            "1": "um",
+            "2": "dois",
+            "3": "três",
+            "4": "quatro",
+            "5": "cinco",
+            "6": "seis",
+            "7": "sete",
+            "8": "oito",
+            "9": "nove",
+            "10": "dez",
+        }
+        return re.sub(r"\b([1-9]|10)\b", lambda m: mapa_nums.get(m.group(0), m.group(0)), texto)
+
     def _gerar_edge(self, texto: str) -> str:
         """Gera o mp3 da fala e devolve o caminho."""
         import asyncio
 
         import edge_tts  # import tardio: sem a lib o jogo só fica mudo
 
+        texto_fonetico = self._normalizar_para_fala(texto)
+
         descritor, caminho = tempfile.mkstemp(prefix="horserace_tts_", suffix=".mp3")
         os.close(descritor)
 
         async def salvar(voz_nome: str) -> None:
             voz = edge_tts.Communicate(
-                text=texto, voice=voz_nome, rate=self.rate, pitch=self.pitch
+                text=texto_fonetico, voice=voz_nome, rate=self.rate, pitch=self.pitch
             )
             await voz.save(caminho)
 
@@ -746,27 +883,74 @@ class Narrador:
         return caminho
 
     def _tocar_mci(self, caminho: str) -> None:
-        """Toca o mp3 do início ao fim; só volta quando acabar.
-
-        `play` sem `wait` + `status mode` em laço, em vez do `wait`
-        bloqueante: assim uma fala no meio pode ser cortada quando o jogo
-        está encerrando, em vez de segurar o desligamento.
-        """
+        """Toca o mp3 principal gerenciando o alias e volume com suporte a ducking."""
         alias = f"horsetts{next(_ALIASES)}"
         _enviar(f'open "{caminho}" type mpegvideo alias {alias}')
+        with self._lock_audio:
+            self._alias_principal = alias
+            self._cortar_atual.clear()
+            vol = 500 if self._ducking_ativo else 1000
+            try:
+                _enviar(f"setaudio {alias} volume to {vol}")
+            except Exception:
+                pass
         try:
             _enviar(f"play {alias}")
             limite = time.monotonic() + self._duracao(alias) + 2.0
             while time.monotonic() < limite:
-                if self._parar.is_set():
+                if self._parar.is_set() or self._cortar_atual.is_set():
                     _enviar(f"stop {alias}")
                     return
                 if _enviar(f"status {alias} mode", 64) == "stopped":
                     return
-                time.sleep(0.05)
+                time.sleep(0.04)
             logger.warning("A fala passou do tempo do áudio: %s", caminho)
         finally:
+            with self._lock_audio:
+                if self._alias_principal == alias:
+                    self._alias_principal = None
             _enviar(f"close {alias}")
+
+    def _tocar_mci_welcome(self, caminho: str) -> None:
+        """Toca o áudio de boas-vindas em volume máximo e reduz o som principal pela metade."""
+        alias_welcome = f"horsetts_welcome_{next(_ALIASES)}"
+        _enviar(f'open "{caminho}" type mpegvideo alias {alias_welcome}')
+
+        # 1. Aplica ducking: abaixa o som principal pela metade (volume 500)
+        with self._lock_audio:
+            self._ducking_ativo = True
+            if self._alias_principal:
+                try:
+                    _enviar(f"setaudio {self._alias_principal} volume to 500")
+                except Exception:
+                    pass
+
+        try:
+            # 2. Toca as boas-vindas com volume 1000 (mais alto e destacado)
+            try:
+                _enviar(f"setaudio {alias_welcome} volume to 1000")
+            except Exception:
+                pass
+            _enviar(f"play {alias_welcome}")
+
+            limite = time.monotonic() + self._duracao(alias_welcome) + 2.0
+            while time.monotonic() < limite:
+                if self._parar.is_set():
+                    _enviar(f"stop {alias_welcome}")
+                    return
+                if _enviar(f"status {alias_welcome} mode", 64) == "stopped":
+                    return
+                time.sleep(0.04)
+        finally:
+            _enviar(f"close {alias_welcome}")
+            # 3. Restaura o som principal para o volume original (1000)
+            with self._lock_audio:
+                self._ducking_ativo = False
+                if self._alias_principal:
+                    try:
+                        _enviar(f"setaudio {self._alias_principal} volume to 1000")
+                    except Exception:
+                        pass
 
     @staticmethod
     def _duracao(alias: str) -> float:

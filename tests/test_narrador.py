@@ -409,3 +409,81 @@ def test_foto_finish_so_quando_a_margem_e_minima(tmp_path):
     # Corrida sem segundo lugar (não deveria acontecer, mas não pode estourar).
     director.podium_data = [{"final_position": 1, "finish_time_ms": 36100.0}]
     assert director._foto_finish_apertada() is False
+
+
+@pytest.mark.asyncio
+async def test_anuncio_imediato_na_linha_de_chegada_sem_esperar_timeout(tmp_path):
+    """Assim que o líder cruza a linha de chegada, o vencedor é anunciado IMEDIATAMENTE (sem esperar os 3.5s)."""
+    from game.director import DirectorState
+
+    voz = FakeNarrador()
+    director = await _director_em_corrida(tmp_path, "imediato.db", voz)
+
+    await director.tick(0.15)  # VOTING -> COUNTDOWN
+    await director.tick(0.06)  # COUNTDOWN -> RACING
+    assert director.state == DirectorState.RACING
+
+    # Simula o cavalo 1 cruzando a linha de chegada
+    lider = director.engine.horses[0]
+    lider.distance = director.engine.track_length
+    lider.finished = True
+    lider.finish_time_ms = 35000.0
+    director.engine.winner_horse_id = lider.id
+
+    # O engine ainda NÃO terminou (falta o timeout de 3.5s)
+    assert director.engine.is_finished() is False
+
+    # Tick durante a corrida
+    await director.tick(0.016)
+
+    # O anúncio de vencedor e descarte de locução já foram chamados na hora!
+    tipos = [c[0] for c in voz.chamadas]
+    assert "interromper_locucao" in tipos
+    assert "descartar_locucao" in tipos
+    assert "vencedor" in tipos
+
+
+def test_audio_ducking_boas_vindas():
+    """Boas-vindas entra no canal prioritário com fila e ducking de áudio."""
+    n = _narrador()
+    assert n.pendentes() == 0
+    assert n._fila_boas_vindas.qsize() == 0
+
+    texto = n.anunciar_entrada("Leonardo")
+    assert texto is not None
+    assert "Leonardo" in texto
+    # Aparece na fila de boas-vindas
+    assert n._fila_boas_vindas.qsize() == 1
+
+
+def test_anti_repeticao_nunca_repete_frase_consecutivamente():
+    """Garante que a mesma frase nunca sai duas vezes seguidas, mesmo com vozes alternando."""
+    frases = [
+        "Frase um {nome}",
+        "Frase dois {nome}",
+        "Frase tres {nome}",
+        "Frase quatro {nome}",
+    ]
+    n = _narrador(boas_vindas=frases)
+    historico = []
+    for i in range(40):
+        fala = n.texto_de_entrada(f"user{i}")
+        historico.append(fala)
+
+    # Verifica que não houve nenhuma repetição consecutiva
+    for i in range(len(historico) - 1):
+        m1 = historico[i].split()[1]
+        m2 = historico[i + 1].split()[1]
+        assert m1 != m2, f"Repetição consecutiva encontrada: {historico[i]} seguido de {historico[i+1]}"
+
+
+def test_normalizar_para_fala_converte_digitos_e_presentes():
+    """Garante que números 1-10 viram palavras em português e presentes em inglês viram português."""
+    bruto = "O cavalo 8 venceu! Ganhou 5x Rose pro cavalo 1!"
+    normalizado = Narrador._normalizar_para_fala(bruto)
+    assert "oito" in normalizado
+    assert "8" not in normalizado
+    assert "um" in normalizado
+    assert "1" not in normalizado
+    assert "Rosa" in normalizado
+    assert "Rose" not in normalizado

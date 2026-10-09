@@ -130,6 +130,7 @@ class EventDirector:
         # O líder já cruzou e a locução pendente já foi descartada? (uma vez
         # por corrida: o descarte não fica varrendo a fila a cada tick)
         self._locucao_encerrada: bool = False
+        self._vitoria_anunciada: bool = False
         # Distância do líder em que o tempo VIRA nesta corrida (None = clima
         # estável) — sorteada na largada, ver `_sortear_hora_da_virada`.
         self._virada_clima_em: Optional[float] = None
@@ -566,11 +567,15 @@ class EventDirector:
         medida que diz se a corrida foi um duelo de verdade — em ~1/3 delas
         é, e é aí que a exclamação da foto-finish entra.
         """
-        if len(self.podium_data) < 2:
-            return False
-        return (
-            self.podium_data[1]["finish_time_ms"] - self.podium_data[0]["finish_time_ms"]
-        ) < MARGEM_FOTO_FINISH_MS
+        if self.podium_data and len(self.podium_data) >= 2:
+            return (
+                self.podium_data[1]["finish_time_ms"] - self.podium_data[0]["finish_time_ms"]
+            ) < MARGEM_FOTO_FINISH_MS
+        finished = [h for h in self.engine.horses if h.finished]
+        if len(finished) >= 2:
+            finished.sort(key=lambda h: h.finish_time_ms)
+            return (finished[1].finish_time_ms - finished[0].finish_time_ms) < MARGEM_FOTO_FINISH_MS
+        return False
 
     async def reset_to_new_race(self) -> None:
         """Reinicia o ciclo imediatamente para uma nova corrida."""
@@ -585,6 +590,7 @@ class EventDirector:
         # votação nova (as falas de agora não podem ser descartadas junto).
         self._virada_clima_em = None
         self._locucao_encerrada = False
+        self._vitoria_anunciada = False
         self._descartar_locucao()
         self._anunciar_votacao_aberta()
 
@@ -618,6 +624,7 @@ class EventDirector:
                 self.state_timer = 0.0
                 self._marcos_falados = set()
                 self._locucao_encerrada = False
+                self._vitoria_anunciada = False
                 self._virada_clima_em = self._sortear_hora_da_virada()
                 self.engine.start_race()
                 logger.info(
@@ -643,6 +650,26 @@ class EventDirector:
             self.engine.update(dt)
             self._locucao_da_corrida()
             self._talvez_virar_o_clima()
+
+            # CHEGADA IMEDIATA: assim que o 1º cruzar a linha, anuncia na hora sem esperar os 3.5s!
+            if self.engine.winner_horse_id and not self._vitoria_anunciada:
+                self._vitoria_anunciada = True
+                self._descartar_locucao()
+                if self.narrador is not None:
+                    self.narrador.interromper_locucao()
+                    winner_id = self.engine.winner_horse_id
+                    winner = next((h for h in self.engine.horses if h.id == winner_id), None)
+                    if winner:
+                        if self._foto_finish_apertada():
+                            segundo = min(
+                                (h for h in self.engine.horses if h.id != winner_id),
+                                key=lambda h: h.finish_time_ms if h.finished else 999999,
+                                default=None
+                            )
+                            if segundo:
+                                self.narrador.anunciar_foto_finish(winner.name, segundo.name)
+                        self.narrador.anunciar_vencedor(winner.number, winner.name)
+
             if self.engine.is_finished():
                 self.state = DirectorState.PODIUM
                 self.state_timer = 0.0
@@ -655,20 +682,17 @@ class EventDirector:
                         f"🏆 Corrida #{self.race_number}: venceu o #{top['horse_id']} {top['name']}!"
                         + (f" ({resto})" if resto else "")
                     )
-                    # Antes de qualquer coisa: o que ficou na fila de locução
-                    # era passado. A fila agora é da CHEGADA — foto-finish e
-                    # campeão entram num canal limpo, e não atrás de uma fala
-                    # de meio de corrida que não aconteceu mais.
-                    self._descartar_locucao()
-                    if self.narrador is not None:
-                        # Chegada apertada ganha a exclamação ANTES do anúncio
-                        # do campeão: a fila da voz é FIFO — primeiro o susto,
-                        # depois o veredito.
-                        if self._foto_finish_apertada():
-                            self.narrador.anunciar_foto_finish(
-                                top["name"], self.podium_data[1]["name"]
-                            )
-                        self.narrador.anunciar_vencedor(top["horse_id"], top["name"])
+                    # Fallback de segurança se não disparou no cruzamento
+                    if not self._vitoria_anunciada:
+                        self._vitoria_anunciada = True
+                        self._descartar_locucao()
+                        if self.narrador is not None:
+                            self.narrador.interromper_locucao()
+                            if self._foto_finish_apertada():
+                                self.narrador.anunciar_foto_finish(
+                                    top["name"], self.podium_data[1]["name"]
+                                )
+                            self.narrador.anunciar_vencedor(top["horse_id"], top["name"])
 
                 # Salva resultados no banco
                 if self.current_db_race_id and snapshot.get("winner_horse_id"):

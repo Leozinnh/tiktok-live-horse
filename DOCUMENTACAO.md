@@ -352,20 +352,28 @@ Isso faz com que os cavalos se inclinem e façam as duas curvas com naturalidade
 
 ## 7. Cenário 3D e Cercas Paramétricas (`web/static/js/scene.js`)
 
-### 7.1 Cercas Ovais em 360 Graus
-As cercas brancas de turfe e as sebes vivas verdes (*hedges*) são geradas através de uma malha paramétrica contínua que contorna as duas retas e os dois arcos circulares das curvas:
-* Cerca Interna: raio fixo em **$52.16\text{m}$** (rente à borda interna da pista).
-* Cerca Externa: raio fixo em **$75.16\text{m}$** (rente à borda externa da pista).
-* As cercas acompanham o hipódromo em um circuito fechado contínuo: **nenhuma grade entra na pista**.
+### 7.1 Portão de Largada Móvel Profissional (Boxes e Cancelas em V)
+O antigo partidor simples foi substituído por um **Partidor Móvel de Hipódromo Profissional** completo:
+* **8 Boxes com 9 Divisórias Acolchoadas:** Painéis divisores acolchoados em verde turfe escuro (`#14532d`), frisos prateados e postes cilíndricos de aço de 4.8m.
+* **Cancelas Dianteiras Articuladas em V (*V-Doors*):** Cada um dos 8 boxes possui um par de portas acolchoadas dianteiras que permanecem **fechadas a 0º durante a votação e contagem**, segurando os animais no partidor. No segundo zero da largada (`RACING`), as 8 portas abrem para fora em um movimento mecânico fluido de 85º.
+* **Treliça Superior com Semáforo de Partida:** Viga estrutural superior com testeira esportiva de corrida e 3 holofotes LED que funcionam como **semáforo de largada**: amarelo na votação, vermelho na contagem e verde ao vivo na corrida.
+* **Placas Numeradas 3D dos Boxes:** Painéis de alta definição acima de cada box exibindo o número `#1` ao `#8` com a cor oficial do cavalo.
+* **Chassis com Pneus de Borracha:** 4 conjuntos de pneus industriais de borracha na base externa, reproduzindo os partidores móveis de turfe internacional.
 
-### 7.2 Elementos do Cenário
+### 7.2 Cercas de Turfe de Trilho Duplo com Flores
+* **Cercas de Trilho Duplo (360 Graus):** Malha paramétrica contínua com **trilho superior a 1.35m** e **trilho intermediário a 0.75m**, além de tampas arredondadas no topo de cada poste vertical em PVC branco puro.
+* **Canteiros de Flores na Sebe Viva Interna:** A sebe viva que contorna o perímetro interno da pista agora conta com **canteiros floridos multicoloridos** (petúnias vermelhas, flores amarelas, brancas e lilases).
+
+### 7.3 Elementos do Cenário e Ambientação
+* **Torre dos Comissários e Cabine de Transmissão (*Stewards Tower*):** Edifício de observação envidraçado de 2 andares perto da linha de chegada, com base de madeira nobre, janelões panorâmicos em vidro azul espelhado, telhado colonial pontudo e mastro de antena esportiva.
+* **Tendas Brancas de Paddock VIP & Hospitality:** 3 gazebos brancos de evento com cúpulas cônicas, colunas brancas e mesas redondas posicionadas na área de hospitalidade à beira da reta.
+* **Cais de Madeira no Lago Ornamental:** Deck rústico de madeira com postes de amarração náuticos avançando sobre a água límpida do lago central.
 * **Jumbotron LED de 34 Metros:** Telão no centro do Infield com suporte metálico treliçado exibindo o logotipo esportivo e avisos ao vivo.
-* **Lago Ornamental & Fonte:** Espelho d'água azul reflexivo com ilha central e chafariz de 6 jatos de água.
-* **Arquibancada Monumental:** 10 degraus de concreto com faixas de assentos, escadas entre os setores e fachada com faixa de publicidade; **~900 torcedores instanciados** (corpo + cabeça, cores e alturas variadas, pulando em fases próprias), camarote VIP de vidro espelhado com montantes, colunas, parede de fundo e 12 bandeiras no telhado que balançam com o vento. (Detalhes na seção 7.3.)
+* **Arquibancada Monumental:** 10 degraus de concreto com faixas de assentos, escadas entre os setores e fachada com faixa de publicidade; **~900 torcedores instanciados** (corpo + cabeça, cores e alturas variadas, pulando em fases próprias), camarote VIP de vidro espelhado com montantes, colunas, parede de fundo e 12 bandeiras no telhado que balançam com o vento.
 * **Floresta Periférica:** Pinheiros e carvalhos 3D posicionados exclusivamente fora da pista (raio $\ge 92\text{m}$ nas curvas e $z \le -96\text{m}$ na reta oposta).
 * **Placas de Distância Oficiais:** Marcadores verticais de turfe ao longo da pista: `800m`, `600m`, `400m`, `200m`, `100m` e `FINAL`.
 
-### 7.3 Céu, Luz e Clima (o passe visual)
+### 7.4 Céu, Luz e Clima (o passe visual)
 
 O fundo liso de cor única e a luz chapada eram o maior "cheiro de protótipo" da cena. Agora:
 
@@ -508,14 +516,14 @@ Cada subida de nível gera uma notificação animada na tela com estrela dourada
 
 ## 13. Testes Automatizados e Garantia de Qualidade
 
-O projeto possui **65 testes automatizados** cobrindo todos os módulos vitais. Para executar:
+O projeto possui **68 testes automatizados** cobrindo todos os módulos vitais. Para executar:
 
 ```bash
 python -m pytest -v
 ```
 
 Os testes verificam:
-* Carregamento e validação de `config.json` e atributos dos 8 cavalos.
+* Carregamento e validação de `config.json` e atributos dos 8 cavalos em arquivos individuais na pasta `horses/`.
 * Ciclo de vida completo do banco SQLite e cálculos atômicos de XP e níveis.
 * Rate limiting por usuário em janela de 1s e sanitização de strings contra ataques.
 * Simulação matemática da corrida, boosts, curvas de personalidade e linha de chegada.
@@ -526,6 +534,8 @@ Os testes verificam:
 * Torcida no chat: número digitado com a corrida rolando empurra o cavalo de leve (e nada acontece fora da corrida); presente e curtida de quem não escolheu cavalo caem em **cavalo sorteado**.
 * Endpoints REST do servidor FastAPI e sincronização WebSocket.
 * Voz da live: frases e fila do Narrador com gerador/tocador injetados (sem internet e sem placa de som), incluindo o descarte da fala mais antiga com a fila cheia e o **descarte da locução de corrida quando a chegada decide** (vencedor e foto-finish nunca são descartados).
+* **Anúncio Imediato na Chegada (Zero Atraso):** assim que o primeiro cavalo cruza a marca de 1000m, a voz dispara o anúncio do campeão na hora (sem aguardar o timeout pós-chegada da física), cortando falas de meio de prova pendentes via `interromper_locucao()`.
+* **Áudio Ducking para Boas-Vindas:** canal prioritário de saudações com reprodução simultânea no MCI que reduz o volume da fala atual em 50% (`volume 500`), reproduz o oi em volume máximo (`volume 1000`) e restaura suavemente o som principal ao término da saudação.
 * Locução ao vivo: frases da dupla da frente, queda na frase padrão com placeholder quebrado e todas as frases do jogo formatando sem erro.
 * Fiação da voz no `EventDirector`: votação (com lembrete a cada 12s), largada, vencedor, presente, entrada e clima falados nos momentos certos — e a locução disparando abertura, disputa, reta final e os três placares UMA vez cada, na ordem da prova.
 * Margem da foto-finish: a exclamação só entra quando a chegada foi decidida no detalhe.
@@ -535,12 +545,26 @@ Os testes verificam:
 
 ## 14. Narração por Voz (`game/narrador.py` + `game/falas.py`)
 
-Mesmo motor do `tiktok-live-pixel`, portado inteiro: uma **thread com fila**, pelo mesmo motivo da thread do TikTok — gerar a voz leva segundos, e o loop de eventos do jogo não pode esperar por isso. Quem presenteia ganha o crédito no telão NA HORA; a fala entra na fila e sai quando der. O ciclo é o pedido original: **gera → toca → apaga**.
+Mesmo motor do `tiktok-live-pixel`, portado inteiro e ampliado: uma **thread com fila**, pelo mesmo motivo da thread do TikTok — gerar a voz leva segundos, e o loop de eventos do jogo não pode esperar por isso. Quem presenteia ganha o crédito no telão NA HORA; a fala entra na fila e sai quando der. O ciclo é o pedido original: **gera → toca → apaga**.
 
 1. O `EventDirector` (ou o adapter, no caso da chegada) chama `narrador.anunciar_*` e segue em frente — nunca bloqueia.
 2. A thread da fila sintetiza o mp3 com o **edge-tts** (nuvem da Microsoft, sem chave de API) num arquivo temporário.
 3. A reprodução usa o **MCI do Windows** via `ctypes` (biblioteca padrão): nenhum binário externo nem pacote de áudio para instalar.
 4. Terminou de tocar, o arquivo é apagado.
+
+### 14.1 Anúncio Imediato do Vencedor (Zero Atraso)
+Antes, o anúncio do vencedor aguardava os 3.5 segundos da desaceleração da engine pós-chegada para só então sintetizar a voz, acumulando até 8 segundos de espera.
+Agora:
+* **Disparo no Milissegundo do Cruzamento:** No exato instante em que o cavalo cruza a linha de 1000m (`winner_horse_id` detectado em `RACING`), o narrador entra em ação imediatamente.
+* **Corte Instantâneo de Locução Antiga (`interromper_locucao()`):** Qualquer locução de meio de prova (ex: "reta final") que estiver sendo falada nos alto-falantes é interrompida na hora via comando `stop` no MCI.
+* O veredito do campeão e foto-finish são sintetizados instantaneamente, estando prontos e tocando com perfeição na virada para o pódio!
+
+### 14.2 Áudio Ducking nas Boas-Vindas
+Quando alguém entra na live durante a narração:
+* O sistema ativa um **canal simultâneo de áudio no MCI**.
+* O som atual que estiver tocando (seja narração da corrida ou agradecimento de presente) tem seu volume **reduzido pela metade (50%, volume 500)**.
+* A voz de boas-vindas toca em **volume máximo (100%, volume 1000)** com destaque sonoro imediato.
+* Assim que a saudação termina, o volume do áudio principal é **automaticamente restaurado para o volume original (1000)**.
 
 ### A locução ao vivo (o locutor da corrida)
 
@@ -564,6 +588,7 @@ Detalhes de projeto:
 
 * **Fila máxima de 20 falas:** cheia, a mais antiga sai — narrar o que está acontecendo agora vale mais do que narrar o atrasado.
 * **Locução de corrida descartada quando a chegada decide:** no instante em que o líder cruza a linha (ou a corrida é encerrada no meio, ou um novo ciclo começa), as falas de meio de prova que ainda estavam na fila são jogadas fora — antes o locutor seguia narrando a corrida como se ninguém tivesse chegado. `descartar_locucao()` no `game/narrador.py` limpa só o que é de corrida: chegada, vencedor, votação e presentes **nunca** são descartados.
+* **Anti-Repetição Consecutiva (Sistema Shuffle Bag):** o sorteio de frases opera com baralhos embaralhados independentes por categoria (`_baralhos_frases`). Todas as frases de cada lista são faladas antes de qualquer repetição, e a virada do baralho impede matematicamente que a última frase sorteada seja escolhida como a primeira do próximo ciclo. Isso elimina completamente o efeito de repetição da mesma frase com vozes diferentes.
 * **Frases sorteadas** de `game/falas.py` (dezenas por momento): a voz nunca vira disco riscado. Um `{placeholder}` inválido numa frase editada cai na frase padrão com aviso no log — nunca deixa a live muda. As listas da locução aceitam troca pelo config (`tts.corrida_abertura`, `tts.corrida_disputa`, `tts.corrida_placar`, `tts.reta_final`, `tts.foto_finish`, `tts.clima`, `tts.clima_virada`).
 * **Rodízio de vozes** (`tts.vozes`): uma live inteira numa voz só soa como robô lendo avisos; a lista vazia volta para a `tts.voz` de sempre.
 * **Nome de cavalo em CAIXA ALTA** (RELÂMPAGO) é falado em caixa normal (Relâmpago): caixa alta na fala soa como grito, e nome curto todo em maiúsculas corre o risco de sair letra por letra.
