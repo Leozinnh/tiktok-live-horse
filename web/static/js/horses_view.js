@@ -160,6 +160,7 @@ class HorseVisualManager {
     emblemCanvas.width = 256; emblemCanvas.height = 128;
     const eCtx = emblemCanvas.getContext("2d");
     const emblemTex = new THREE.CanvasTexture(emblemCanvas);
+    emblemTex.encoding = THREE.sRGBEncoding;
     const emblemSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: emblemTex, transparent: true, opacity: 0 }));
     emblemSprite.scale.set(5.5, 2.75, 1.0);
     emblemSprite.position.set(0, 8.5, 0);
@@ -204,6 +205,7 @@ class HorseVisualManager {
     ctx.fillText(`#${horseConfig.number} ${horseConfig.name}`, 128, 40);
 
     const badgeTexture = new THREE.CanvasTexture(badgeCanvas);
+    badgeTexture.encoding = THREE.sRGBEncoding;
     const badgeMat = new THREE.SpriteMaterial({ map: badgeTexture, transparent: true });
     const badgeSprite = new THREE.Sprite(badgeMat);
     badgeSprite.scale.set(6.0, 1.5, 1.0);

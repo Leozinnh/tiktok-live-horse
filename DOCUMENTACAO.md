@@ -277,9 +277,22 @@ As cercas brancas de turfe e as sebes vivas verdes (*hedges*) são geradas atrav
 ### 7.2 Elementos do Cenário
 * **Jumbotron LED de 34 Metros:** Telão no centro do Infield com suporte metálico treliçado exibindo o logotipo esportivo e avisos ao vivo.
 * **Lago Ornamental & Fonte:** Espelho d'água azul reflexivo com ilha central e chafariz de 6 jatos de água.
-* **Arquibancada Monumental:** 10 degraus de concreto com centenas de torcedores coloridos animados, camarotes VIP com vidros espelhados e 12 bandeiras no telhado que balançam com o vento.
+* **Arquibancada Monumental:** 10 degraus de concreto com faixas de assentos, escadas entre os setores e fachada com faixa de publicidade; **~900 torcedores instanciados** (corpo + cabeça, cores e alturas variadas, pulando em fases próprias), camarote VIP de vidro espelhado com montantes, colunas, parede de fundo e 12 bandeiras no telhado que balançam com o vento. (Detalhes na seção 7.3.)
 * **Floresta Periférica:** Pinheiros e carvalhos 3D posicionados exclusivamente fora da pista (raio $\ge 92\text{m}$ nas curvas e $z \le -96\text{m}$ na reta oposta).
 * **Placas de Distância Oficiais:** Marcadores verticais de turfe ao longo da pista: `800m`, `600m`, `400m`, `200m`, `100m` e `FINAL`.
+
+### 7.3 Céu, Luz e Clima (o passe visual)
+
+O fundo liso de cor única e a luz chapada eram o maior "cheiro de protótipo" da cena. Agora:
+
+* **Céu com gradiente:** domo com shader próprio (cor do topo → cor do horizonte) + **sol em sprite** com brilho radial desenhado em canvas + **estrelas** que aparecem à noite. Cada clima tem a sua paleta (o pôr do sol tem céu roxo com horizonte laranja; a tempestade, chumbo).
+* **Luz que modela:** luz **hemisférica** (céu azulado por cima, gramado esverdeado por baixo) + sol direcional com sombras + **preenchimento frio** do lado oposto (nenhuma sombra fica preta). Refletores do estádio acendem só no clima noturno.
+* **Texturas procedurais:** grama com manchas tonais e areia com grãos e estrias longitudinais, geradas em canvas — **nenhum asset externo** para baixar ou versionar.
+* **Clima mexe na pista:** chuva/tempestade **molham a areia** (escurece e ganha espelho); a neblina fecha o horizonte; a **tempestade dispara relâmpagos** — um clarão curto que acende o céu e o ambiente (e a fonte do lago pulsa de verdade).
+* **Pipeline de cor sRGB:** `outputEncoding` do renderer + texturas de canvas marcadas como sRGB — sem isso o ACES escurece a cena inteira e as cores saem lavadas.
+* **Contraste sob controle:** a exposição do tone mapping fica em **0.92** e ambiente/hemisfério são enxutos (0.33/0.42 no claro) contra um sol forte (1.5). Com a exposição antiga (1.05) os realces — areia, camisas brancas, céu — estouravam e a cena achatava; menos luz de preenchimento devolve sombra de verdade sem perder cor. Cada clima mantém a proporção na sua própria paleta (tabela `PALETAS` em `setWeather`).
+* **Arquibancada de estádio:** degraus de concreto com **faixa azul de assentos** no espelho, **escadas** dividindo os setores, fachada frontal com **faixa de publicidade iluminada**, camarote VIP de vidro com montantes, colunas, parede de fundo e teto com testa. A torcida é **instanciada** (`InstancedMesh`: corpo + cabeça, 2 draw calls no lugar de ~900) com altura, camisa e tom de pele variados, pulando por fase própria — e cada fã respeita os corredores das escadas.
+* **Vinheta de transmissão (CSS):** escurecimento suave nos cantos e na base, entre o canvas e o HUD — a imagem ganha cara de TV sem escurecer texto ou painel. O degrau do campeão no pódio tem um brilho varrendo, e o líder da torre de posições ganha glow.
 
 ---
 
@@ -336,6 +349,11 @@ A interface do usuário foi desenhada no padrão das transmissões da **Fórmula
 * **Chip de clima:** ☀️ SOL, 🌅 PÔR DO SOL, 🌃 NOTURNA, 🌧️ CHUVA, ⚡ TEMPESTADE ou 💨 VENTO — cada um com a sua cor. É **informação de aposta**: o clima da pista é sorteado ANTES da votação abrir, e cada cavalo tem o seu clima favorito (ver seção 8) — quem escolhe o cavalo já sabe em que tempo a prova vai ser.
 * **Pill de status por fase:** votação é dourada, **AO VIVO é vermelha** (com pulso mais rápido), pódio dourado, XP verde e ranking azul — a fase se lê de longe, sem precisar ler o texto.
 * **Relógio contextual:** na votação/contagem conta os segundos (fica vermelho e pisca nos últimos 5s); **na corrida vira a distância do líder** (ex.: `847m`, vermelho ao passar dos 900m — reta final); nas telas de resultado some (não há o que contar).
+
+### Os modais centrais (votação, contagem, pódio, XP):
+
+* **Cartela de votação:** grade 4×2 com o número, o nome e os **apoiadores ao vivo** de cada cavalo. Ela **fica na tela também durante a contagem regressiva** (o cabeçalho vira "VOTAÇÃO ENCERRADA!") — o número do countdown flutua **por cima** da cena, em vez de substituir o painel. Antes, a virada para a contagem trocava o modal inteiro e a cartela sumia de uma vez, bem na hora em que o público quer conferir os números finais.
+* **Atualização sem piscar:** a cartela é montada uma vez por fase e só o texto dos contadores muda a cada voto (sem remontar o DOM). Remontar a cada update reiniciava a animação de entrada — o painel piscava a cada voto novo no chat.
 
 ### Controles de Calibração do HUD no Painel Admin (`/test`):
 No **Card 4** de `http://localhost:8000/test`, você ajusta a interface do OBS ao vivo:

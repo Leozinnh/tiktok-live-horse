@@ -18,11 +18,36 @@ class TrackScene {
 
     // Objetos animados
     this.flags = [];
-    this.crowdMeshes = [];
     this.clouds = [];
     this.fountains = [];
     this.finishGate = null;
     this.startGate = null;
+
+    // Torcida instanciada (montada em buildGrandstands)
+    this.crowdData = [];
+    this.crowdCorpo = null;
+    this.crowdCabeca = null;
+    this._instPos = new THREE.Vector3();
+    this._instEscala = new THREE.Vector3();
+    this._instQuat = new THREE.Quaternion();
+    this._instMatriz = new THREE.Matrix4();
+
+    // Visual: céu com gradiente, sol, estrelas e luzes de modelagem
+    this.skyUniforms = null;
+    this.sunSprite = null;
+    this.stars = null;
+    this.hemiLight = null;
+    this.fillLight = null;
+    this.cloudMat = null;
+    this.trackMat = null;
+
+    // Relâmpago da tempestade (e o relógio interno do update)
+    this.lightningTimer = 4.0;
+    this.flashIntensity = 0.0;
+    this._ultimoTempo = 0.0;
+    this._corHorizonteBase = new THREE.Color(0xc9ecff);
+    this._ambienteBase = 0.33;
+    this._corBranca = new THREE.Color(0xffffff);
 
     // Posição da linha de chegada REAL da pista (distância 1000 = fim da
     // curva 4, em x=-150). É a mesma âncora usada pela física — a câmera de
@@ -54,13 +79,20 @@ class TrackScene {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    // Exposição abaixo de 1: com 1.05 os realces (areia, camisas brancas, céu)
+    // estouravam e a cena achatava. Menos exposição + ambiente mais baixo
+    // (em setupLighting/PALETAS) devolve o contraste sem perder cor.
+    this.renderer.toneMappingExposure = 0.92;
+    // Pipeline de cor correto: sem o output em sRGB o ACES escurece a cena e
+    // as cores saem lavadas — céu, gramado e areia perdem a vida.
+    this.renderer.outputEncoding = THREE.sRGBEncoding;
     this.container.appendChild(this.renderer.domElement);
 
     // 4. Configuração de Iluminação
     this.setupLighting();
 
     // 5. Construção do Hipódromo Monumental
+    this.buildSky();
     this.buildGroundAndInfield();
     this.buildTrack();
     this.buildLaneMarkings();
@@ -77,10 +109,17 @@ class TrackScene {
   }
 
   setupLighting() {
-    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    // Ambiente/hemisfério enxutos: eles preenchem a sombra, mas em excesso
+    // lavam a imagem inteira (o "estourado" some quando a sombra é sombra).
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.33);
     this.scene.add(this.ambientLight);
 
-    this.sunLight = new THREE.DirectionalLight(0xfffaed, 1.3);
+    // Luz do céu (azulada, por cima) contra a luz do gramado (esverdeada, por
+    // baixo): dá volume a cavalos e estádio — luz ambiente chapada não dá.
+    this.hemiLight = new THREE.HemisphereLight(0xbfd9ff, 0x3f6b2e, 0.42);
+    this.scene.add(this.hemiLight);
+
+    this.sunLight = new THREE.DirectionalLight(0xfffaed, 1.35);
     this.sunLight.position.set(-160, 240, 190);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.width = 2048;
@@ -94,6 +133,12 @@ class TrackScene {
     this.sunLight.shadow.camera.bottom = -d;
     this.sunLight.shadow.bias = -0.0004;
     this.scene.add(this.sunLight);
+
+    // Preenchimento frio vindo do lado oposto ao sol: nenhuma sombra fica
+    // preta — o cavalo que corre na sombra continua legível.
+    this.fillLight = new THREE.DirectionalLight(0xcfe8ff, 0.28);
+    this.fillLight.position.set(220, 130, -260);
+    this.scene.add(this.fillLight);
 
     // 4 Refletores esportivos nos cantos do estádio
     const towerPositions = [
@@ -116,10 +161,172 @@ class TrackScene {
     });
   }
 
+  // Céu de verdade: um domo com gradiente (topo → horizonte), o disco do sol
+  // e as estrelas da noite. Fundo liso de cor única era o maior "cheiro de
+  // protótipo" da cena — todo plano de câmera pegava o mesmo azul chapado.
+  buildSky() {
+    const skyGeo = new THREE.SphereGeometry(1100, 32, 16);
+    this.skyUniforms = {
+      topColor: { value: new THREE.Color(0x2f7ddb) },
+      horizonColor: { value: new THREE.Color(0xc9ecff) },
+      offset: { value: 140.0 },
+      exponent: { value: 0.75 },
+    };
+    const skyMat = new THREE.ShaderMaterial({
+      uniforms: this.skyUniforms,
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 horizonColor;
+        uniform float offset;
+        uniform float exponent;
+        varying vec3 vWorldPosition;
+        void main() {
+          float h = normalize(vWorldPosition + vec3(0.0, offset, 0.0)).y;
+          float f = pow(max(h, 0.0), exponent);
+          gl_FragColor = vec4(mix(horizonColor, topColor, f), 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+    });
+    this.scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+    // Sol: sprite com brilho radial desenhado em canvas (sem asset externo).
+    const sunCanvas = document.createElement("canvas");
+    sunCanvas.width = sunCanvas.height = 256;
+    const sCtx = sunCanvas.getContext("2d");
+    const sunGrad = sCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
+    sunGrad.addColorStop(0.0, "rgba(255, 255, 240, 1.0)");
+    sunGrad.addColorStop(0.22, "rgba(255, 238, 180, 0.9)");
+    sunGrad.addColorStop(0.5, "rgba(255, 210, 120, 0.28)");
+    sunGrad.addColorStop(1.0, "rgba(255, 190, 90, 0.0)");
+    sCtx.fillStyle = sunGrad;
+    sCtx.fillRect(0, 0, 256, 256);
+
+    this.sunSprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(sunCanvas),
+        transparent: true,
+        depthWrite: false,
+        fog: false,
+      })
+    );
+    // Alinhado com a direção da luz do sol (-160, 240, 190) — o brilho nasce
+    // de onde a sombra aponta.
+    this.sunSprite.position.set(-330, 430, 390);
+    this.sunSprite.scale.set(260, 260, 1);
+    this.scene.add(this.sunSprite);
+
+    // Estrelas: pontos fixos no domo, invisíveis de dia (o clima acende).
+    const starCount = 420;
+    const positions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI * 0.42; // só o hemisfério de cima
+      const r = 950;
+      positions[i * 3] = Math.cos(theta) * Math.sin(phi + 0.12) * r;
+      positions[i * 3 + 1] = Math.cos(phi) * r * 0.9 + 60;
+      positions[i * 3 + 2] = Math.sin(theta) * Math.sin(phi + 0.12) * r;
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    this.stars = new THREE.Points(
+      starGeo,
+      new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 2.2,
+        sizeAttenuation: false,
+        transparent: true,
+        opacity: 0.0,
+        fog: false,
+        depthWrite: false,
+      })
+    );
+    this.scene.add(this.stars);
+  }
+
+  // Textura procedural de grama (canvas): manchas tonais que quebram o
+  // "verde plástico" do fundo liso, sem baixar nenhum asset.
+  criarTexturaGrama(repeatX, repeatY, base) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 2600; i++) {
+      ctx.fillStyle =
+        Math.random() < 0.55 ? "rgba(20, 83, 45, 0.45)" : "rgba(134, 239, 172, 0.10)";
+      ctx.fillRect(
+        Math.random() * 256,
+        Math.random() * 256,
+        1 + Math.random() * 3,
+        1 + Math.random() * 3
+      );
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(repeatX, repeatY);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.anisotropy = this.renderer ? this.renderer.capabilities.getMaxAnisotropy() : 4;
+    return tex;
+  }
+
+  // Textura procedural da areia da pista: grãos, mosqueados e estrias
+  // longitudinais (o casco bate sempre na mesma direção).
+  criarTexturaAreia() {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ca9868"; // areia batida dourada esportiva
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 3200; i++) {
+      const r = Math.random();
+      ctx.fillStyle =
+        r < 0.5
+          ? "rgba(169, 123, 79, 0.5)"
+          : r < 0.85
+          ? "rgba(224, 185, 136, 0.45)"
+          : "rgba(120, 84, 48, 0.4)";
+      ctx.fillRect(
+        Math.random() * 256,
+        Math.random() * 256,
+        1 + Math.random() * 2.5,
+        1 + Math.random() * 2.5
+      );
+    }
+    for (let i = 0; i < 26; i++) {
+      ctx.strokeStyle = `rgba(140, 100, 60, ${0.05 + Math.random() * 0.09})`;
+      ctx.lineWidth = 1 + Math.random() * 2.5;
+      const x = Math.random() * 256;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + (Math.random() - 0.5) * 14, 256);
+      ctx.stroke();
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, 64); // 1 fita de 22m de largura × ~15m por tile na volta
+    tex.encoding = THREE.sRGBEncoding;
+    tex.anisotropy = this.renderer ? this.renderer.capabilities.getMaxAnisotropy() : 4;
+    return tex;
+  }
+
   buildGroundAndInfield() {
-    // 1. Gramado Base Gigante
+    // 1. Gramado Base Gigante (com textura procedural de grama)
     const grassGeo = new THREE.PlaneGeometry(1600, 1400, 32, 32);
-    const grassMat = new THREE.MeshLambertMaterial({ color: 0x226926, side: THREE.DoubleSide });
+    const grassMat = new THREE.MeshLambertMaterial({
+      map: this.criarTexturaGrama(48, 42, "#226926"),
+      side: THREE.DoubleSide,
+    });
     const grass = new THREE.Mesh(grassGeo, grassMat);
     grass.rotation.x = -Math.PI / 2;
     grass.position.y = -0.15;
@@ -127,10 +334,15 @@ class TrackScene {
     this.scene.add(grass);
 
     // 2. Gramado Infield Central Texturizado com Faixas de Corte
+    // (duas texturas — uma por tom do corte — reaproveitadas nas faixas)
+    const texturaCorteClaro = this.criarTexturaGrama(12, 1.6, "#2e7d32");
+    const texturaCorteEscuro = this.criarTexturaGrama(12, 1.6, "#256e29");
     for (let strip = -120; strip <= 120; strip += 20) {
       const stripGeo = new THREE.PlaneGeometry(280, 18);
-      const col = (Math.abs(strip) % 40 === 0) ? 0x2e7d32 : 0x256e29;
-      const stripMat = new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide });
+      const stripMat = new THREE.MeshLambertMaterial({
+        map: Math.abs(strip) % 40 === 0 ? texturaCorteClaro : texturaCorteEscuro,
+        side: THREE.DoubleSide,
+      });
       const stripMesh = new THREE.Mesh(stripGeo, stripMat);
       stripMesh.rotation.x = -Math.PI / 2;
       stripMesh.position.set(0, -0.08, strip * 0.4);
@@ -141,9 +353,11 @@ class TrackScene {
     // 3. Lago Ornamental no Infield
     const lakeGeo = new THREE.RingGeometry(18, 42, 36);
     const lakeMat = new THREE.MeshStandardMaterial({
-      color: 0x0284c7,
-      roughness: 0.08,
-      metalness: 0.85
+      color: 0x0ea5e9,
+      roughness: 0.12,
+      // Sem mapa de ambiente, metalness alta deixa a água PRETA (metal só
+      // reflete o que existe em volta) — baixa ela vira água com brilho.
+      metalness: 0.3
     });
     const lake = new THREE.Mesh(lakeGeo, lakeMat);
     lake.rotation.x = -Math.PI / 2;
@@ -242,14 +456,17 @@ class TrackScene {
     trackGeo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     trackGeo.computeVertexNormals();
 
-    const trackMat = new THREE.MeshStandardMaterial({
-      color: 0xca9868, // Areia batida dourada esportiva
-      roughness: 0.88,
-      metalness: 0.05,
+    // A cor mora na textura; o material começa branco (= textura pura) e o
+    // clima molha/tinge a pista mexendo só no color de multiplicação.
+    this.trackMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: this.criarTexturaAreia(),
+      roughness: 0.92,
+      metalness: 0.04,
       side: THREE.DoubleSide
     });
 
-    const trackMesh = new THREE.Mesh(trackGeo, trackMat);
+    const trackMesh = new THREE.Mesh(trackGeo, this.trackMat);
     trackMesh.receiveShadow = true;
     this.scene.add(trackMesh);
   }
@@ -257,7 +474,7 @@ class TrackScene {
   buildLaneMarkings() {
     // Linhas sutis brancas demarcando as raias dos 8 cavalos
     const halfStraight = this.straightLen / 2.0;
-    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 });
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.26 });
 
     // 7 divisórias entre as 8 raias (centradas perfeitamente entre cada raia)
     for (let line = 1; line <= 7; line++) {
@@ -291,6 +508,7 @@ class TrackScene {
     const checkerTex = new THREE.CanvasTexture(canvas);
     checkerTex.wrapS = THREE.RepeatWrapping;
     checkerTex.wrapT = THREE.RepeatWrapping;
+    checkerTex.encoding = THREE.sRGBEncoding;
     const finishMat = new THREE.MeshBasicMaterial({ map: checkerTex });
     const finishMesh = new THREE.Mesh(finishLineGeo, finishMat);
     finishMesh.rotation.x = -Math.PI / 2;
@@ -404,6 +622,7 @@ class TrackScene {
       ctx.fillText(m.text, 64, 42);
 
       const tex = new THREE.CanvasTexture(boardCanvas);
+      tex.encoding = THREE.sRGBEncoding;
       const board = new THREE.Mesh(
         new THREE.BoxGeometry(2.4, 1.4, 0.2),
         new THREE.MeshStandardMaterial({ map: tex })
@@ -455,6 +674,7 @@ class TrackScene {
     ctx.fillText("APÓIE SEU CAVALO NO CHAT!", 256, 170);
 
     const screenTex = new THREE.CanvasTexture(canvas);
+    screenTex.encoding = THREE.sRGBEncoding;
     const screenMat = new THREE.MeshBasicMaterial({ map: screenTex });
     const screen = new THREE.Mesh(new THREE.PlaneGeometry(31, 13.5), screenMat);
     screen.position.set(55, 20, 3.05);
@@ -466,47 +686,147 @@ class TrackScene {
   buildGrandstands() {
     const standGroup = new THREE.Group();
     const concreteMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.8 });
+    const escadaMat = new THREE.MeshStandardMaterial({ color: 0xb6c2cf, roughness: 0.7 });
+    const assentoMat = new THREE.MeshStandardMaterial({ color: 0x1e40af, roughness: 0.55 });
     const roofMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.4 });
+    const mullionMat = new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.35, metalness: 0.4 });
     const seatColors = [0xef4444, 0x3b82f6, 0xf59e0b, 0x10b981, 0xffffff];
+    const peleCores = [0xffdbac, 0xe8b98f, 0xc68642, 0x8d5524];
 
-    // Degraus da arquibancada principal
-    for (let tier = 0; tier < 10; tier++) {
-      const stepGeo = new THREE.BoxGeometry(250, 1.5, 3.2);
-      const step = new THREE.Mesh(stepGeo, concreteMat);
-      step.position.set(0, tier * 1.5 + 0.75, this.radius + 18 + tier * 3.0);
+    const LARGURA = 250;
+    const NIVEIS = 10;
+    const zBase = this.radius + 18;
+    const corredores = [-94, -32, 32, 94]; // escadas que dividem os setores
+    const emCorredor = (x) => corredores.some((cx) => Math.abs(x - cx) < 2.6);
+
+    // 1. Degraus de concreto + faixa azul no espelho (lê como fileira de assentos)
+    for (let tier = 0; tier < NIVEIS; tier++) {
+      const z = zBase + tier * 3.0;
+
+      const step = new THREE.Mesh(new THREE.BoxGeometry(LARGURA, 1.5, 3.2), concreteMat);
+      step.position.set(0, tier * 1.5 + 0.75, z);
       step.castShadow = true;
       step.receiveShadow = true;
       standGroup.add(step);
 
-      // Torcedores vibrando
-      const crowdCount = 80;
-      for (let c = 0; c < crowdCount; c++) {
-        const crowdGeo = new THREE.CylinderGeometry(0.35, 0.35, 1.2, 8);
-        const col = seatColors[Math.floor(Math.random() * seatColors.length)];
-        const crowdMat = new THREE.MeshLambertMaterial({ color: col });
-        const fan = new THREE.Mesh(crowdGeo, crowdMat);
-        const xOffset = -120 + (c / crowdCount) * 240 + (Math.random() - 0.5) * 1.8;
-        fan.position.set(xOffset, tier * 1.5 + 1.8, this.radius + 18 + tier * 3.0);
-        standGroup.add(fan);
-        this.crowdMeshes.push({ mesh: fan, baseHeight: fan.position.y, phase: Math.random() * Math.PI * 2 });
+      const faixa = new THREE.Mesh(new THREE.BoxGeometry(LARGURA, 0.5, 0.5), assentoMat);
+      faixa.position.set(0, tier * 1.5 + 1.72, z - 1.3);
+      standGroup.add(faixa);
+    }
+
+    // 2. Escadas entre setores: painel inclinado acompanhando a rampa dos degraus
+    const inclinacao = -Math.atan2(1.5, 3.0);
+    corredores.forEach((cx) => {
+      const escada = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.7, 33.6), escadaMat);
+      escada.position.set(cx, 8.3, zBase + 13.5);
+      escada.rotation.x = inclinacao;
+      escada.receiveShadow = true;
+      standGroup.add(escada);
+    });
+
+    // 3. Fachada frontal + faixa de publicidade iluminada (a arquibancada
+    // ganha base sólida em vez de degraus flutuando sobre a grama)
+    const fachada = new THREE.Mesh(new THREE.BoxGeometry(LARGURA, 3.2, 1.6), concreteMat);
+    fachada.position.set(0, 1.6, zBase - 2.6);
+    fachada.receiveShadow = true;
+    standGroup.add(fachada);
+
+    const ledMat = new THREE.MeshStandardMaterial({
+      color: 0x0c4a6e, emissive: 0x0ea5e9, emissiveIntensity: 0.5, roughness: 0.4,
+    });
+    const ledBand = new THREE.Mesh(new THREE.BoxGeometry(LARGURA, 1.1, 1.8), ledMat);
+    ledBand.position.set(0, 2.6, zBase - 2.6);
+    standGroup.add(ledBand);
+
+    // 4. Multidão instanciada: corpo + cabeça em dois InstancedMesh (2 draw
+    // calls no lugar de ~900), altura e cor variadas por torcedor.
+    const corpoGeo = new THREE.CylinderGeometry(0.32, 0.36, 1.15, 7);
+    const cabecaGeo = new THREE.SphereGeometry(0.23, 7, 6);
+    const corpoMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const cabecaMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+
+    const fans = [];
+    const porNivel = 96;
+    for (let tier = 0; tier < NIVEIS; tier++) {
+      for (let c = 0; c < porNivel; c++) {
+        const x = -LARGURA / 2 + 5 + (c / (porNivel - 1)) * (LARGURA - 10) + (Math.random() - 0.5) * 1.5;
+        if (emCorredor(x)) continue;
+        fans.push({
+          x: x,
+          baseY: tier * 1.5 + 1.72,
+          z: zBase + tier * 3.0 + (Math.random() - 0.5) * 0.9,
+          fase: Math.random() * Math.PI * 2,
+          escala: 0.85 + Math.random() * 0.45,
+          cor: seatColors[Math.floor(Math.random() * seatColors.length)],
+          pele: peleCores[Math.floor(Math.random() * peleCores.length)],
+        });
       }
     }
 
-    // Camarote VIP com vidro espelhado no topo
-    const vipGeo = new THREE.BoxGeometry(250, 6, 8);
+    this.crowdData = fans;
+    this.crowdCorpo = new THREE.InstancedMesh(corpoGeo, corpoMat, fans.length);
+    this.crowdCabeca = new THREE.InstancedMesh(cabecaGeo, cabecaMat, fans.length);
+    // A esfera da geometria base não cobre a multidão espalhada por 250m: sem
+    // isso o Three descarta a torcida inteira em certos ângulos de câmera.
+    this.crowdCorpo.frustumCulled = false;
+    this.crowdCabeca.frustumCulled = false;
+
+    const cor = new THREE.Color();
+    fans.forEach((f, i) => {
+      this.crowdCorpo.setColorAt(i, cor.setHex(f.cor));
+      this.crowdCabeca.setColorAt(i, cor.setHex(f.pele));
+    });
+    if (this.crowdCorpo.instanceColor) this.crowdCorpo.instanceColor.needsUpdate = true;
+    if (this.crowdCabeca.instanceColor) this.crowdCabeca.instanceColor.needsUpdate = true;
+
+    standGroup.add(this.crowdCorpo);
+    standGroup.add(this.crowdCabeca);
+    this.atualizarTorcida(0); // já posiciona as instâncias na montagem
+
+    // 5. Camarote VIP: laje, vidro espelhado e montantes brancos
+    const laje = new THREE.Mesh(new THREE.BoxGeometry(LARGURA, 0.8, 5.6), concreteMat);
+    laje.position.set(0, 15.2, zBase + 31.2);
+    standGroup.add(laje);
+
     const glassMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.1, metalness: 0.9 });
-    const vip = new THREE.Mesh(vipGeo, glassMat);
-    vip.position.set(0, 18.5, this.radius + 48);
+    const vip = new THREE.Mesh(new THREE.BoxGeometry(LARGURA, 6, 5), glassMat);
+    vip.position.set(0, 18.5, zBase + 31.2);
     vip.castShadow = true;
     standGroup.add(vip);
 
-    // Teto / Cobertura monumental curvada
-    const roofGeo = new THREE.BoxGeometry(260, 2.0, 38);
+    for (let mx = -125; mx <= 125; mx += 25) {
+      const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.5, 6.4, 0.35), mullionMat);
+      mullion.position.set(mx, 18.5, zBase + 28.7); // atravessa a face do vidro
+      standGroup.add(mullion);
+    }
+
+    // 6. Colunas de sustentação + parede de fundo (fecham o estádio por trás)
+    const alturaColuna = 23;
+    for (let cx = -105; cx <= 105; cx += 30) {
+      const coluna = new THREE.Mesh(new THREE.BoxGeometry(1.1, alturaColuna, 1.1), mullionMat);
+      coluna.position.set(cx, alturaColuna / 2, zBase + 36);
+      coluna.castShadow = true;
+      standGroup.add(coluna);
+    }
+
+    // Altura casada com a face de baixo do teto nesta profundidade (~y 22)
+    const paredeFundo = new THREE.Mesh(new THREE.BoxGeometry(LARGURA, 22, 2.5), concreteMat);
+    paredeFundo.position.set(0, 11, zBase + 37.6);
+    paredeFundo.receiveShadow = true;
+    standGroup.add(paredeFundo);
+
+    // 7. Teto estendido até a parede + testa na borda da frente
+    const roofGeo = new THREE.BoxGeometry(264, 2.0, 44);
     const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.position.set(0, 26, this.radius + 32);
+    roof.position.set(0, 26, zBase + 16);
     roof.rotation.x = 0.14;
     roof.castShadow = true;
     standGroup.add(roof);
+
+    const testa = new THREE.Mesh(new THREE.BoxGeometry(268, 2.8, 1.4), roofMat);
+    testa.position.set(0, 29.0, zBase - 5.6);
+    testa.castShadow = true;
+    standGroup.add(testa);
 
     // Mastros e Bandeiras Coloridas no Teto
     const flagColors = [0xef4444, 0xf59e0b, 0x10b981, 0x3b82f6, 0x8b5cf6];
@@ -528,6 +848,37 @@ class TrackScene {
     }
 
     this.scene.add(standGroup);
+  }
+
+  // Torcida instanciada: recompõe a matriz de cada torcedor (corpo + cabeça)
+  // a partir dos dados guardados em crowdData. Chamado na montagem e no update.
+  atualizarTorcida(timeSeconds) {
+    if (!this.crowdCorpo || !this.crowdCabeca || !this.crowdData.length) return;
+
+    const pos = this._instPos;
+    const esc = this._instEscala;
+    const quat = this._instQuat;
+    const mat = this._instMatriz;
+
+    for (let i = 0; i < this.crowdData.length; i++) {
+      const f = this.crowdData[i];
+      const y = f.baseY + Math.sin(timeSeconds * 6.0 + f.fase) * 0.28;
+      const s = f.escala;
+
+      esc.set(s, s, s);
+
+      pos.set(f.x, y, f.z);
+      mat.compose(pos, quat, esc);
+      this.crowdCorpo.setMatrixAt(i, mat);
+
+      // A cabeça acompanha o corpo: topo do cilindro (0.575) + raio da esfera
+      pos.set(f.x, y + 0.8 * s, f.z);
+      mat.compose(pos, quat, esc);
+      this.crowdCabeca.setMatrixAt(i, mat);
+    }
+
+    this.crowdCorpo.instanceMatrix.needsUpdate = true;
+    this.crowdCabeca.instanceMatrix.needsUpdate = true;
   }
 
   buildTreesAndNature() {
@@ -583,11 +934,14 @@ class TrackScene {
   }
 
   buildClouds() {
-    const cloudMat = new THREE.MeshLambertMaterial({
+    // O material fica guardado: o clima tinge as nuvens (douradas no pôr do
+    // sol, escuras na tempestade).
+    this.cloudMat = new THREE.MeshLambertMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.82
+      opacity: 0.85
     });
+    const cloudMat = this.cloudMat;
 
     for (let i = 0; i < 18; i++) {
       const cloudGroup = new THREE.Group();
@@ -672,6 +1026,7 @@ class TrackScene {
     bCtx.fillText("🏁 LINHA DE CHEGADA 🏁", 256, 80);
 
     const bannerTex = new THREE.CanvasTexture(bannerCanvas);
+    bannerTex.encoding = THREE.sRGBEncoding;
     const banner = new THREE.Mesh(
       new THREE.BoxGeometry(0.8, 3.2, this.trackWidth + 3.0),
       new THREE.MeshStandardMaterial({ map: bannerTex })
@@ -711,47 +1066,106 @@ class TrackScene {
 
   setWeather(weatherType) {
     this.currentWeather = weatherType;
-    if (weatherType === "NIGHT_LIGHTS") {
-      this.scene.background.setHex(0x050814);
-      this.scene.fog.color.setHex(0x050814);
-      this.ambientLight.intensity = 0.28;
-      this.sunLight.intensity = 0.12;
-      this.floodlights.forEach((f) => (f.intensity = 2.4));
-    } else if (weatherType === "SUNSET") {
-      this.scene.background.setHex(0xf97316);
-      this.scene.fog.color.setHex(0xf97316);
-      this.ambientLight.intensity = 0.55;
-      this.sunLight.color.setHex(0xffaa55);
-      this.sunLight.intensity = 1.35;
-      this.floodlights.forEach((f) => (f.intensity = 0.9));
-    } else if (weatherType === "RAIN" || weatherType === "STORM") {
-      this.scene.background.setHex(0x475569);
-      this.scene.fog.color.setHex(0x475569);
-      this.ambientLight.intensity = 0.42;
-      this.sunLight.intensity = 0.32;
-      this.floodlights.forEach((f) => (f.intensity = 1.4));
-    } else {
-      // CLEAR
-      this.scene.background.setHex(0x7dd3fc);
-      this.scene.fog.color.setHex(0xbae6fd);
-      this.ambientLight.intensity = 0.7;
-      this.sunLight.color.setHex(0xfffaed);
-      this.sunLight.intensity = 1.3;
-      this.floodlights.forEach((f) => (f.intensity = 0.0));
-    }
+
+    // Uma paleta por clima. Cada linha vira céu (topo/horizonte), neblina,
+    // luzes, sol/estrelas, nuvens e o estado da pista (molhada = escura e
+    // espelhada). Tudo num lugar só — antes cada clima mexia em um subconjunto
+    // das luzes e sobrava estado velho do clima anterior.
+    // Ambiente/hemisfério baixos + sol forte = contraste. Antes tudo era alto
+    // e a cena saía estourada, sem sombra de verdade.
+    const PALETAS = {
+      CLEAR: {
+        ceuTopo: 0x2f7ddb, horizonte: 0xc9ecff, neblina: 0.0012,
+        ambiente: 0.32, hemi: 0.4, sol: 1.5, solCor: 0xfffaed, torres: 0.0,
+        nuvemCor: 0xffffff, nuvemOpacidade: 0.85,
+        solVisivel: true, solBrilho: 0xfff2c4, estrelas: 0.0,
+        pistaCor: 0xffffff, pistaRugosidade: 0.92, pistaMetal: 0.04,
+      },
+      WIND: {
+        ceuTopo: 0x3b82f6, horizonte: 0xdbeafe, neblina: 0.0010,
+        ambiente: 0.32, hemi: 0.4, sol: 1.45, solCor: 0xfffaed, torres: 0.0,
+        nuvemCor: 0xf1f5f9, nuvemOpacidade: 0.7,
+        solVisivel: true, solBrilho: 0xfff2c4, estrelas: 0.0,
+        pistaCor: 0xffffff, pistaRugosidade: 0.92, pistaMetal: 0.04,
+      },
+      SUNSET: {
+        ceuTopo: 0x4c1d95, horizonte: 0xfb923c, neblina: 0.0016,
+        ambiente: 0.3, hemi: 0.34, sol: 1.4, solCor: 0xffb066, torres: 0.7,
+        nuvemCor: 0xffc9a3, nuvemOpacidade: 0.8,
+        solVisivel: true, solBrilho: 0xff9d4d, estrelas: 0.15,
+        pistaCor: 0xffd9b3, pistaRugosidade: 0.92, pistaMetal: 0.04,
+      },
+      NIGHT_LIGHTS: {
+        ceuTopo: 0x020617, horizonte: 0x0f172a, neblina: 0.0017,
+        ambiente: 0.16, hemi: 0.18, sol: 0.1, solCor: 0x93c5fd, torres: 2.6,
+        nuvemCor: 0x475569, nuvemOpacidade: 0.55,
+        solVisivel: false, solBrilho: 0xffffff, estrelas: 1.0,
+        pistaCor: 0xcfd8e8, pistaRugosidade: 0.9, pistaMetal: 0.06,
+      },
+      RAIN: {
+        ceuTopo: 0x475569, horizonte: 0x94a3b8, neblina: 0.0026,
+        ambiente: 0.3, hemi: 0.34, sol: 0.34, solCor: 0xfffaed, torres: 1.2,
+        nuvemCor: 0x94a3b8, nuvemOpacidade: 0.9,
+        solVisivel: false, solBrilho: 0xffffff, estrelas: 0.0,
+        pistaCor: 0x7f8ea3, pistaRugosidade: 0.42, pistaMetal: 0.18,
+      },
+      STORM: {
+        ceuTopo: 0x1e293b, horizonte: 0x64748b, neblina: 0.0032,
+        ambiente: 0.24, hemi: 0.26, sol: 0.26, solCor: 0xfffaed, torres: 1.6,
+        nuvemCor: 0x64748b, nuvemOpacidade: 0.95,
+        solVisivel: false, solBrilho: 0xffffff, estrelas: 0.0,
+        pistaCor: 0x6b7a90, pistaRugosidade: 0.36, pistaMetal: 0.22,
+      },
+    };
+
+    const p = PALETAS[weatherType] || PALETAS.CLEAR;
+
+    // Céu + neblina na cor do horizonte (os objetos distantes se dissolvem
+    // dentro do céu em vez de recortar contra ele).
+    this.skyUniforms.topColor.value.setHex(p.ceuTopo);
+    this.skyUniforms.horizonColor.value.setHex(p.horizonte);
+    this._corHorizonteBase.setHex(p.horizonte);
+    this.scene.background.setHex(p.horizonte);
+    this.scene.fog.color.setHex(p.horizonte);
+    this.scene.fog.density = p.neblina;
+
+    // Luzes
+    this.ambientLight.intensity = p.ambiente;
+    this._ambienteBase = p.ambiente;
+    this.hemiLight.intensity = p.hemi;
+    this.sunLight.color.setHex(p.solCor);
+    this.sunLight.intensity = p.sol;
+    this.fillLight.intensity = weatherType === "NIGHT_LIGHTS" ? 0.0 : p.sol * 0.16;
+    this.floodlights.forEach((f) => (f.intensity = p.torres));
+
+    // Sol, estrelas e nuvens
+    this.sunSprite.visible = p.solVisivel;
+    this.sunSprite.material.color.setHex(p.solBrilho);
+    this.stars.material.opacity = p.estrelas;
+    this.cloudMat.color.setHex(p.nuvemCor);
+    this.cloudMat.opacity = p.nuvemOpacidade;
+
+    // Pista: molhada escurece e espelha (chuva/tempestade)
+    this.trackMat.color.setHex(p.pistaCor);
+    this.trackMat.roughness = p.pistaRugosidade;
+    this.trackMat.metalness = p.pistaMetal;
+
+    // Sair da tempestade apaga o clarão pendente
+    this.flashIntensity = 0.0;
   }
 
   update(timeSeconds) {
-    // 1. Torcida pulando e vibrando
-    for (let i = 0; i < this.crowdMeshes.length; i++) {
-      const c = this.crowdMeshes[i];
-      c.mesh.position.y = c.baseHeight + Math.sin(timeSeconds * 6.0 + c.phase) * 0.28;
-    }
+    // O update recebe só o relógio; o dt sai da diferença entre chamadas.
+    const dt = Math.min(0.1, Math.max(0, timeSeconds - this._ultimoTempo));
+    this._ultimoTempo = timeSeconds;
 
-    // 2. Nuvens flutuando no horizonte
+    // 1. Torcida pulando e vibrando (instanciada: 2 uploads de matriz por frame)
+    this.atualizarTorcida(timeSeconds);
+
+    // 2. Nuvens flutuando no horizonte (passo por segundo, independe do FPS)
     for (let i = 0; i < this.clouds.length; i++) {
       const cl = this.clouds[i];
-      cl.position.x += 0.8 * 0.016;
+      cl.position.x += 0.77 * dt;
       if (cl.position.x > 450) {
         cl.position.x = -450;
       }
@@ -761,6 +1175,37 @@ class TrackScene {
     for (let i = 0; i < this.flags.length; i++) {
       const fl = this.flags[i];
       fl.rotation.y = Math.sin(timeSeconds * 4.0 + i) * 0.22;
+    }
+
+    // 4. Jatos da fonte central pulsando (eram estátuas de água parada)
+    for (let i = 0; i < this.fountains.length; i++) {
+      const jet = this.fountains[i];
+      const onda = Math.sin(timeSeconds * 2.6 + i * 1.7);
+      jet.scale.y = 1.0 + onda * 0.18;
+      jet.material.opacity = 0.55 + 0.25 * Math.abs(onda);
+    }
+
+    // 5. Relâmpago da tempestade: clarão curto que acende o céu e o ambiente
+    if (this.currentWeather === "STORM") {
+      this.lightningTimer -= dt;
+      if (this.lightningTimer <= 0) {
+        this.flashIntensity = 0.85 + Math.random() * 0.35;
+        this.lightningTimer = 3.0 + Math.random() * 6.0;
+      }
+      this.flashIntensity = Math.max(0, this.flashIntensity - dt * 3.2);
+      const f = Math.min(1.0, this.flashIntensity);
+      if (f > 0.001) {
+        this.skyUniforms.horizonColor.value
+          .copy(this._corHorizonteBase)
+          .lerp(this._corBranca, f * 0.85);
+        this.scene.fog.color.copy(this.skyUniforms.horizonColor.value);
+        this.ambientLight.intensity = this._ambienteBase + f * 1.6;
+      } else {
+        // Devolve o céu ao estado da paleta depois do clarão
+        this.skyUniforms.horizonColor.value.copy(this._corHorizonteBase);
+        this.scene.fog.color.copy(this._corHorizonteBase);
+        this.ambientLight.intensity = this._ambienteBase;
+      }
     }
   }
 

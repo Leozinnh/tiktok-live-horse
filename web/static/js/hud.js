@@ -41,6 +41,11 @@ class BroadcastHUD {
     this.leaderboardEl = document.getElementById("hudLeaderboard");
     this.audioToggleBtn = document.getElementById("audioToggleBtn");
 
+    // Controle da cartela de votação: qual fase está montada no DOM e qual
+    // número da contagem já foi exibido (evita remontar/piscar a cada update).
+    this.votingPanelState = null;
+    this.countdownShown = null;
+
     if (this.audioToggleBtn) {
       this.audioToggleBtn.addEventListener("click", () => {
         this.audio.init();
@@ -251,39 +256,25 @@ class BroadcastHUD {
   }
 
   renderCenterModal(state, stateData) {
-    if (state === "VOTING") {
-      const summary = stateData.voting_summary || {};
-      let cardsHtml = "";
+    // A cartela de votação fica na tela durante a votação E a contagem: antes
+    // o número do countdown substituía a cartela inteira e ela sumia "do nada"
+    // bem na hora em que o público quer conferir os números finais de cada
+    // cavalo. Agora o número flutua POR CIMA (ver renderCountdownOverlay).
+    if (state === "VOTING" || state === "COUNTDOWN") {
+      this.renderVotingPanel(state, stateData);
+      if (state === "COUNTDOWN") {
+        this.renderCountdownOverlay(stateData);
+      } else {
+        this.countdownShown = null;
+      }
+      return;
+    }
 
-      Object.values(summary).forEach((h) => {
-        cardsHtml += `
-          <div class="horse-vote-card" style="border-color: ${h.color_hex};">
-            <div class="num-badge" style="background: ${h.color_hex};">#${h.horse_id}</div>
-            <div class="info">
-              <div class="name">${h.horse_name}</div>
-              <div class="supporters">👥 ${h.supporters_count} apoiadores</div>
-            </div>
-          </div>
-        `;
-      });
+    // Saiu da votação: a próxima entrada remonta a cartela do zero.
+    this.votingPanelState = null;
+    this.countdownShown = null;
 
-      this.centerModal.innerHTML = `
-        <div class="voting-overlay">
-          <div class="voting-header">
-            <h2>ESCOLHA SEU CAVALO!</h2>
-            <p>Comente o número (1 a 8) ou o nome do cavalo no chat da LIVE!</p>
-          </div>
-          <div class="horses-vote-grid">
-            ${cardsHtml}
-          </div>
-        </div>
-      `;
-    } else if (state === "COUNTDOWN") {
-      const count = Math.ceil(stateData.remaining_seconds || 5);
-      this.centerModal.innerHTML = `
-        <div class="countdown-big">${count > 0 ? count : "LARGADA!"}</div>
-      `;
-    } else if (state === "PODIUM") {
+    if (state === "PODIUM") {
       const podium = stateData.podium || [];
       const first = podium[0] || {};
       const second = podium[1] || {};
@@ -375,7 +366,79 @@ class BroadcastHUD {
       `;
     } else {
       // RACING: limpa modal central para visão completa 3D
-      this.centerModal.innerHTML = "";
+      if (this.centerModal.innerHTML !== "") this.centerModal.innerHTML = "";
+    }
+  }
+
+  renderVotingPanel(state, stateData) {
+    const summary = stateData.voting_summary || {};
+    const horses = Object.values(summary);
+
+    if (this.votingPanelState !== state) {
+      // Montagem única por fase. Remontar a cada update reiniciava a animação
+      // de entrada e a cartela piscava a cada voto novo no chat.
+      let cardsHtml = "";
+      horses.forEach((h) => {
+        cardsHtml += `
+          <div class="horse-vote-card" style="border-color: ${h.color_hex};">
+            <div class="num-badge" style="background: ${h.color_hex};">#${h.horse_id}</div>
+            <div class="info">
+              <div class="name">${h.horse_name}</div>
+              <div class="supporters" data-horse="${h.horse_id}">👥 ${h.supporters_count} apoiadores</div>
+            </div>
+          </div>
+        `;
+      });
+
+      const header = state === "COUNTDOWN"
+        ? `<h2>VOTAÇÃO ENCERRADA!</h2>
+           <p>Últimos números dos apoiadores — a prova começa em instantes!</p>`
+        : `<h2>ESCOLHA SEU CAVALO!</h2>
+           <p>Comente o número (1 a 8) ou o nome do cavalo no chat da LIVE!</p>`;
+
+      this.centerModal.innerHTML = `
+        <div class="voting-overlay">
+          <div class="voting-header">
+            ${header}
+          </div>
+          <div class="horses-vote-grid">
+            ${cardsHtml}
+          </div>
+        </div>
+      `;
+      this.votingPanelState = state;
+      return;
+    }
+
+    // Já montada: só os contadores mudam — troca o texto sem recriar o DOM.
+    horses.forEach((h) => {
+      const el = this.centerModal.querySelector(`.supporters[data-horse="${h.horse_id}"]`);
+      const texto = `👥 ${h.supporters_count} apoiadores`;
+      if (el && el.textContent !== texto) el.textContent = texto;
+    });
+  }
+
+  renderCountdownOverlay(stateData) {
+    const count = Math.ceil(stateData.remaining_seconds || 5);
+    const texto = count > 0 ? String(count) : "LARGADA!";
+
+    let wrap = this.centerModal.querySelector(".countdown-wrap");
+    if (!wrap) {
+      wrap = document.createElement("div");
+      wrap.className = "countdown-wrap";
+      wrap.innerHTML = `<div class="countdown-big"></div>`;
+      this.centerModal.appendChild(wrap);
+      this.countdownShown = null;
+    }
+
+    if (this.countdownShown !== texto) {
+      const big = wrap.querySelector(".countdown-big");
+      big.textContent = texto;
+      // Trocar o texto não reinicia o CSS: força o replay do zoom a cada segundo.
+      big.style.animation = "none";
+      void big.offsetWidth;
+      big.style.animation = "";
+      this.countdownShown = texto;
     }
   }
 
