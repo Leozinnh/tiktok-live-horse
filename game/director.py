@@ -13,6 +13,46 @@ class DirectorState(str, Enum):
     XP_REWARDS = "XP_REWARDS"
     LEADERBOARD = "LEADERBOARD"
 
+# ---------------------------------------------------------------------------
+# Tabela de presentes: quanto mais valioso, maior o bônus (velocidade + duração).
+# `keywords` casa por substring no nome do presente (inglês e português).
+# `xp` aceita "small"/"medium"/"large" (vem do config) ou um número fixo.
+# Calibre power/duration/xp aqui sem tocar na lógica.
+# ---------------------------------------------------------------------------
+GIFT_TIERS = [
+    {"keywords": ["lion", "leao", "leão"], "power": 1.70, "duration": 9.0, "xp": 2000,
+     "label": "FÚRIA DO LEÃO DOURADO", "legendary": "LION", "emoji": "🦁"},
+    {"keywords": ["dragon", "dragao", "dragão"], "power": 1.65, "duration": 8.5, "xp": 1800,
+     "label": "IMPACTO DO DRAGÃO CÓSMICO", "legendary": "DRAGON", "emoji": "🐉"},
+    {"keywords": ["galaxy", "galaxia", "universe", "universo"], "power": 1.60, "duration": 8.0, "xp": 1500,
+     "label": "OVERDRIVE GALÁCTICO", "legendary": "GALAXY", "emoji": "🌌"},
+    {"keywords": ["cap", "bone", "boné"], "power": 1.35, "duration": 5.5, "xp": "medium",
+     "label": "SUPER BOOST", "legendary": None, "emoji": "🧢"},
+    {"keywords": ["donut"], "power": 1.35, "duration": 5.5, "xp": "medium",
+     "label": "SUPER BOOST", "legendary": None, "emoji": "🍩"},
+    {"keywords": ["coffee", "cafe", "café"], "power": 1.20, "duration": 4.5, "xp": "small",
+     "label": "TURBO", "legendary": None, "emoji": "☕"},
+    {"keywords": ["rose", "rosa", "heart", "coracao", "coração", "perfume"], "power": 1.20, "duration": 4.0, "xp": "small",
+     "label": "TURBO", "legendary": None, "emoji": "🌹"},
+]
+GIFT_DEFAULT = {"keywords": [], "power": 1.12, "duration": 3.0, "xp": "small",
+                "label": "TURBO", "legendary": None, "emoji": "🎁"}
+
+# Quantidade enviada amplia o bônus: cada unidade extra soma 10% do delta do tier
+# (teto de 5 extras) e o multiplicador final nunca passa de 1.8.
+# Ex.: 10 rosas = 1.30 (acima de 1 rosa = 1.20, abaixo de 1 galáxia = 1.60).
+GIFT_COUNT_STEP = 0.10
+GIFT_COUNT_MAX_EXTRA = 5
+GIFT_POWER_CAP = 1.8
+
+# Curtidas em rajada (>= LIKE_BURST_MIN de uma vez) dão um empurrão BEM leve.
+# Curtida é gratuita e infinita: não pode competir com presente.
+LIKE_BURST_MIN = 5
+LIKE_DURATION_SECONDS = 3.0
+LIKE_POWER_BASE = 1.02
+LIKE_POWER_MAX = 1.05
+
+
 class EventDirector:
     def __init__(self, config: Settings, engine: RaceEngine, repository: DatabaseRepository):
         self.config = config
@@ -108,50 +148,30 @@ class EventDirector:
             
         h_name = next(h.name for h in self.config.horses if h.id == chosen_horse_id)
         
-        # Determina impacto do presente
+        # Determina o tier do presente (tabela no topo do módulo)
         gift_lower = gift_name.lower()
-        is_legendary = False
-        legendary_kind = None
-
-        gift_emoji_map = {
-            "galaxy": "🌌", "galaxia": "🌌",
-            "lion": "🦁", "leao": "🦁", "leão": "🦁",
-            "dragon": "🐉", "dragao": "🐉", "dragão": "🐉",
-            "universe": "🪐", "universo": "🪐",
-            "rose": "🌹", "rosa": "🌹",
-            "donut": "🍩",
-            "cap": "🧢", "bone": "🧢", "boné": "🧢",
-            "coffee": "☕", "cafe": "☕", "café": "☕",
-            "coracao": "💖", "coração": "💖", "heart": "💖",
-            "fire": "🔥", "fogo": "🔥"
-        }
-        gift_emoji = "🎁"
-        for k, e in gift_emoji_map.items():
-            if k in gift_lower:
-                gift_emoji = e
+        tier = GIFT_DEFAULT
+        for t in GIFT_TIERS:
+            if any(k in gift_lower for k in t["keywords"]):
+                tier = t
                 break
 
-        if any(w in gift_lower for w in ["galaxy", "galaxia"]):
-            power, dur, xp = 1.30, 6.0, 1500
-            b_label = "OVERDRIVE GALÁCTICO"
-            is_legendary = True
-            legendary_kind = "GALAXY"
-        elif any(w in gift_lower for w in ["lion", "leao", "leão"]):
-            power, dur, xp = 1.35, 6.5, 2000
-            b_label = "FÚRIA DO LEÃO DOURADO"
-            is_legendary = True
-            legendary_kind = "LION"
-        elif any(w in gift_lower for w in ["dragon", "dragao", "dragão", "universe", "universo"]):
-            power, dur, xp = 1.32, 6.0, 1800
-            b_label = "IMPACTO DO DRAGÃO CÓSMICO"
-            is_legendary = True
-            legendary_kind = "DRAGON"
-        elif any(w in gift_lower for w in ["cap", "donut", "coffee", "perfume", "coracao"]):
-            power, dur, xp = 1.15, 3.5, self.config.xp.gift_medium
-            b_label = "SUPER BOOST"
-        else:
-            power, dur, xp = 1.08, 2.5, self.config.xp.gift_small
-            b_label = "TURBO"
+        xp_map = {
+            "small": self.config.xp.gift_small,
+            "medium": self.config.xp.gift_medium,
+            "large": self.config.xp.gift_large,
+        }
+        xp = tier["xp"] if isinstance(tier["xp"], int) else xp_map[tier["xp"]]
+        b_label = tier["label"]
+        gift_emoji = tier["emoji"]
+        is_legendary = tier["legendary"] is not None
+        legendary_kind = tier["legendary"]
+
+        # Quantidade amplia o bônus: cada unidade extra soma 10% do delta do tier
+        # (teto de 5 extras). Ex.: 10 rosas (1.30) > 1 rosa (1.20) < 1 galáxia (1.60).
+        extras = min(max(gift_count - 1, 0), GIFT_COUNT_MAX_EXTRA)
+        power = min(GIFT_POWER_CAP, 1.0 + (tier["power"] - 1.0) * (1.0 + GIFT_COUNT_STEP * extras))
+        dur = tier["duration"]
             
         # Aplica boost na engine (tanto em RACING quanto acumulando em VOTING/COUNTDOWN!)
         self.engine.apply_boost(
@@ -179,7 +199,7 @@ class EventDirector:
             "gift_name": gift_name,
             "gift_emoji": gift_emoji,
             "boost_label": b_label,
-            "text": f"{gift_emoji} {viewer['display_name']} enviou {gift_name}! {b_label} em {h_name}!",
+            "text": f"{gift_emoji} {viewer['display_name']} enviou {gift_name}{f' x{gift_count}' if gift_count > 1 else ''}! {b_label} em {h_name}!",
             "horse_id": chosen_horse_id,
             "horse_name": h_name,
             "badge": gift_emoji
@@ -194,6 +214,38 @@ class EventDirector:
                 break
         if chosen_horse_id:
             self.engine.add_cheer(chosen_horse_id)
+
+    async def handle_viewer_like(self, tiktok_username: str, display_name: str, count: int) -> None:
+        """Rajada de curtidas (>= LIKE_BURST_MIN de uma vez) dá um empurrão leve.
+
+        Bem leve de propósito: curtida é gratuita e infinita, então só empurra
+        o cavalo do apoiador (ou o líder, se o autor não for identificável —
+        o TikTok para de mandar o autor depois de muitas curtidas seguidas).
+        Não grava nada no banco: curtida não rende XP nem estatística.
+        """
+        if count < LIKE_BURST_MIN:
+            return
+
+        chosen_horse_id = None
+        if tiktok_username:
+            for hid, sups in self.horse_supporters.items():
+                if any(s["tiktok_username"] == tiktok_username for s in sups):
+                    chosen_horse_id = hid
+                    break
+        if chosen_horse_id is None:
+            chosen_horse_id = self.engine.leader_horse_id or 1
+
+        power = min(LIKE_POWER_MAX, LIKE_POWER_BASE + 0.002 * min(count - LIKE_BURST_MIN, 10))
+        self.engine.apply_boost(
+            horse_id=chosen_horse_id,
+            boost_name="GALERA CURTIU",
+            power=power,
+            duration_seconds=LIKE_DURATION_SECONDS,
+            is_legendary=False,
+            legendary_kind=None,
+            gift_emoji="❤️",
+            donor_name=display_name or "Torcida"
+        )
 
     async def skip_to_countdown(self) -> None:
         """Pula o tempo de votação e inicia a contagem de largada imediatamente."""

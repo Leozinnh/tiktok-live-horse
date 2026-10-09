@@ -210,3 +210,45 @@ class DatabaseRepository:
             ) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
+
+    async def get_all_viewers(self, limit: int = 500) -> List[Dict[str, Any]]:
+        """Lista todos os espectadores cadastrados (painel admin /test)."""
+        async with self.connection.get_connection() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT id, tiktok_username, display_name, xp, level, races_count, wins_count, created_at, updated_at
+                FROM viewers
+                ORDER BY xp DESC, wins_count DESC
+                LIMIT ?
+                """,
+                (limit,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
+
+    async def reset_viewer(self, viewer_id: int) -> bool:
+        """Zera XP, nível e estatísticas de um espectador (mantém a identidade)."""
+        async with self.connection.get_connection() as db:
+            cursor = await db.execute(
+                """
+                UPDATE viewers
+                SET xp = 0, level = 1, races_count = 0, wins_count = 0, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (viewer_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def reset_all_viewers(self) -> int:
+        """Zera XP, nível e estatísticas de TODOS os espectadores. Retorna quantos foram zerados."""
+        async with self.connection.get_connection() as db:
+            cursor = await db.execute(
+                """
+                UPDATE viewers
+                SET xp = 0, level = 1, races_count = 0, wins_count = 0, updated_at = CURRENT_TIMESTAMP
+                """
+            )
+            await db.commit()
+            return cursor.rowcount

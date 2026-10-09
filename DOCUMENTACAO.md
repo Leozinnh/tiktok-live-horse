@@ -156,23 +156,28 @@ Ao receber um presente, o cavalo correspondente exibe uma **pill 3D flutuante** 
 1. O **Emoji oficial do presente** renderizado em alta definição (`Segoe UI Emoji`).
 2. O **`@nome_do_apoiador`** em texto branco contrastante com fundo escuro translúcido.
 
-### 5.2 Mapeamento de Presentes (`game/director.py`)
-No arquivo `game/director.py`, dentro de `handle_viewer_gift()`, todos os presentes são normalizados:
+### 5.2 Tabela de Presentes e Escala de Valor (`game/director.py`)
+No topo de `game/director.py` existe a tabela `GIFT_TIERS`, que casa o nome do presente por substring (inglês e português) e define bônus, duração, XP, emoji e o tipo lendário:
 
-```python
-gift_emoji_map = {
-    "galaxy": "🌌", "galaxia": "🌌",
-    "lion": "🦁", "leao": "🦁", "leão": "🦁",
-    "dragon": "🐉", "dragao": "🐉", "dragão": "🐉",
-    "universe": "🪐", "universo": "🪐",
-    "rose": "🌹", "rosa": "🌹",
-    "donut": "🍩",
-    "cap": "🧢", "bone": "🧢", "boné": "🧢",
-    "coffee": "☕", "cafe": "☕", "café": "☕",
-    "coracao": "💖", "coração": "💖", "heart": "💖",
-    "fire": "🔥", "fogo": "🔥"
-}
-```
+| Presente | Multiplicador | Duração | XP |
+|---|---|---|---|
+| 🦁 Leão (`lion`, `leao`) | `1.70` | 9.0s | 2000 |
+| 🐉 Dragão (`dragon`, `dragao`) | `1.65` | 8.5s | 1800 |
+| 🌌 Galáxia (`galaxy`, `galaxia`, `universe`) | `1.60` | 8.0s | 1500 |
+| 🧢 Boné (`cap`, `bone`) | `1.35` | 5.5s | 250 (config) |
+| 🍩 Donut (`donut`) | `1.35` | 5.5s | 250 (config) |
+| ☕ Café (`coffee`, `cafe`) | `1.20` | 4.5s | 100 (config) |
+| 🌹 Rosa (`rose`, `rosa`, `heart`, `coracao`) | `1.20` | 4.0s | 100 (config) |
+| 🎁 Qualquer outro (padrão) | `1.12` | 3.0s | 100 (config) |
+
+**Quantidade enviada de uma vez** amplia o bônus: cada unidade extra soma `+10%` do delta do presente (máximo de 5 extras) e o multiplicador final nunca passa do teto `1.80`.
+Exemplo: 10 rosas = `1.30` — mais forte que 1 rosa (`1.20`), porém mais fraco que 1 galáxia (`1.60`).
+
+Para **adicionar um presente novo**, basta inserir uma linha em `GIFT_TIERS` (sem tocar em nenhuma lógica) e, se ele tiver efeitos visuais próprios no 3D, mapear o `legendary` correspondente no front-end.
+
+### 5.2.1 Curtidas em Rajada (Boost de Torcida)
+Quando alguém manda **5 ou mais curtidas de uma vez** (`LIKE_BURST_MIN`), o cavalo que a pessoa apoia — ou o líder da pista, quando o TikTok não informa o autor — recebe um boost `GALERA CURTIU` de `1.02` a `1.05` por 3 segundos.
+Curtida é gratuita e infinita: o empurrão é de propósito **bem leve**, não rende XP e não grava nada no banco, para nunca competir com os presentes.
 
 ### 5.3 Presentes Míticos e Super Raros (Leão, Galáxia, Dragão)
 Quando um presente raro é enviado, os seguintes efeitos são ativados simultaneamente:
@@ -182,7 +187,7 @@ Quando um presente raro é enviado, os seguintes efeitos são ativados simultane
 * **Aura Mítica Tórica e Rastro de Chamas:** Um anel energético brilhante gira em alta velocidade ao redor do cavalo, deixando brasas e labaredas no chão.
 * **Banner Mítico no HUD:** Card monumental no topo da tela com borda dourada/violeta incandescente e pulsação em toda a moldura da live.
 * **Áudio de Trovão e Sub-Grave:** Impacto estrondoso de 140 Hz descendo até 25 Hz com o clamor da multidão do estádio a 100% de volume por 4 segundos.
-* **Turbo Massivo:** +35% de velocidade por 6.5 segundos e até +2.000 XP para o apoiador.
+* **Turbo Massivo:** até +70% de velocidade por 9 segundos (Leão; ver tabela `GIFT_TIERS` em 5.2) e até +2.000 XP para o apoiador.
 
 ### 5.4 Retenção de Presentes Pré-Largada
 Se um espectador enviar presentes durante a fase de **Votação (`VOTING`)** ou **Contagem Regressiva (`COUNTDOWN`)**:
@@ -324,9 +329,11 @@ Acesse em qualquer navegador em:
    * 🔄 **Próxima Corrida:** Reinicia o ciclo e prepara a próxima prova.
 2. **Simulação de Comentários & Votos:** Digite ou clique nos botões rápidos (#1 ao #8, `/turbo`, etc.).
 3. **Simulação de Presentes:** Dispare Rosa, Café, Donut, Boné, Leão (+2000 XP), Galáxia (+1500 XP) ou Dragão (+1800 XP).
-4. **Rajada de Público:** Simule 20 ou 50 espectadores comentando e votando de uma vez só.
-5. **Controles de Clima:** Sol, Pôr do Sol, Noite com Refletores, Chuva, Tempestade e Vento.
-6. **Console de Eventos Avançado:**
+4. **Simulação de Curtidas:** Rajadas de 5, 10 ou 30 curtidas de uma vez (`POST /api/test/inject_like`) para ver o empurrão leve da torcida.
+5. **Rajada de Público:** Simule 20 ou 50 espectadores comentando e votando de uma vez só.
+6. **Controles de Clima:** Sol, Pôr do Sol, Noite com Refletores, Chuva, Tempestade e Vento.
+7. **👥 Gerenciamento de Usuários (Admin):** lista todos os espectadores cadastrados (XP, nível, corridas, vitórias) com botão **🧹 Zerar** por usuário e **🧨 Zerar TODOS** — zera XP, nível e estatísticas sem apagar as contas (`GET /api/test/viewers`, `POST /api/test/reset_viewer`, `POST /api/test/reset_all_viewers`).
+8. **Console de Eventos Avançado:**
    * Abas de filtro: `[Todos]`, `[🎁 Presentes]`, `[💬 Votos]`, `[🏁 Fases]`.
    * Contadores em tempo real de presentes e votos acumulados.
    * Botões para `🗑️ Limpar` e `📋 Copiar Histórico`.

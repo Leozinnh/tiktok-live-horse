@@ -15,6 +15,15 @@ from tiktok.mock_adapter import MockTikTokAdapter
 from tiktok.adapter import TikTokLiveAdapter
 from web.server import create_app, run_simulation_loop
 
+# Quando a saída é redirecionada para arquivo/serviço, o stdout do Windows cai
+# para cp1252 e o banner com emojis derruba o boot com UnicodeEncodeError.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"

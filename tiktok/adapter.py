@@ -22,7 +22,7 @@ from typing import Optional
 
 from TikTokLive import TikTokLiveClient
 from TikTokLive.client.errors import UserNotFoundError, UserOfflineError, WebcastBlockedError
-from TikTokLive.events import CommentEvent, GiftEvent
+from TikTokLive.events import CommentEvent, GiftEvent, LikeEvent
 
 from tiktok.parser import CommandParser
 from backend.security import SecurityManager
@@ -86,6 +86,19 @@ class TikTokLiveAdapter:
                     user, nick = self._identidade(event)
                     count = max(1, int(event.repeat_count or 1))
                     await self.director.handle_viewer_gift(user, nick, gift.name, count)
+
+                @client.on(LikeEvent)
+                async def on_like(event: LikeEvent):
+                    # Rajada de curtidas (5+ de uma vez): empurrão leve no cavalo do apoiador.
+                    # O autor pode vir None (o TikTok para de mandar depois de muitas curtidas).
+                    user_obj = getattr(event, "user", None)
+                    raw_user = getattr(user_obj, "unique_id", None) or getattr(user_obj, "display_id", None) or ""
+                    raw_nick = getattr(user_obj, "nickname", None) or raw_user
+                    await self.director.handle_viewer_like(
+                        self.security.sanitize_name(raw_user) if raw_user else "",
+                        self.security.sanitize_name(raw_nick) if raw_nick else "",
+                        int(getattr(event, "count", 0) or 0),
+                    )
 
                 # connect() só retorna quando o websocket fecha.
                 # NÃO trocar por start(): ele retorna imediatamente e o while dispara

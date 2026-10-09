@@ -294,6 +294,113 @@ async function updateHudSetting() {
   appendLog(`📐 HUD ajustado: Escala ${Math.round(currentHudConfig.scale * 100)}% | Posição Top: ${currentHudConfig.top}px`, "#38bdf8", "race");
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+async function simulateLikes(count) {
+  const user = document.getElementById("giftUser").value.trim() || "Torcida";
+  try {
+    const res = await fetch("/api/test/inject_like", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: user, display_name: user, count: count })
+    });
+    const result = await res.json();
+    appendLog(`💗 @${escapeHtml(user)} mandou ${count} curtidas de uma vez! -> boost leve no cavalo apoiado`, "#f472b6", "gift");
+  } catch (err) {
+    appendLog(`Erro ao simular curtidas: ${err}`, "#f87171", "all");
+  }
+}
+
+let lastViewers = [];
+
+async function loadViewers() {
+  try {
+    const res = await fetch("/api/test/viewers");
+    const data = await res.json();
+    lastViewers = data.viewers || [];
+    renderViewers(lastViewers, data.total || lastViewers.length);
+  } catch (err) {
+    appendLog(`Erro ao carregar usuários: ${err}`, "#f87171", "all");
+  }
+}
+
+function renderViewers(viewers, total) {
+  const totalEl = document.getElementById("viewersTotal");
+  if (totalEl) totalEl.innerText = total;
+
+  const container = document.getElementById("viewersList");
+  if (!container) return;
+
+  if (!viewers.length) {
+    container.innerHTML = '<div style="color: #64748b; font-size: 13px;">Nenhum usuário cadastrado ainda.</div>';
+    return;
+  }
+
+  const rows = viewers.map((v) => `
+    <tr style="border-top: 1px solid rgba(148, 163, 184, 0.15);">
+      <td style="padding: 5px 6px; color: #e2e8f0;">${escapeHtml(v.display_name)} <span style="color: #64748b; font-size: 11px;">@${escapeHtml(v.tiktok_username)}</span></td>
+      <td style="color: #fbbf24; font-weight: 700; text-align: right;">${v.xp}</td>
+      <td style="text-align: center;">${v.level}</td>
+      <td style="text-align: center;">${v.races_count}</td>
+      <td style="text-align: center;">${v.wins_count}</td>
+      <td style="text-align: right;">
+        <button class="quick-btn" style="padding: 3px 10px; font-size: 11px; background: #7f1d1d; border-color: #ef4444;" onclick="resetViewer(${v.id})">🧹 Zerar</button>
+      </td>
+    </tr>`).join("");
+
+  container.innerHTML = `
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+      <thead>
+        <tr style="color: #94a3b8; font-size: 11px; text-transform: uppercase;">
+          <th style="text-align: left; padding: 4px 6px;">Usuário</th>
+          <th style="text-align: right;">XP</th>
+          <th style="text-align: center;">Nv</th>
+          <th style="text-align: center;">🏁</th>
+          <th style="text-align: center;">🏆</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function resetViewer(viewerId) {
+  const v = lastViewers.find((x) => x.id === viewerId);
+  const label = v ? `${v.display_name} (@${v.tiktok_username})` : `#${viewerId}`;
+  if (!confirm(`Zerar XP, nível e estatísticas de ${label}?`)) return;
+
+  try {
+    const res = await fetch("/api/test/reset_viewer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ viewer_id: viewerId })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    appendLog(`🧹 Usuário ${escapeHtml(label)} foi zerado (XP, nível e estatísticas).`, "#fbbf24", "race");
+    loadViewers();
+  } catch (err) {
+    appendLog(`Erro ao zerar usuário: ${err}`, "#f87171", "all");
+  }
+}
+
+async function resetAllViewers() {
+  if (!confirm("Zerar TODOS os usuários? XP, níveis e estatísticas de todo mundo.\nEssa ação NÃO pode ser desfeita.")) return;
+
+  try {
+    const res = await fetch("/api/test/reset_all_viewers", { method: "POST" });
+    const result = await res.json();
+    appendLog(`🧨 ${result.reset_count} usuário(s) zerado(s)!`, "#ef4444", "race");
+    loadViewers();
+  } catch (err) {
+    appendLog(`Erro ao zerar todos: ${err}`, "#f87171", "all");
+  }
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   connectWs();
+  loadViewers();
 });

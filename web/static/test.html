@@ -116,6 +116,13 @@
         <button class="quick-btn" style="background: linear-gradient(135deg, #b91c1c, #f59e0b); font-weight: 800;" onclick="sendGift('Dragon')">🐉 DRAGÃO (+1800 XP)</button>
       </div>
       
+      <label style="margin-top: 14px;">💗 Simulação de Curtidas (Rajada):</label>
+      <div class="quick-buttons" style="grid-template-columns: repeat(3, 1fr);">
+        <button class="quick-btn" onclick="simulateLikes(5)">💗 5 de uma vez</button>
+        <button class="quick-btn" onclick="simulateLikes(10)">💗 10 de uma vez</button>
+        <button class="quick-btn" onclick="simulateLikes(30)">💗 30 de uma vez</button>
+      </div>
+
       <label style="margin-top: 14px;">Simulação de Público em Massa:</label>
       <div class="quick-buttons" style="grid-template-columns: repeat(2, 1fr);">
         <button class="btn btn-green" onclick="simulateBurst(20)">👥 +20 Votos Rápidos</button>
@@ -147,6 +154,21 @@
       <div class="form-group" style="margin-top: 14px;">
         <label>Elementos da Transmissão:</label>
         <button class="btn btn-secondary" onclick="toggleProgressHud()">🏁 Ocultar / Mostrar Régua do Topo</button>
+      </div>
+    </div>
+
+    <!-- Card 6: Usuários & Ranking (Admin) -->
+    <div class="card">
+      <div class="card-title" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <span>👥 Usuários Cadastrados</span>
+        <span style="font-size: 12px; color: #94a3b8;"><span id="viewersTotal">0</span> no banco</span>
+      </div>
+      <div class="quick-buttons" style="grid-template-columns: repeat(2, 1fr);">
+        <button class="quick-btn" onclick="loadViewers()">🔄 Atualizar Lista</button>
+        <button class="quick-btn" style="background: #7f1d1d; border-color: #ef4444;" onclick="resetAllViewers()">🧨 Zerar TODOS</button>
+      </div>
+      <div id="viewersList" style="margin-top: 10px; max-height: 340px; overflow-y: auto;">
+        <div style="color: #64748b; font-size: 13px;">Clique em "Atualizar Lista" para carregar os usuários...</div>
       </div>
     </div>
 

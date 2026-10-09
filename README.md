@@ -57,17 +57,24 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
 
 ### 3. Simulação de Eventos & Público:
 - **Comentários & Votos:** Envie votos rápidos nos cavalos (#1 ao #8) ou comandos de torcida (`/turbo`, `bora torcida!`).
-- **Presentes & Super Raros:**
-  - 🌹 **Rosa** e ☕ **Café**: Turbo básico e ágil.
-  - 🧢 **Boné** e 🍩 **Donut**: Super Boost de velocidade.
-  - 🦁 **Leão (+2000 XP)**: Fúria dourada com pilar de luz celeste de 90m, onda de choque e screen shake.
-  - 🌌 **Galáxia (+1500 XP)**: Overdrive cósmico com vórtice estelar violeta e chamas nos cascos.
-  - 🐉 **Dragão (+1800 XP)**: Impacto místico com rastro de labaredas e rugido de torcida.
+- **Presentes & Super Raros:** a regra é simples — quanto mais valioso o presente, maior o bônus (velocidade e duração). Enviar em quantidade também amplia o bônus (cada unidade extra soma +10% do delta do presente, com teto).
+  - 🌹 **Rosa** e ☕ **Café**: Turbo básico (`1.20`) e ágil.
+  - 🧢 **Boné** e 🍩 **Donut**: Super Boost de velocidade (`1.35`).
+  - 🌌 **Galáxia (+1500 XP)**: Overdrive cósmico (`1.60`) com vórtice estelar violeta e chamas nos cascos.
+  - 🐉 **Dragão (+1800 XP)**: Impacto místico (`1.65`) com rastro de labaredas e rugido de torcida.
+  - 🦁 **Leão (+2000 XP)**: Fúria dourada (`1.70`) com pilar de luz celeste de 90m, onda de choque e screen shake.
+  - *Exemplo de quantidade:* 10 rosas (`1.30`) superam 1 rosa (`1.20`), mas continuam abaixo de 1 galáxia (`1.60`). O multiplicador final nunca passa de `1.80`.
   - *Presentes enviados durante a fase de votação já ficam acumulados para a largada!*
+- **Curtidas em Rajada:** quando alguém manda **5 ou mais curtidas de uma vez**, o cavalo que a pessoa apoia (ou o líder da pista) recebe um empurrão **bem leve** (`1.02` a `1.05`) por 3 segundos. Curtida é gratuita e infinita, então não rende XP nem compete com presentes.
 - **Rajada em Massa:** Simule 20 ou 50 espectadores votando simultaneamente para testes de estresse.
 - **Controle de Clima:** Sol Claro, Pôr do Sol, Noite com Refletores do Estádio, Chuva, Tempestade e Vento.
 
-### 4. Console com Histórico e Filtros:
+### 4. Gerenciamento de Usuários (Admin):
+- **👥 Usuários Cadastrados:** lista todos os espectadores no banco com XP, nível, corridas e vitórias, ordenados por XP.
+- **🧹 Zerar (por usuário):** zera XP, nível e estatísticas de um espectador específico, mantendo a identidade dele no banco.
+- **🧨 Zerar TODOS:** zera XP, nível e estatísticas de todos os espectadores de uma vez. Útil para começar uma temporada nova.
+
+### 5. Console com Histórico e Filtros:
 - Abas de filtragem: `Todos`, `🎁 Presentes`, `💬 Votos`, `🏁 Fases`.
 - Contadores em tempo real do total de presentes e votos na transmissão.
 - Botões para `🗑️ Limpar` e `📋 Copiar Histórico`.

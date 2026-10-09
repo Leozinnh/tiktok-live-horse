@@ -27,6 +27,14 @@ class GiftRequest(BaseModel):
     gift_name: str
     count: int = 1
 
+class LikeRequest(BaseModel):
+    username: str = ""
+    display_name: str = ""
+    count: int = 5
+
+class ResetViewerRequest(BaseModel):
+    viewer_id: int
+
 class BurstRequest(BaseModel):
     count: int = 20
 
@@ -99,6 +107,23 @@ def create_app(
     async def get_leaderboard(limit: int = 10):
         return await repository.get_leaderboard(limit=limit)
 
+    @app.get("/api/test/viewers")
+    async def list_viewers(limit: int = 500):
+        viewers = await repository.get_all_viewers(limit=limit)
+        return {"viewers": viewers, "total": len(viewers)}
+
+    @app.post("/api/test/reset_viewer")
+    async def reset_viewer(req: ResetViewerRequest):
+        ok = await repository.reset_viewer(req.viewer_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Viewer não encontrado")
+        return {"status": "ok", "viewer_id": req.viewer_id}
+
+    @app.post("/api/test/reset_all_viewers")
+    async def reset_all_viewers():
+        count = await repository.reset_all_viewers()
+        return {"status": "ok", "reset_count": count}
+
     @app.post("/api/test/inject_comment")
     async def inject_comment(req: CommentRequest):
         res = await mock_adapter.inject_comment(
@@ -114,6 +139,15 @@ def create_app(
             username=req.username,
             display_name=req.display_name or req.username,
             gift_name=req.gift_name,
+            count=req.count
+        )
+        return res
+
+    @app.post("/api/test/inject_like")
+    async def inject_like(req: LikeRequest):
+        res = await mock_adapter.inject_like(
+            username=req.username or "Torcida",
+            display_name=req.display_name or req.username or "Torcida",
             count=req.count
         )
         return res

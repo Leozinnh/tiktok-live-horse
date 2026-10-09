@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Distribuição
+build/
+dist/
+*.egg-info/
+
+# Banco de dados SQLite (gerado em runtime)
+*.db
+*.db-journal
+*.sqlite3
+
+# Logs
+*.log
+
+# Testes / cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Variáveis de ambiente / segredos
+.env

@@ -48,11 +48,18 @@ class MockTikTokAdapter:
     async def inject_gift(self, username: str, display_name: str, gift_name: str, count: int = 1) -> Dict[str, Any]:
         clean_user = self.security.sanitize_name(username)
         clean_name = self.security.sanitize_name(display_name)
-        
+
         await self.director.handle_viewer_gift(
             clean_user, clean_name, gift_name, count
         )
         return {"status": "ok", "action": "GIFT", "gift_name": gift_name, "count": count}
+
+    async def inject_like(self, username: str, display_name: str, count: int = 5) -> Dict[str, Any]:
+        clean_user = self.security.sanitize_name(username)
+        clean_name = self.security.sanitize_name(display_name)
+
+        await self.director.handle_viewer_like(clean_user, clean_name, count)
+        return {"status": "ok", "action": "LIKE", "count": count}
 
     async def simulate_crowd_burst(self, count: int = 20) -> Dict[str, Any]:
         """
