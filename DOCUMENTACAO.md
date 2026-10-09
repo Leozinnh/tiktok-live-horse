@@ -570,12 +570,12 @@ Mesmo motor do `tiktok-live-pixel`, portado inteiro e ampliado: uma **thread com
 3. A reprodução usa o **MCI do Windows** via `ctypes` (biblioteca padrão): nenhum binário externo nem pacote de áudio para instalar.
 4. Terminou de tocar, o arquivo é apagado.
 
-### 14.1 Anúncio Imediato do Vencedor (Zero Atraso)
-Antes, o anúncio do vencedor aguardava os 3.5 segundos da desaceleração da engine pós-chegada para só então sintetizar a voz, acumulando até 8 segundos de espera.
+### 14.1 Anúncio Imediato do Vencedor com Fade-Out Suave (Zero Corte Seco)
+Antes, o anúncio do vencedor aguardava os 3.5 segundos da desaceleração da engine pós-chegada para só então sintetizar a voz, acumulando até 8 segundos de espera, e um corte abrupto podia acontecer no meio da palavra.
 Agora:
 * **Disparo no Milissegundo do Cruzamento:** No exato instante em que o cavalo cruza a linha de 1000m (`winner_horse_id` detectado em `RACING`), o narrador entra em ação imediatamente.
-* **Corte Instantâneo de Locução Antiga (`interromper_locucao()`):** Qualquer locução de meio de prova (ex: "reta final") que estiver sendo falada nos alto-falantes é interrompida na hora via comando `stop` no MCI.
-* O veredito do campeão e foto-finish são sintetizados instantaneamente, estando prontos e tocando com perfeição na virada para o pódio!
+* **Fade-Out Suave da Locução Anterior (`interromper_locucao()`):** Se alguma locução da corrida estiver sendo falada nos alto-falantes (ex: *"Olha o placar..."*), o narrador **não corta o som do nada**. Ele executa um **fade-out musical e suave de ~240ms** (reduzindo o volume de forma exponencial em 6 etapas: 70% $\to$ 45% $\to$ 25% $\to$ 10% $\to$ 2% $\to$ 0%), silenciando a fala anterior com extrema elegância antes de abrir o veredito do campeão.
+* O veredito do campeão e foto-finish são sintetizados instantaneamente, entrando com volume pleno e clareza total na virada para o pódio!
 
 ### 14.2 Áudio Ducking nas Boas-Vindas
 Quando alguém entra na live durante a narração:
