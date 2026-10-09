@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    html, body { margin: 0; padding: 0; background: #000; }
+    #viewport { width: 540px; height: 960px; position: relative; }
+    #canvas-container { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="viewport"><div id="canvas-container"></div></div>
+
+  <script src="js/three.min.js"></script>
+  <script src="js/scene.js"></script>
+  <script>
+    // Harness de verificação da ambientação (não faz parte do jogo).
+    const params = new URLSearchParams(location.search);
+    const shot = params.get("shot") || "infield";
+
+    const cena = new TrackScene(document.getElementById("canvas-container"));
+    cena.init();
+    cena.setWeather("CLEAR", { instantaneo: true });
+
+    if (shot === "infield") {
+      // Vista de helicóptero sobre o miolo: pista de treino, lago, telão e mata
+      cena.camera.position.set(-40, 300, 560);
+      cena.camera.lookAt(new THREE.Vector3(0, 0, 40));
+      cena.update(1.0, "VOTING");
+      cena.render();
+    } else if (shot === "geral") {
+      // Vista aérea do estádio inteiro, mostrando as faixas de vegetação externas
+      cena.camera.position.set(-700, 620, 1100);
+      cena.camera.lookAt(new THREE.Vector3(0, 0, 0));
+      cena.update(1.0, "VOTING");
+      cena.render();
+    } else if (shot === "portao-up") {
+      cena.update(0.5, "VOTING");
+      cena.render();
+    } else if (shot === "portao-down") {
+      // 6s de corrida: tempo de sobra para o portão afundar
+      for (let i = 1; i <= 120; i++) cena.update(i * 0.05, "RACING");
+      cena.render();
+    } else if (shot === "tarde") {
+      // Pista de treino de perto, para conferir areia, raias e obstáculos
+      cena.camera.position.set(-150, 14, 148);
+      cena.camera.lookAt(new THREE.Vector3(60, 1, 118));
+      cena.update(1.0, "VOTING");
+      cena.render();
+    } else if (shot === "torcida") {
+      // Arquibancada: confere as cores de camisa por instância
+      cena.camera.position.set(-90, 22, 262);
+      cena.camera.lookAt(new THREE.Vector3(-60, 8, 214));
+      cena.update(1.0, "VOTING");
+      cena.render();
+    }
+    // O screenshot headless não pega o buffer do canvas WebGL: copia o frame
+    // para uma <img> na MESMA tarefa do render (o buffer só é limpo no
+    // próximo composite) e é essa imagem que aparece na captura.
+    const url = cena.renderer.domElement.toDataURL("image/png");
+    const img = document.createElement("img");
+    img.src = url;
+    img.style.cssText = "position:fixed;left:0;top:0;width:540px;height:960px;";
+    document.body.appendChild(img);
+    cena.renderer.domElement.style.display = "none";
+    document.title = "pronto";
+  </script>
+</body>
+</html>

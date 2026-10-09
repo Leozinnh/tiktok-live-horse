@@ -394,9 +394,10 @@ class HorseVisualManager {
           this.particles.emitVictoryGlow(horseObj.group.position, hData.color_hex);
         }
 
-        // Eleva o badge de nome bem alto para flutuar majestosamente acima das orelhas sem o cavalo atravessá-lo
+        // Badge do campeão: sobe para não atravessar a cabeça empinada, mas só
+        // o necessário — a 8,8m ele saía do enquadramento do pódio.
         if (horseObj.badge) {
-          horseObj.badge.position.y = 8.8 + Math.sin(rearT * 1.5) * 0.15;
+          horseObj.badge.position.y = 7.8 + Math.sin(rearT * 1.5) * 0.12;
           horseObj.badge.position.z = -0.5;
         }
       } else {

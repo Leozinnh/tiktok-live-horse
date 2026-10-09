@@ -90,7 +90,10 @@ class TrackScene {
     this.startGateDoors = [];
     this.startSignalLights = [];
     this.gateOpenAngle = 0.0;
-    this.startGateTargetZ = 0.0;
+    this.startGateTargetY = 0.0;
+
+    // Dirigível da ambientação (voa devagar sobre o hipódromo)
+    this.blimp = null;
 
     // Torcida instanciada (montada em buildGrandstands)
     this.crowdData = [];
@@ -182,6 +185,7 @@ class TrackScene {
     this.buildStartAndFinishGates();
     this.buildStadiumTowers();
     this.buildExtraSceneryDecorations();
+    this.buildAmbientacao();
 
     window.addEventListener("resize", () => this.onResize());
   }
@@ -842,6 +846,10 @@ class TrackScene {
     const cabecaGeo = new THREE.SphereGeometry(0.23, 7, 6);
     const corpoMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
     const cabecaMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    // Sem isto as cores de camisa/pele por instância não pintavam: a torcida
+    // inteira saía branca (ver prepararCoresDeInstancia).
+    this.prepararCoresDeInstancia(corpoGeo, corpoMat);
+    this.prepararCoresDeInstancia(cabecaGeo, cabecaMat);
 
     const fans = [];
     const porNivel = 288;
@@ -1491,6 +1499,319 @@ class TrackScene {
     this.scene.add(pierGroup);
   }
 
+  // ==========================================================================
+  // AMBIENTAÇÃO DO HIPÓDROMO
+  // Com a pista triplicada (3000m), o miolo do infield virou um gramado liso de
+  // ~900x350m e a faixa atrás da cerca, um vazio: nas tomadas abertas (largada,
+  // pódio, chuva) a cena parecia um campo com cavalos passando. Este bloco
+  // preenche esse vazio com pista de treino, vegetação e um dirigível — tudo
+  // instanciado ou com material compartilhado, porque o alvo é um browser
+  // source do OBS rodando junto do jogo.
+  // ==========================================================================
+
+  // Distância de um ponto ao EIXO da pista principal (o oval: retas de 900m em
+  // z=±190,99 e curvas de raio 190,99 em x=±450). Para um ponto qualquer,
+  // hypot(max(0, |x|-450), z) mede a distância ao eixo do oval e
+  // |essa medida - raio| diz o quanto ele está fora do eixo — 0 em cima da
+  // linha, 14,5 na cerca interna (176,49) e 14,5 na externa (205,49).
+  distanciaPistaPrincipal(x, z) {
+    const d = Math.hypot(Math.max(0, Math.abs(x) - this.straightLen / 2.0), z);
+    return Math.abs(d - this.radius);
+  }
+
+  buildAmbientacao() {
+    this.buildPistaDeTreino();
+    this.buildVegetacao();
+    this.buildBlimp();
+  }
+
+  // Cor por instância (InstancedMesh.setColorAt): no three r128 ela é calculada
+  // no vértice (USE_INSTANCING_COLOR) mas só chega ao fragmento se o material
+  // tiver vertexColors ligado (USE_COLOR) — sem isso a malha instanciada inteira
+  // sai branca. Um atributo de cor neutro na geometria liga o define sem tingir.
+  prepararCoresDeInstancia(geo, mat) {
+    const total = geo.attributes.position.count;
+    geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(total * 3).fill(1.0), 3));
+    mat.vertexColors = true;
+  }
+
+  // Pista de treino: um oval de areia concêntrico dentro do infield, com
+  // obstáculos, que dá "cara de hipódromo" ao gramado central nas tomadas
+  // abertas. Raio 120m e retas de 480m deixam 52m de gramado até a cerca
+  // interna da pista principal (z=124,5 contra 176,49) — ninguém se cruza.
+  buildPistaDeTreino() {
+    const S = 240.0; // meia-reta (480m de reta)
+    const R = 120.0; // raio das curvas
+    const LARGURA = 9.0;
+    const SEGMENTOS = 240;
+
+    // Eixo do oval de treino parametrizado por u ∈ [0,1): sai da reta da frente
+    // (z=+R) em direção a +x, dá a volta e fecha no ponto de partida. O vetor
+    // (nx,nz) é a normal (para fora) usada para abrir a faixa de areia.
+    const perimetro = 4 * S + 2 * Math.PI * R;
+    const reta = 2 * S;
+    const curva = Math.PI * R;
+    const eixo = (u) => {
+      let d = (((u % 1) + 1) % 1) * perimetro;
+      if (d <= reta) {
+        return { x: -S + d, z: R, nx: 0, nz: 1 };
+      }
+      d -= reta;
+      if (d <= curva) {
+        const ang = Math.PI / 2 - (d / curva) * Math.PI;
+        return { x: S + R * Math.cos(ang), z: R * Math.sin(ang), nx: Math.cos(ang), nz: Math.sin(ang) };
+      }
+      d -= curva;
+      if (d <= reta) {
+        return { x: S - d, z: -R, nx: 0, nz: -1 };
+      }
+      d -= reta;
+      const ang = -Math.PI / 2 - (d / curva) * Math.PI;
+      return { x: -S + R * Math.cos(ang), z: R * Math.sin(ang), nx: Math.cos(ang), nz: Math.sin(ang) };
+    };
+
+    // Faixa contínua em volta do oval (mesma montagem de triângulos da pista
+    // principal: (interno_i, externo_i, interno_i+1) + (externo_i, externo_i+1, interno_i+1)).
+    const criarFaixa = (deslocamento, largura, material, altura) => {
+      const vertices = [];
+      const uvs = [];
+      const indices = [];
+      const meia = largura * 0.5;
+      for (let i = 0; i <= SEGMENTOS; i++) {
+        const u = i / SEGMENTOS;
+        const p = eixo(u);
+        const rIn = deslocamento - meia;
+        const rOut = deslocamento + meia;
+        vertices.push(p.x + p.nx * rIn, altura, p.z + p.nz * rIn);
+        vertices.push(p.x + p.nx * rOut, altura, p.z + p.nz * rOut);
+        uvs.push(0, u, 1, u);
+      }
+      for (let i = 0; i < SEGMENTOS; i++) {
+        const a = i * 2;
+        // Mesmo sentido de giro da pista principal: (interno_i, externo_i,
+        // interno_i+1) — invertido, a faixa nasce virada para baixo e some.
+        indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      const malha = new THREE.Mesh(geo, material);
+      malha.receiveShadow = true;
+      return malha;
+    };
+
+    // Areia batida (mesma textura da pista principal, tile menor porque a
+    // pista de treino é 1/3 do tamanho)
+    const areiaTex = this.criarTexturaAreia();
+    areiaTex.repeat.set(1, 260);
+    const areiaMat = new THREE.MeshStandardMaterial({ map: areiaTex, roughness: 0.95 });
+    this.scene.add(criarFaixa(0, LARGURA, areiaMat, 0.05));
+
+    // Duas linhas brancas pintadas no chão delimitando as raias
+    const tintaMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.8 });
+    this.scene.add(criarFaixa(-LARGURA * 0.5 + 0.3, 0.45, tintaMat, 0.07));
+    this.scene.add(criarFaixa(LARGURA * 0.5 - 0.3, 0.45, tintaMat, 0.07));
+
+    // Obstáculos de treino na reta da frente (fardos brancos com pés vermelhos)
+    const fardoMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
+    const peMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.5 });
+    for (let x = -200; x <= 200; x += 80) {
+      const obstaculo = new THREE.Group();
+      const barra = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.95, LARGURA - 1.4), fardoMat);
+      barra.position.y = 0.75;
+      barra.castShadow = true;
+      obstaculo.add(barra);
+      for (const lado of [-1, 1]) {
+        const pe = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 1.3, 8), peMat);
+        pe.position.set(0, 0.65, lado * (LARGURA - 1.4) * 0.5);
+        pe.castShadow = true;
+        obstaculo.add(pe);
+      }
+      obstaculo.position.set(x, 0, R);
+      this.scene.add(obstaculo);
+    }
+  }
+
+  // Árvores e arbustos em malhas instanciadas: ~4 draw calls para 130 árvores
+  // (tronco + 3 camadas de copa) e 1 para os arbustos, contra ~500 malhas se
+  // cada um fosse um Mesh — o que derrubaria o FPS do browser source.
+  buildVegetacao() {
+    // Sorteio determinístico (Park-Miller): a mesma ambientação em todo
+    // carregamento. Sorteio livre faria a cena mudar a cada refresh — e uma
+    // árvore nascendo em cima da pista é o tipo de bug que só aparece na live.
+    let semente = 20261009;
+    const rnd = () => {
+      semente = (semente * 16807) % 2147483647;
+      return semente / 2147483647;
+    };
+
+    // Guarda de posicionamento: nada nasce em cima da pista principal (nem das
+    // cercas), da pista de treino, do lago, do telão, do cais, das arquibancadas,
+    // das torres de refletor, da torre dos comissários/tendas nem das árvores
+    // que já existem no infield.
+    const distTreino = (x, z) => Math.abs(Math.hypot(Math.max(0, Math.abs(x) - 240.0), z) - 120.0);
+    const jaOcupado = (x, z) => {
+      if (Math.hypot(x + 20, z) < 48) return false; // lago ornamental + cais
+      if (x > 20 && x < 95 && z > -18 && z < 24) return false; // telão e pilares
+      if (x > -510 && x < -438 && z > 206 && z < 240) return false; // comissários + tendas VIP
+      if (z > 200 && z < 262 && Math.abs(x) < 405) return false; // arquibancada
+      for (const [tx, tz] of [[-540, 390], [540, 390], [540, -390], [-540, -390]]) {
+        if (Math.hypot(x - tx, z - tz) < 26) return false; // torres de refletor
+      }
+      for (const [ax, az] of [[-190, 36], [-160, -40], [110, 44], [170, -36], [210, 30], [-210, -20]]) {
+        if (Math.hypot(x - ax, z - az) < 9) return false; // jardim que já existia
+      }
+      return true;
+    };
+    const localValido = (x, z, folga) => {
+      if (Math.abs(x) > 1150 || Math.abs(z) > 1000) return false;
+      if (this.distanciaPistaPrincipal(x, z) < folga) return false;
+      if (distTreino(x, z) < folga * 0.45) return false;
+      return jaOcupado(x, z);
+    };
+
+    // Sorteia dentro de uma caixa [x0, z0, x1, z1] até juntar "quantos" pontos
+    // válidos — a caixa do infield, sozinha, cobre tanto o anel entre a pista
+    // de treino e a cerca quanto o miolo, porque a guarda vale para os dois lados.
+    const sortear = (quantos, caixa, folga) => {
+      const pontos = [];
+      let tentativas = 0;
+      const limite = quantos * 80;
+      while (pontos.length < quantos && tentativas < limite) {
+        tentativas++;
+        const x = caixa[0] + rnd() * (caixa[2] - caixa[0]);
+        const z = caixa[1] + rnd() * (caixa[3] - caixa[1]);
+        if (!localValido(x, z, folga)) continue;
+        pontos.push({ x, z, escala: 0.7 + rnd() * 0.8, giro: rnd() * Math.PI * 2 });
+      }
+      return pontos;
+    };
+
+    const INFIELD = [-450, -190, 450, 190];
+    const FUNDOS = [-1100, -1000, 1100, -212]; // atrás da reta oposta
+    const CURVA_DIR = [462, -1000, 1150, 1000];
+    const CURVA_ESQ = [-1150, -1000, -462, 1000];
+    const FRENTE = [-1150, 214, 1150, 1000]; // fora das arquibancadas
+
+    const arvores = [
+      ...sortear(40, INFIELD, 20.0),
+      ...sortear(45, FUNDOS, 20.0),
+      ...sortear(18, CURVA_DIR, 20.0),
+      ...sortear(17, CURVA_ESQ, 20.0),
+      ...sortear(10, FRENTE, 20.0),
+    ];
+    const arbustos = [
+      ...sortear(90, INFIELD, 17.0),
+      ...sortear(70, FUNDOS, 17.0),
+      ...sortear(28, CURVA_DIR, 17.0),
+      ...sortear(27, CURVA_ESQ, 17.0),
+      ...sortear(25, FRENTE, 17.0),
+    ];
+
+    // --- Árvores: tronco + 3 camadas de copa (mesmas medidas do pinheiro que
+    // já existia na cena), uma InstancedMesh por parte ---
+    const troncoMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const folhagemMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const partesArvore = [
+      { geo: new THREE.CylinderGeometry(0.4, 0.6, 4, 8), mat: troncoMat, y: 2.0, cor: [0x5c3a21, 0x6b4423, 0x4a2f1a] },
+      { geo: new THREE.ConeGeometry(3.5, 3.8, 8), mat: folhagemMat, y: 3.5, cor: [0x14532d, 0x166534, 0x1a6b3a] },
+      { geo: new THREE.ConeGeometry(2.7, 3.8, 8), mat: folhagemMat, y: 5.7, cor: [0x14532d, 0x166534, 0x1a6b3a] },
+      { geo: new THREE.ConeGeometry(1.9, 3.8, 8), mat: folhagemMat, y: 7.9, cor: [0x14532d, 0x166534, 0x1a6b3a] },
+    ];
+    const dummy = new THREE.Object3D();
+    const cor = new THREE.Color();
+    partesArvore.forEach((parte, k) => {
+      this.prepararCoresDeInstancia(parte.geo, parte.mat);
+      const malha = new THREE.InstancedMesh(parte.geo, parte.mat, Math.max(1, arvores.length));
+      malha.count = arvores.length;
+      malha.castShadow = true;
+      // A esfera da geometria base não cobre árvores espalhadas por 2300m: sem
+      // isso o Three descarta a mata inteira em certos ângulos de câmera.
+      malha.frustumCulled = false;
+      arvores.forEach((a, i) => {
+        dummy.position.set(a.x, parte.y * a.escala, a.z);
+        dummy.rotation.set(0, a.giro, 0);
+        dummy.scale.setScalar(a.escala);
+        dummy.updateMatrix();
+        malha.setMatrixAt(i, dummy.matrix);
+        malha.setColorAt(i, cor.setHex(parte.cor[(i + k) % parte.cor.length]));
+      });
+      malha.instanceMatrix.needsUpdate = true;
+      if (malha.instanceColor) malha.instanceColor.needsUpdate = true;
+      this.scene.add(malha);
+    });
+
+    // --- Arbustos: moita achatada, um draw call só (sem sombra: a 240
+    // instâncias o custo do shadow map não se paga) ---
+    const moitaGeo = new THREE.IcosahedronGeometry(1.7, 0);
+    const moitaMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    this.prepararCoresDeInstancia(moitaGeo, moitaMat);
+    const moitas = new THREE.InstancedMesh(moitaGeo, moitaMat, Math.max(1, arbustos.length));
+    moitas.count = arbustos.length;
+    moitas.frustumCulled = false;
+    arbustos.forEach((a, i) => {
+      const escala = 0.7 + a.escala * 0.6;
+      dummy.position.set(a.x, 0.75 * escala, a.z);
+      dummy.rotation.set(0, a.giro, 0);
+      dummy.scale.set(escala, escala * 0.62, escala);
+      dummy.updateMatrix();
+      moitas.setMatrixAt(i, dummy.matrix);
+      moitas.setColorAt(i, cor.setHex([0x166534, 0x1f7a3d, 0x14532d, 0x2f8f4e][i % 4]));
+    });
+    moitas.instanceMatrix.needsUpdate = true;
+    if (moitas.instanceColor) moitas.instanceColor.needsUpdate = true;
+    this.scene.add(moitas);
+  }
+
+  // Dirigível de transmissão: com a névoa dividida por 3 o céu virou um pano de
+  // fundo enorme e vazio — ele dá movimento e escala ao hipódromo nas tomadas
+  // abertas (não é interativo e não colide com nada).
+  buildBlimp() {
+    const grupo = new THREE.Group();
+
+    const envelope = new THREE.Mesh(
+      new THREE.SphereGeometry(9, 20, 14),
+      new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.45 })
+    );
+    envelope.scale.set(2.7, 1.0, 1.0); // ~49m de comprimento
+    grupo.add(envelope);
+
+    // Faixa dourada pintada no bojo (cilindro deitado no eixo do dirigível)
+    const faixa = new THREE.Mesh(
+      new THREE.CylinderGeometry(9.02, 9.02, 3.4, 24, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.5, side: THREE.DoubleSide })
+    );
+    faixa.rotation.z = Math.PI / 2;
+    grupo.add(faixa);
+
+    const escuroMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
+
+    // Nacele (cabine) embaixo e lemes na cauda
+    const nacele = new THREE.Mesh(new THREE.BoxGeometry(7, 2, 3), escuroMat);
+    nacele.position.set(2, -9.6, 0);
+    grupo.add(nacele);
+
+    const lemeVertical = new THREE.Mesh(new THREE.BoxGeometry(4.5, 6, 0.4), escuroMat);
+    lemeVertical.position.set(-22, 4.5, 0);
+    lemeVertical.rotation.z = 0.35;
+    grupo.add(lemeVertical);
+
+    const lemeHorizontal = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.4, 8), escuroMat);
+    lemeHorizontal.position.set(-22, 0, 0);
+    grupo.add(lemeHorizontal);
+
+    // Bico de proa, para fechar a silhueta pontuda
+    const proa = new THREE.Mesh(new THREE.SphereGeometry(2.4, 12, 8), escuroMat);
+    proa.position.set(24, 0, 0);
+    grupo.add(proa);
+
+    grupo.position.set(-700, 150, -40);
+    this.blimp = grupo;
+    this.scene.add(grupo);
+  }
+
   setWeather(weatherType, opcoes = {}) {
     this.currentWeather = weatherType;
     const nova = PALETAS_CLIMA[weatherType] || PALETAS_CLIMA.CLEAR;
@@ -1591,6 +1912,15 @@ class TrackScene {
       }
     }
 
+    // 2b. Dirigível cruzando o céu, com uma flutuação lenta de altitude
+    if (this.blimp) {
+      this.blimp.position.x += 6.5 * dt;
+      if (this.blimp.position.x > 1200) {
+        this.blimp.position.x = -1200;
+      }
+      this.blimp.position.y = 150 + Math.sin(timeSeconds * 0.35) * 2.2;
+    }
+
     // 3. Bandeiras balançando no vento
     for (let i = 0; i < this.flags.length; i++) {
       const fl = this.flags[i];
@@ -1655,13 +1985,16 @@ class TrackScene {
       }
     }
 
-    // 8. Movimento do Portão Móvel de Largada (Reboque Automático para Fora da Pista)
-    // Na largada, o partidor móvel é rebocado para o Infield, liberando totalmente a reta de chegada!
+    // 8. Recolhimento do Portão Móvel de Largada: afunda para DENTRO do chão.
+    // Antes ele era rebocado para o infield e ficava atravessado no gramado, à
+    // vista durante toda a prova; agora a estrutura desce e some no gramado,
+    // deixando a reta de chegada limpa (e volta a subir na votação seguinte).
     const corridaOuPodio = (directorState === "RACING" || directorState === "PODIUM" || directorState === "XP_REWARDS" || directorState === "LEADERBOARD");
-    this.startGateTargetZ = corridaOuPodio ? -42.0 : 0.0;
+    // -7m enterra até o mastro do semáforo (5,5m de altura): nada fica de fora.
+    this.startGateTargetY = corridaOuPodio ? -7.0 : 0.0;
 
     if (this.startGate) {
-      this.startGate.position.z += (this.startGateTargetZ - this.startGate.position.z) * Math.min(1.0, dt * 2.5);
+      this.startGate.position.y += (this.startGateTargetY - this.startGate.position.y) * Math.min(1.0, dt * 2.6);
     }
 
     // Animação das Cancelas do Portão de Largada (Abertura Mecânica Fluida)
