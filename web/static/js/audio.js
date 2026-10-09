@@ -204,6 +204,84 @@ class GameAudio {
     });
   }
 
+  playHorseNeigh() {
+    if (this.isMuted || !this.ctx) return;
+    this.resume();
+    const now = this.ctx.currentTime;
+
+    // Síntese procedural de relincho de cavalo com modulação FM e formante
+    const osc = this.ctx.createOscillator();
+    const vibrato = this.ctx.createOscillator();
+    const vibratoGain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = "sawtooth";
+    // Frequência base com varredura de subida e descida típica do relincho
+    osc.frequency.setValueAtTime(650, now);
+    osc.frequency.exponentialRampToValueAtTime(1450, now + 0.35);
+    osc.frequency.exponentialRampToValueAtTime(520, now + 1.25);
+
+    // Vibrato rápido (tremolo característico da garganta do cavalo)
+    vibrato.frequency.setValueAtTime(8, now);
+    vibratoGain.gain.setValueAtTime(45, now);
+    vibratoGain.gain.linearRampToValueAtTime(90, now + 0.5);
+    vibratoGain.gain.linearRampToValueAtTime(20, now + 1.2);
+    vibrato.connect(osc.frequency);
+
+    // Filtro formante ressonante
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(1200, now);
+    filter.frequency.linearRampToValueAtTime(1800, now + 0.4);
+    filter.frequency.linearRampToValueAtTime(900, now + 1.25);
+    filter.Q.value = 3.5;
+
+    // Envelope de amplitude
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.28, now + 0.15);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.35);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    vibrato.start(now);
+    osc.start(now);
+    vibrato.stop(now + 1.4);
+    osc.stop(now + 1.4);
+  }
+
+  playFireworkBurst() {
+    if (this.isMuted || !this.ctx) return;
+    this.resume();
+    const now = this.ctx.currentTime;
+    
+    // Ruído de explosão de fogos filtrado com ressonância grave
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.9);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.22));
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(450, now);
+    filter.frequency.exponentialRampToValueAtTime(120, now + 0.5);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.32, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    noise.start(now);
+  }
+
   setupCrowdNoise() {
     if (!this.ctx) return;
     // Ruído contínuo rosa filtrado simulando murmúrio e torcida do hipódromo

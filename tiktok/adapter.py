@@ -23,7 +23,7 @@ from typing import Optional
 from TikTokLive import TikTokLiveClient
 from TikTokLive.client.errors import UserNotFoundError, UserOfflineError, WebcastBlockedError
 from TikTokLive.events import (
-    CommentEvent, GiftEvent, LikeEvent, JoinEvent,
+    CommentEvent, GiftEvent, LikeEvent, JoinEvent, FollowEvent,
     ConnectEvent, DisconnectEvent, LiveEndEvent,
 )
 
@@ -116,7 +116,18 @@ class TikTokLiveAdapter:
                         return
                     if not self.security.check_and_set_cooldown(user, "join", cooldown_seconds=60.0):
                         return
+                    logger.info("👤 Entrada detectada no TikTok: %s (@%s)", nick or user, user)
                     await self.director.handle_viewer_join(user, nick)
+
+                @client.on(FollowEvent)
+                async def on_follow(event: FollowEvent):
+                    user, nick = self._identidade(event)
+                    if not user:
+                        return
+                    if not self.security.check_and_set_cooldown(user, "follow", cooldown_seconds=60.0):
+                        return
+                    logger.info("➕ Novo seguidor detectado no TikTok: %s (@%s)", nick or user, user)
+                    await self.director.handle_viewer_follow(user, nick)
 
                 @client.on(LikeEvent)
                 async def on_like(event: LikeEvent):

@@ -54,6 +54,18 @@ class MockTikTokAdapter:
         )
         return {"status": "ok", "action": "GIFT", "gift_name": gift_name, "count": count}
 
+    async def inject_join(self, username: str, display_name: str) -> Dict[str, Any]:
+        clean_user = self.security.sanitize_name(username)
+        clean_name = self.security.sanitize_name(display_name)
+        await self.director.handle_viewer_join(clean_user, clean_name)
+        return {"status": "ok", "action": "JOIN", "user": clean_user, "display_name": clean_name}
+
+    async def inject_follow(self, username: str, display_name: str) -> Dict[str, Any]:
+        clean_user = self.security.sanitize_name(username)
+        clean_name = self.security.sanitize_name(display_name)
+        await self.director.handle_viewer_follow(clean_user, clean_name)
+        return {"status": "ok", "action": "FOLLOW", "user": clean_user, "display_name": clean_name}
+
     async def inject_like(self, username: str, display_name: str, count: int = 5) -> Dict[str, Any]:
         clean_user = self.security.sanitize_name(username)
         clean_name = self.security.sanitize_name(display_name)

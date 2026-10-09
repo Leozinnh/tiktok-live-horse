@@ -26,6 +26,7 @@ class BroadcastHUD {
     this.lastState = null;
     this.lastRaceNumber = null;
     this.activeNotifications = new Set();
+    this.seenNotificationIds = new Set();
 
     // Elementos DOM
     this.raceBadgeEl = document.getElementById("raceBadge");
@@ -60,13 +61,11 @@ class BroadcastHUD {
     if (this.leaderboardEl) {
       if (config.scale !== undefined) {
         this.leaderboardEl.style.transform = `scale(${config.scale})`;
-        this.leaderboardEl.style.transformOrigin = "top left";
+        this.leaderboardEl.style.transformOrigin = "bottom center";
       }
-      if (config.top !== undefined) {
-        this.leaderboardEl.style.top = `${config.top}px`;
-      }
-      if (config.left !== undefined) {
-        this.leaderboardEl.style.left = `${config.left}px`;
+      this.leaderboardEl.style.top = "auto";
+      if (config.bottom !== undefined) {
+        this.leaderboardEl.style.bottom = `${config.bottom}px`;
       }
     }
     const progressContainer = document.getElementById("trackProgressContainer");
@@ -108,13 +107,25 @@ class BroadcastHUD {
 
     this.renderTimer(state, stateData);
 
-    // 2. Notificações Flutuantes (Fila sem repetição)
+    // 2. Notificações Flutuantes (Fila com IDs únicos: nunca bloqueia votos legítimos)
     if (stateData.notifications && Array.isArray(stateData.notifications)) {
       stateData.notifications.forEach((n) => {
-        const key = n.text;
-        if (!this.activeNotifications.has(key)) {
-          this.activeNotifications.add(key);
-          this.showToast(n);
+        if (n.id !== undefined) {
+          if (!this.seenNotificationIds.has(n.id)) {
+            this.seenNotificationIds.add(n.id);
+            if (this.seenNotificationIds.size > 200) {
+              const arr = Array.from(this.seenNotificationIds);
+              this.seenNotificationIds = new Set(arr.slice(-100));
+            }
+            this.showToast(n);
+          }
+        } else {
+          const key = `${n.type}_${n.text}`;
+          if (!this.activeNotifications.has(key)) {
+            this.activeNotifications.add(key);
+            setTimeout(() => this.activeNotifications.delete(key), 4000);
+            this.showToast(n);
+          }
         }
       });
     }
@@ -191,9 +202,15 @@ class BroadcastHUD {
       this.showMythicAnnouncement(notification);
     }
 
+    let cleanText = notification.text || "";
+    // Se o texto já começar com o mesmo emoji/badge, remove para evitar duplicação visual
+    if (notification.badge && cleanText.startsWith(notification.badge)) {
+      cleanText = cleanText.substring(notification.badge.length).trim();
+    }
+
     const toast = document.createElement("div");
     toast.className = `toast ${notification.type === "GIFT" ? "gift" : ""}`;
-    toast.innerHTML = `<span>${notification.badge || "🏇"}</span> <span>${notification.text}</span>`;
+    toast.innerHTML = `<span>${notification.badge || "🏇"}</span> <span>${cleanText}</span>`;
     this.notificationContainer.appendChild(toast);
 
     if (notification.type === "GIFT" && !notification.is_legendary) {
@@ -459,7 +476,8 @@ class BroadcastHUD {
     const progressContainer = document.getElementById("trackProgressContainer");
     const progressBar = document.getElementById("trackProgressBar");
 
-    if (state !== "RACING" && state !== "COUNTDOWN") {
+    // O HUD de classificação só deve aparecer estritamente quando a corrida estiver rolando (RACING)!
+    if (state !== "RACING") {
       this.leaderboardEl.style.display = "none";
       if (progressContainer) progressContainer.style.display = "none";
       return;

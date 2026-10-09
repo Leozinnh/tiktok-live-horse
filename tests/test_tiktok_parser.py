@@ -22,6 +22,16 @@ def test_command_parser_choices():
     assert parser.parse_comment("/cavalo 4") == {"action": "CHOOSE_HORSE", "horse_id": 4}
     assert parser.parse_comment("/cavalo raio") == {"action": "CHOOSE_HORSE", "horse_id": 4}
 
+    # Variações reais de chat do TikTok
+    assert parser.parse_comment("#1") == {"action": "CHOOSE_HORSE", "horse_id": 1}
+    assert parser.parse_comment("# 2") == {"action": "CHOOSE_HORSE", "horse_id": 2}
+    assert parser.parse_comment("111") == {"action": "CHOOSE_HORSE", "horse_id": 1}
+    assert parser.parse_comment("vai 1") == {"action": "CHOOSE_HORSE", "horse_id": 1}
+    assert parser.parse_comment("bora 3!") == {"action": "CHOOSE_HORSE", "horse_id": 3}
+    assert parser.parse_comment("relampagooo") == {"action": "CHOOSE_HORSE", "horse_id": 1}
+    assert parser.parse_comment("vai trovaooo") == {"action": "CHOOSE_HORSE", "horse_id": 2}
+    assert parser.parse_comment("cavalo 5") == {"action": "CHOOSE_HORSE", "horse_id": 5}
+
 def test_command_parser_cheers_and_fun_commands():
     from tiktok.parser import CommandParser
     

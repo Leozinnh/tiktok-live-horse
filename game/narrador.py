@@ -50,10 +50,12 @@ from game.falas import (
     CORRIDA_ABERTURA,
     CORRIDA_DISPUTA,
     CORRIDA_PLACAR,
+    CURTIDAS,
     FALAS,
     FOTO_FINISH,
     LARGADA,
     RETA_FINAL,
+    SEGUIDOR,
     VENCEDOR,
     VOTACAO_ABERTA,
 )
@@ -220,6 +222,8 @@ class Narrador:
         self.foto_finish = _frases_do_config(cfg.foto_finish, FOTO_FINISH)
         self.clima = _frases_do_config(cfg.clima, CLIMA)
         self.clima_virada = _frases_do_config(cfg.clima_virada, CLIMA_VIRADA)
+        self.seguidor = SEGUIDOR
+        self.curtidas = CURTIDAS
 
         self._gerar = gerar or self._gerar_edge
         self._tocar = tocar or self._tocar_mci
@@ -353,6 +357,23 @@ class Narrador:
             return str(valor or "")
 
     @staticmethod
+    def _limpar_nome_para_fala(nome: str, fallback: str = "") -> str:
+        """Limpa o nome para a voz: remove emojis, símbolos e pontuação esquisita.
+
+        Ex.: 'caioba🇧🇷✋🏽😛🤚🏽' vira 'caioba' (não lê 'bandeira do brasil').
+        Se só tinha emoji ('👑🔥'), usa o fallback (ex.: username @caioba338).
+        """
+        import re
+
+        nome_str = (nome or "").strip().lstrip("@")
+        limpo = re.sub(r"[^a-zA-Z0-9À-ÿ\s]", "", nome_str)
+        limpo = re.sub(r"\s+", " ", limpo).strip()
+        if not limpo and fallback:
+            fb_str = (fallback or "").strip().lstrip("@")
+            limpo = re.sub(r"[^a-zA-Z0-9À-ÿ\s]", "", fb_str).strip()
+        return limpo or "espectador"
+
+    @staticmethod
     def _nome_falado(valor: str) -> str:
         """Nome próprio como a voz lê melhor: "RELÂMPAGO" vira "Relâmpago".
 
@@ -367,13 +388,13 @@ class Narrador:
     ) -> str:
         """A fala do presente, sorteada entre as frases do jogo.
 
-        O arroba não se pronuncia ("@ana" vira "ana").
+        O arroba não se pronuncia ("@ana" vira "ana") e emojis são limpos.
         """
         return self._sorteada(
             self.falas,
             FALA_PADRAO,
             {
-                "nome": (nome or "").strip().lstrip("@"),
+                "nome": self._limpar_nome_para_fala(nome),
                 "quantidade": f"{int(quantidade)}x " if int(quantidade) > 1 else "",
                 "presente": presente or "presente",
                 "cavalo": self._nome_falado(cavalo),
@@ -381,16 +402,16 @@ class Narrador:
             "Fala",
         )
 
-    def texto_de_entrada(self, nome: str) -> str:
+    def texto_de_entrada(self, nome: str, fallback: str = "") -> str:
         """A fala de quem acabou de chegar, sorteada entre as do jogo.
 
         Sem `{quantidade}` nem `{presente}`: a chegada não tem prêmio, tem
-        só um nome — e é por ele que a voz chama.
+        só um nome — e é por ele que a voz chama (sem emojis).
         """
         return self._sorteada(
             self.boas_vindas,
             BOAS_VINDAS_PADRAO,
-            {"nome": (nome or "").strip().lstrip("@")},
+            {"nome": self._limpar_nome_para_fala(nome, fallback)},
             "Boas-vindas",
         )
 
@@ -572,7 +593,7 @@ class Narrador:
             self.texto_do_presente(nome, quantidade, presente, cavalo), nome
         )
 
-    def anunciar_entrada(self, nome: str) -> str | None:
+    def anunciar_entrada(self, nome: str, fallback: str = "") -> str | None:
         """Enfileira o oi de quem chegou com canal prioritário e áudio ducking.
 
         Mesma fila e mesmo ciclo do presente — a diferença é só a lista de
@@ -582,8 +603,53 @@ class Narrador:
         if not self.ativo or not self.entrada_ativa:
             return None
 
-        texto = self.texto_de_entrada(nome)
+        texto = self.texto_de_entrada(nome, fallback=fallback)
         self._enfileirar(texto, nome, categoria=ENTRADA)
+        try:
+            self._fila_boas_vindas.put_nowait(texto)
+        except queue.Full:
+            pass
+        return texto
+
+    def texto_de_seguidor(self, nome: str, fallback: str = "") -> str:
+        """A fala de agradecimento a um novo seguidor da live."""
+        return self._sorteada(
+            self.seguidor,
+            "Mais um seguidor na família! Muito obrigado, {nome}!",
+            {"nome": self._limpar_nome_para_fala(nome, fallback)},
+            "Seguidor",
+        )
+
+    def anunciar_follow(self, nome: str, fallback: str = "") -> str | None:
+        """Enfileira o agradecimento ao novo seguidor com canal prioritário e áudio ducking."""
+        if not self.ativo or not self.entrada_ativa:
+            return None
+
+        texto = self.texto_de_seguidor(nome, fallback)
+        try:
+            self._fila_boas_vindas.put_nowait(texto)
+        except queue.Full:
+            pass
+        return texto
+
+    def texto_de_curtidas(self, nome: str, quantidade: int, fallback: str = "") -> str:
+        """A fala de agradecimento por 20+ curtidas."""
+        return self._sorteada(
+            self.curtidas,
+            "Valeu pelas {quantidade} curtidas, {nome}! O dedo tá voando!",
+            {
+                "nome": self._limpar_nome_para_fala(nome, fallback),
+                "quantidade": self._numero(quantidade),
+            },
+            "Curtidas",
+        )
+
+    def anunciar_curtidas(self, nome: str, quantidade: int, fallback: str = "") -> str | None:
+        """Enfileira o agradecimento pelas 20+ curtidas com canal prioritário e áudio ducking."""
+        if not self.ativo or not self.entrada_ativa:
+            return None
+
+        texto = self.texto_de_curtidas(nome, quantidade, fallback)
         try:
             self._fila_boas_vindas.put_nowait(texto)
         except queue.Full:
@@ -715,6 +781,19 @@ class Narrador:
                 logger.warning("Fila de falas cheia; %s ficou sem voz", nome)
         return texto
 
+    def _enfileirar_frente(self, texto: str, nome: str) -> str:
+        """Põe na frente da fila com prioridade máxima (para presentes não atrasarem)."""
+        item = (texto, None)
+        with self._fila.mutex:
+            if self._fila.maxsize > 0 and len(self._fila.queue) >= self._fila.maxsize:
+                try:
+                    self._fila.queue.pop()
+                except IndexError:
+                    pass
+            self._fila.queue.appendleft(item)
+            self._fila.not_empty.notify()
+        return texto
+
     def descartar_locucao(self) -> int:
         """Tira da fila a locução da corrida que ainda não falou.
 
@@ -728,6 +807,7 @@ class Narrador:
         Devolve quantas falas saíram; quem chama decide o que fazer com o
         número (na prática, só avisar no log).
         """
+        self.interromper_locucao()
         guardadas = []
         descartadas = 0
         while True:
@@ -761,8 +841,8 @@ class Narrador:
                 return
             texto, categoria = item
 
-            # Se for entrada e já foi falada com ducking pelo canal prioritário, pula
-            if categoria == ENTRADA and texto in self._entradas_faladas:
+            # Entrada de espectador é processada exclusivamente pelo canal de boas-vindas com ducking
+            if categoria == ENTRADA:
                 continue
 
             caminho: str | None = None
@@ -770,6 +850,9 @@ class Narrador:
                 with self._lock_audio:
                     self._categoria_atual = categoria
                 caminho = self._gerar(texto)
+                # Se for fala de corrida e foi pedida interrupção enquanto gerava o TTS, não toca!
+                if categoria == CORRIDA and (self._cortar_atual.is_set() or self._fade_out_solicitado.is_set()):
+                    continue
                 self._tocar(caminho)
             except Exception as erro:
                 # Áudio é enfeite: um tropeço aqui (internet, codec, placa de
@@ -847,7 +930,10 @@ class Narrador:
             "9": "nove",
             "10": "dez",
         }
-        return re.sub(r"\b([1-9]|10)\b", lambda m: mapa_nums.get(m.group(0), m.group(0)), texto)
+        texto = re.sub(r"\b([1-9]|10)\b", lambda m: mapa_nums.get(m.group(0), m.group(0)), texto)
+        # Remove qualquer emoji ou símbolo restante para a voz nunca ler o nome do emoji
+        texto = re.sub(r"[^a-zA-Z0-9À-ÿ\s.,!?:;\-]", "", texto)
+        return re.sub(r"\s+", " ", texto).strip()
 
     def _gerar_edge(self, texto: str) -> str:
         """Gera o mp3 da fala e devolve o caminho."""

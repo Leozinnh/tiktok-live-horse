@@ -158,15 +158,15 @@ class CinematicCameraDirector {
       }
 
       case "CAM_PODIUM":
-        // Órbita cinematográfica 360º ampla em torno do vencedor
-        this.podiumAngle += dt * 0.35;
-        const orbitRadius = 22.0;
+        // Órbita cinematográfica em ângulo heróico e dinâmico em torno do campeão empinado
+        this.podiumAngle += dt * 0.42;
+        const orbitRadius = 14.5;
         this.targetPos.set(
           winnerPos.x + Math.cos(this.podiumAngle) * orbitRadius,
-          8.5,
+          5.0 + Math.sin(this.podiumAngle * 0.8) * 1.5,
           winnerPos.z + Math.sin(this.podiumAngle) * orbitRadius
         );
-        this.targetLookAt.set(winnerPos.x, 2.5, winnerPos.z);
+        this.targetLookAt.set(winnerPos.x, 3.2, winnerPos.z);
         break;
     }
 

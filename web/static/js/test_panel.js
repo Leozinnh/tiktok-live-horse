@@ -157,6 +157,36 @@ async function sendComment(customText = null) {
   }
 }
 
+async function simulateJoin() {
+  const user = document.getElementById("commentUser").value.trim() || "Leonardo";
+  try {
+    const res = await fetch("/api/test/inject_join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: user.toLowerCase(), display_name: user })
+    });
+    const result = await res.json();
+    appendLog(`👤 @${user} entrou na LIVE!`, "#38bdf8", "vote");
+  } catch (err) {
+    appendLog(`Erro ao simular entrada: ${err}`, "#f87171", "all");
+  }
+}
+
+async function simulateFollow() {
+  const user = document.getElementById("commentUser").value.trim() || "Leonardo";
+  try {
+    const res = await fetch("/api/test/inject_follow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: user.toLowerCase(), display_name: user })
+    });
+    const result = await res.json();
+    appendLog(`➕ @${user} começou a seguir a LIVE!`, "#38bdf8", "vote");
+  } catch (err) {
+    appendLog(`Erro ao simular follow: ${err}`, "#f87171", "all");
+  }
+}
+
 async function sendGift(customGift = null) {
   const user = document.getElementById("giftUser").value.trim() || "Leonardo";
   const gift = customGift || document.getElementById("giftSelect").value;

@@ -34,11 +34,21 @@ class CommandParser:
         if not norm:
             return None
 
-        # 1. Checa escolha direta por número (ex: "1", " 3 ", "8")
-        if re.fullmatch(r"[1-8]", norm):
-            hid = int(norm)
-            if hid in self.valid_horse_ids:
-                return {"action": "CHOOSE_HORSE", "horse_id": hid}
+        # 1. Checa menção direta ou flexível ao nome do cavalo (inclusive com letras repetidas ex: relampagooo)
+        padroes_cavalos = [
+            ("relampago", r"\bre+la+m+pa+g+o+\b", 1),
+            ("trovao", r"\btro+va+o+\b", 2),
+            ("furacao", r"\bfu+ra+ca+o+\b", 3),
+            ("raio", r"\bra+i+o+\b", 4),
+            ("pantera", r"\bpa+n+te+ra+\b", 5),
+            ("tita", r"\bti+ta+[no]*\b", 6),
+            ("nevasca", r"\bne+va+s*ca+\b", 7),
+            ("fantasma", r"\bfa+n+ta+s*ma+\b", 8),
+        ]
+        for nome_chave, padrao, hid in padroes_cavalos:
+            if re.search(padrao, norm) or (nome_chave in norm):
+                if hid in self.valid_horse_ids:
+                    return {"action": "CHOOSE_HORSE", "horse_id": hid}
 
         # 2. Checa comando /cavalo <id ou nome>
         cavalo_match = re.search(r"/(?:cavalo|horse)\s+([a-z0-9]+)", norm)
@@ -51,19 +61,33 @@ class CommandParser:
             elif param in HORSE_NAME_MAP:
                 return {"action": "CHOOSE_HORSE", "horse_id": HORSE_NAME_MAP[param]}
 
-        # 3. Checa menção direta ao nome do cavalo
-        for name, hid in HORSE_NAME_MAP.items():
-            # Palavra exata ou início/fim
-            pattern = rf"\b{name}\b"
-            if re.search(pattern, norm):
+        # 3. Dígito único ou repetido do mesmo cavalo (ex: "1", " 3 ", "111", "88", "4444")
+        m_rep = re.fullmatch(r"([1-8])\1*", norm)
+        if m_rep:
+            hid = int(m_rep.group(1))
+            if hid in self.valid_horse_ids:
                 return {"action": "CHOOSE_HORSE", "horse_id": hid}
 
-        # 4. Checa comandos divertidos (/turbo, /chuva, /caos, /sorte)
+        # 4. Hashtag ou prefixos comuns no chat (ex: "#1", "# 2", "n1", "no 3", "num 4", "numero 5", "cavalo 6")
+        m_prefix = re.search(r"(?:#|n[ºo]?|num|numero|cavalo|horse)\s*([1-8])\b", norm)
+        if m_prefix:
+            hid = int(m_prefix.group(1))
+            if hid in self.valid_horse_ids:
+                return {"action": "CHOOSE_HORSE", "horse_id": hid}
+
+        # 5. Dígito isolado de 1 a 8 na frase (ex: "vai 1", "bora 3!", "eu vou de 4", "1 pfv", "ganha 7")
+        m_digito = re.search(r"\b([1-8])\b", norm)
+        if m_digito:
+            hid = int(m_digito.group(1))
+            if hid in self.valid_horse_ids:
+                return {"action": "CHOOSE_HORSE", "horse_id": hid}
+
+        # 6. Checa comandos divertidos (/turbo, /chuva, /caos, /sorte)
         fun_match = re.search(r"/(turbo|chuva|fogo|caos|sorte)", norm)
         if fun_match:
             return {"action": "CHEER", "command": fun_match.group(1)}
 
-        # 5. Frases de torcida ("vai relampago", "bora bora", "torcida", etc)
+        # 7. Frases de torcida genéricas ("bora bora", "torcida", etc)
         if any(w in norm for w in ["vai", "bora", "forca", "corre", "ganha", "cheer"]):
             return {"action": "CHEER", "command": "cheer"}
 

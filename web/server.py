@@ -32,6 +32,10 @@ class LikeRequest(BaseModel):
     display_name: str = ""
     count: int = 5
 
+class JoinRequest(BaseModel):
+    username: str = "espectador"
+    display_name: str = "Espectador"
+
 class ResetViewerRequest(BaseModel):
     viewer_id: int
 
@@ -81,7 +85,7 @@ def create_app(
     app.state.repository = repository
     app.state.manager = manager
     app.state.is_loop_running = False
-    app.state.hud_config = {"scale": 1.0, "top": 195, "left": 28, "showTower": True, "showProgress": True}
+    app.state.hud_config = {"scale": 1.0, "bottom": 24, "showTower": True, "showProgress": True}
 
     # Diretório estático
     static_dir = Path(__file__).resolve().parent / "static"
@@ -152,6 +156,22 @@ def create_app(
             username=req.username or "Torcida",
             display_name=req.display_name or req.username or "Torcida",
             count=req.count
+        )
+        return res
+
+    @app.post("/api/test/inject_join")
+    async def inject_join(req: JoinRequest):
+        res = await mock_adapter.inject_join(
+            username=req.username or "espectador",
+            display_name=req.display_name or req.username or "Espectador",
+        )
+        return res
+
+    @app.post("/api/test/inject_follow")
+    async def inject_follow(req: JoinRequest):
+        res = await mock_adapter.inject_follow(
+            username=req.username or "seguidor",
+            display_name=req.display_name or req.username or "Seguidor",
         )
         return res
 

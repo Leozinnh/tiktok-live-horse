@@ -58,6 +58,24 @@ def test_api_state_and_test_injection(test_app):
     assert res_gift.status_code == 200
     assert res_gift.json()["status"] == "ok"
 
+    # Injeta entrada de espectador de teste
+    join_payload = {
+        "username": "tester_join",
+        "display_name": "Tester Entrou"
+    }
+    res_join = client.post("/api/test/inject_join", json=join_payload)
+    assert res_join.status_code == 200
+    assert res_join.json()["status"] == "ok"
+
+    # Injeta seguidor de teste
+    follow_payload = {
+        "username": "tester_follow",
+        "display_name": "Tester Seguiu"
+    }
+    res_follow = client.post("/api/test/inject_follow", json=follow_payload)
+    assert res_follow.status_code == 200
+    assert res_follow.json()["status"] == "ok"
+
 
 def _boosts_of_horse(client, horse_id: int):
     data = client.get("/api/state").json()

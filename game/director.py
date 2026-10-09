@@ -1,6 +1,8 @@
 import asyncio
+import itertools
 import logging
 import random
+import time
 from enum import Enum
 from typing import Dict, Any, List, Optional
 from config.settings import Settings
@@ -77,8 +79,6 @@ CLIMA_VIRADA_ENTRE = (0.35, 0.70)
 # fala a cada ~5s — a corrida fica narrada do começo ao fim, como numa
 # transmissão de turfe de verdade. Com só três marcos (abertura, disputa e
 # reta), sobravam buracos de 10-12s de silêncio no meio da prova.
-# O de 880m cai a ~4s da linha: é o tempo de gerar o áudio e a voz entrar no
-# ar antes do vencedor cruzar (a fila do narrador é uma só).
 MARCOS_LOCUCAO = (
     (120.0, "abertura"),
     (320.0, "placar"),
@@ -113,6 +113,7 @@ class EventDirector:
         self.race_number: int = 1
         self.current_db_race_id: Optional[int] = None
         self.state_timer: float = 0.0
+        self._notif_id_gen = itertools.count(1)
         
         # Mapa: horse_id -> lista de dicionários de espectadores que escolheram
         self.horse_supporters: Dict[int, List[Dict[str, Any]]] = {h.id: [] for h in self.config.horses}
@@ -137,6 +138,14 @@ class EventDirector:
 
         self._anunciar_votacao_aberta()
 
+    def _adicionar_notificacao(self, notif_dict: Dict[str, Any]) -> None:
+        """Adiciona notificação com ID único e timestamp para o cliente exibir perfeitamente."""
+        notif_dict["id"] = next(self._notif_id_gen)
+        notif_dict["timestamp"] = time.time()
+        self.notifications_queue.append(notif_dict)
+        if len(self.notifications_queue) > 40:
+            self.notifications_queue = self.notifications_queue[-20:]
+
     def _nome_cavalo(self, horse_id: int) -> str:
         return next((h.name for h in self.config.horses if h.id == horse_id), f"#{horse_id}")
 
@@ -158,9 +167,9 @@ class EventDirector:
         )
         if self.narrador is not None:
             self.narrador.anunciar_clima(rotulo, nomes)
-        self.notifications_queue.append({
+        self._adicionar_notificacao({
             "type": "WEATHER",
-            "text": f"{weather.emoji()} Clima da corrida: {rotulo}!"
+            "text": f"Clima da corrida: {rotulo}!"
             + (f" Favorece {', '.join(nomes)}!" if nomes else ""),
             "horse_id": None,
             "badge": weather.emoji(),
@@ -181,9 +190,6 @@ class EventDirector:
         )
         if self.narrador is not None:
             self.narrador.anunciar_votacao(self.race_number)
-        # Daqui a CHAMADA_VOTACAO_INTERVALO sai o primeiro LEMBRETE de voto
-        # (o relógio do estado acabou de zerar nos três pontos que chamam
-        # este método: criação, reset e virada do ranking).
         self._proxima_chamada_votacao = self.state_timer + CHAMADA_VOTACAO_INTERVALO
 
     def _resumo_votos(self) -> str:
@@ -222,7 +228,8 @@ class EventDirector:
             self._empurrao_da_torcida(tiktok_username, display_name, horse_id)
             return True
 
-        if self.state != DirectorState.VOTING:
+        # Aceita votos tanto na fase VOTING quanto na contagem COUNTDOWN
+        if self.state not in (DirectorState.VOTING, DirectorState.COUNTDOWN):
             return False
 
         viewer = await self.repository.get_or_create_viewer(tiktok_username, display_name)
@@ -245,9 +252,9 @@ class EventDirector:
         # Atualiza contagem na engine
         self.engine.set_supporter_count(horse_id, len(self.horse_supporters[horse_id]))
         
-        # Adiciona notificação para o HUD
+        # Adiciona notificação para o HUD com ID único
         h_name = next(h.name for h in self.config.horses if h.id == horse_id)
-        self.notifications_queue.append({
+        self._adicionar_notificacao({
             "type": "CHOICE",
             "text": f"{viewer['display_name']} escolheu {h_name}!",
             "horse_id": horse_id,
@@ -276,7 +283,7 @@ class EventDirector:
             gift_emoji="💬",
             donor_name=nome
         )
-        self.notifications_queue.append({
+        self._adicionar_notificacao({
             "type": "CHEER",
             "text": f"{nome} torce pelo {h_name}!",
             "horse_id": horse_id,
@@ -360,7 +367,7 @@ class EventDirector:
                 viewer["display_name"], gift_count, gift_name, h_name
             )
 
-        self.notifications_queue.append({
+        self._adicionar_notificacao({
             "type": "GIFT",
             "is_legendary": is_legendary,
             "legendary_kind": legendary_kind,
@@ -380,8 +387,23 @@ class EventDirector:
         Não grava nada no banco: entrada é presença, não voto — criar linha
         de viewer para cada chegada encheria o ranking de gente sem XP.
         """
+        nome_visivel = display_name or tiktok_username or "espectador"
+        logger.info("👤 %s (@%s) entrou na LIVE!", nome_visivel, tiktok_username or "")
         if self.narrador is not None:
-            self.narrador.anunciar_entrada(display_name or tiktok_username)
+            self.narrador.anunciar_entrada(display_name, fallback=tiktok_username)
+
+    async def handle_viewer_follow(self, tiktok_username: str, display_name: str) -> None:
+        """Quem seguiu ganha agradecimento na voz e notificação na tela."""
+        nome = display_name or tiktok_username or "novo seguidor"
+        logger.info("➕ %s (@%s) começou a seguir a LIVE!", nome, tiktok_username or "")
+        self._adicionar_notificacao({
+            "type": "FOLLOW",
+            "badge": "➕",
+            "text": f"{nome} começou a seguir a live!",
+            "horse_id": None,
+        })
+        if self.narrador is not None:
+            self.narrador.anunciar_follow(display_name, fallback=tiktok_username)
 
     async def handle_cheer_command(self, tiktok_username: str, display_name: str) -> None:
         viewer = await self.repository.get_or_create_viewer(tiktok_username, display_name)
@@ -430,6 +452,18 @@ class EventDirector:
             f"empurrão no #{chosen_horse_id} {self._nome_cavalo(chosen_horse_id)} ({power:.2f}x)"
         )
 
+        # Se mandou mais de 20 curtidas, o narrador agradece na voz e exibe toast
+        if count >= 20:
+            nome_curtiu = display_name or tiktok_username or "família"
+            self._adicionar_notificacao({
+                "type": "LIKE",
+                "badge": "❤️",
+                "text": f"{nome_curtiu} mandou {count} curtidas na live!",
+                "horse_id": chosen_horse_id,
+            })
+            if self.narrador is not None:
+                self.narrador.anunciar_curtidas(display_name, count, fallback=tiktok_username)
+
     async def skip_to_countdown(self) -> None:
         """Pula o tempo de votação e inicia a contagem de largada imediatamente."""
         logger.info(
@@ -466,6 +500,7 @@ class EventDirector:
         """
         if self.narrador is None:
             return
+        self.narrador.interromper_locucao()
         descartadas = self.narrador.descartar_locucao()
         if descartadas:
             logger.info(
@@ -552,9 +587,9 @@ class EventDirector:
         logger.info(f"🌦️ O tempo virou na corrida #{self.race_number}: {rotulo}.")
         if self.narrador is not None:
             self.narrador.anunciar_virada_do_clima(rotulo, nomes)
-        self.notifications_queue.append({
+        self._adicionar_notificacao({
             "type": "WEATHER_CHANGE",
-            "text": f"{weather.emoji()} O tempo virou: {rotulo}!"
+            "text": f"O tempo virou: {rotulo}!"
             + (f" Favorece {', '.join(nomes)}!" if nomes else ""),
             "horse_id": None,
             "badge": weather.emoji(),
@@ -598,8 +633,6 @@ class EventDirector:
         self.state_timer += dt
         
         if self.state == DirectorState.VOTING:
-            # Lembrete de voto: a votação é a fase em que o público precisa
-            # de chamada — uma abertura e 30s de silêncio não puxam ninguém.
             if (
                 self.state_timer >= self._proxima_chamada_votacao
                 and self.narrador is not None
@@ -749,10 +782,10 @@ class EventDirector:
     def get_state_payload(self) -> Dict[str, Any]:
         engine_snap = self.engine.get_snapshot()
         
-        # Coleta notificações recentes (máx 3)
-        recent_notifications = self.notifications_queue[-3:] if self.notifications_queue else []
-        if len(self.notifications_queue) > 20:
-            self.notifications_queue = self.notifications_queue[-10:]
+        # Coleta notificações recentes (até 10 para nunca perder votos em rajada)
+        recent_notifications = self.notifications_queue[-10:] if self.notifications_queue else []
+        if len(self.notifications_queue) > 40:
+            self.notifications_queue = self.notifications_queue[-20:]
             
         remaining_time = 0.0
         if self.state == DirectorState.VOTING:

@@ -254,7 +254,7 @@ class HorseVisualManager {
     };
   }
 
-  update(horsesData, dt) {
+  update(horsesData, dt, directorState = "", winnerHorseId = null) {
     if (!horsesData || !Array.isArray(horsesData)) return;
 
     for (let i = 0; i < horsesData.length; i++) {
@@ -286,6 +286,9 @@ class HorseVisualManager {
       // Avanço cinemático contínuo por frame (Dead Reckoning com velocidade vetorial):
       // Garante movimento 60-144 FPS liso e sedoso, sem engasgos de rede
       const speed = hData.finished ? 0.0 : (hData.speed || 0.0);
+      const isWinner = (winnerHorseId !== null && hData.id === winnerHorseId) || (hData.finished && hData.position === 1);
+      const isPodiumPhase = (directorState === "PODIUM" || directorState === "XP_REWARDS" || directorState === "LEADERBOARD");
+
       if (speed > 0.5) {
         const vx = speed * Math.sin(horseObj.group.rotation.y);
         const vz = speed * Math.cos(horseObj.group.rotation.y);
@@ -343,6 +346,43 @@ class HorseVisualManager {
           horseObj.wings.right.rotation.z = -(0.22 + flap * 0.45);
           horseObj.wings.right.rotation.y = -(0.12 + flapCos * 0.18);
           horseObj.wings.right.rotation.x = -0.15 + flap * 0.1;
+        }
+      } else if (isWinner && isPodiumPhase) {
+        // CAVALO CAMPEÃO EMPINANDO TRIUNFANTE NAS 2 PATAS TRASEIRAS (REARING HORSE)
+        const rearT = (Date.now() * 0.0035) + horseObj.id;
+        const rearWave = Math.sin(rearT * 2.8);
+
+        // Tronco empina para cima a ~35º e eleva-se no ar sustentado pelas patas traseiras
+        horseObj.body.position.y = 3.65 + Math.sin(rearT * 1.5) * 0.15;
+        horseObj.body.rotation.x = -0.58 + rearWave * 0.06;
+        horseObj.neck.rotation.x = -Math.PI / 10 + Math.cos(rearT * 2.8) * 0.1;
+
+        // Patas dianteiras no ar pedalando com orgulho de vencedor
+        horseObj.legs.frontL.upper.rotation.x = -1.15 + rearWave * 0.35;
+        horseObj.legs.frontL.lower.rotation.x = 1.35 + Math.cos(rearT * 2.8) * 0.3;
+        horseObj.legs.frontR.upper.rotation.x = -0.9 + Math.cos(rearT * 2.8) * 0.35;
+        horseObj.legs.frontR.lower.rotation.x = 1.2 + rearWave * 0.3;
+
+        // Patas traseiras plantadas firmemente no chão suportando o corpo empinado
+        horseObj.legs.backL.upper.rotation.x = 0.52;
+        horseObj.legs.backL.lower.rotation.x = -0.45;
+        horseObj.legs.backR.upper.rotation.x = 0.48;
+        horseObj.legs.backR.lower.rotation.x = -0.40;
+
+        // Se tiver asas (Pégaso), abre majestosamente para o céu
+        if (horseObj.wings) {
+          horseObj.wings.left.rotation.z = 0.65 + Math.sin(rearT * 2.0) * 0.18;
+          horseObj.wings.left.rotation.y = 0.2;
+          horseObj.wings.left.rotation.x = -0.25;
+
+          horseObj.wings.right.rotation.z = -(0.65 + Math.sin(rearT * 2.0) * 0.18);
+          horseObj.wings.right.rotation.y = -0.2;
+          horseObj.wings.right.rotation.x = -0.25;
+        }
+
+        // Brasas e brilhos dourados de vitória caindo em volta do campeão
+        if (Math.random() < 0.35) {
+          this.particles.emitVictoryGlow(horseObj.group.position, hData.color_hex);
         }
       } else {
         // Em repouso nos boxes ou parado na linha de chegada (parado naturalmente com as 4 patas no chão)

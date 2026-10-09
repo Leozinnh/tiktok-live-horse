@@ -70,9 +70,12 @@ class GameClient {
         this.audio.playStartHorn();
       } else if (curState === "PODIUM") {
         this.audio.playVictoryFanfare();
-        const winnerId = state.engine.winner_horse_id || 1;
+        this.audio.playHorseNeigh();
+        const winnerId = (state.engine && state.engine.winner_horse_id) || 1;
         const winPos = this.horseManager.getHorsePosition(winnerId);
-        this.particles.triggerConfetti(winPos);
+        this.particles.triggerVictoryFireworks(winPos);
+      } else if (curState === "VOTING") {
+        this.particles.stopVictoryFireworks();
       }
       this.lastState = curState;
     }
@@ -97,10 +100,10 @@ class GameClient {
         const horses = engineData.horses || [];
         const directorState = this.latestServerState.director_state || "READY";
 
-        // 1. Atualizar cavalos e animação de galope
-        this.horseManager.update(horses, dt);
+        // 1. Atualizar cavalos e animação de galope / empinar do campeão
+        this.horseManager.update(horses, dt, directorState, engineData.winner_horse_id);
 
-        // 2. Atualizar partículas (poeira, faíscas, chuva, confetes)
+        // 2. Atualizar partículas (poeira, faíscas, chuva, confetes, fogos)
         this.particles.update(dt, engineData.weather || "CLEAR");
 
         // 3. Atualizar cena, arquibancadas e portão de largada

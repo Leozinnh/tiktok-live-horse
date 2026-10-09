@@ -27,6 +27,14 @@ class ParticleSystem {
     this.confettiParticles = [];
     this.initConfetti();
 
+    // 6. Fogos de Artifício Triunfantes do Campeão
+    this.fireworkSparks = [];
+    this.fireworkPoolSize = 160;
+    this.initFireworks();
+    this.fireworksTimer = 0;
+    this.victoryFireworksActive = false;
+    this.victoryOrigin = new THREE.Vector3();
+
     // Screen Shake Trigger
     this.screenShakeIntensity = 0.0;
   }
@@ -283,6 +291,91 @@ class ParticleSystem {
     });
   }
 
+  initFireworks() {
+    const geo = new THREE.SphereGeometry(0.24, 6, 6);
+    const colors = [0xfbbf24, 0xef4444, 0x10b981, 0x06b6d4, 0xa855f7, 0xf43f5e];
+    for (let i = 0; i < this.fireworkPoolSize; i++) {
+      const col = colors[i % colors.length];
+      const mat = new THREE.MeshBasicMaterial({
+        color: col,
+        transparent: true,
+        opacity: 0.0,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.visible = false;
+      this.scene.add(mesh);
+      this.fireworkSparks.push({
+        mesh: mesh,
+        vx: 0, vy: 0, vz: 0,
+        life: 0,
+        maxLife: 1.8,
+        color: col
+      });
+    }
+  }
+
+  triggerVictoryFireworks(originPos) {
+    this.victoryFireworksActive = true;
+    this.victoryOrigin.copy(originPos);
+    this.fireworksTimer = 0.2; // Primeiro estouro imediato!
+    this.triggerConfetti(originPos);
+  }
+
+  stopVictoryFireworks() {
+    this.victoryFireworksActive = false;
+  }
+
+  emitVictoryGlow(pos, hexColor = "#fbbf24") {
+    // Pequenas brasas brilhantes flutuando ao redor do cavalo campeão
+    const ember = this.mythicEmbers.find((e) => !e.mesh.visible);
+    if (!ember) return;
+    ember.mesh.position.set(
+      pos.x + (Math.random() - 0.5) * 2.2,
+      pos.y + 0.3 + Math.random() * 2.5,
+      pos.z + (Math.random() - 0.5) * 2.2
+    );
+    ember.mesh.material.color.set(hexColor);
+    ember.mesh.visible = true;
+    ember.life = 0.8;
+    ember.vx = (Math.random() - 0.5) * 1.5;
+    ember.vy = 1.5 + Math.random() * 2.5;
+    ember.vz = (Math.random() - 0.5) * 1.5;
+    ember.mesh.material.opacity = 0.9;
+  }
+
+  launchFireworkBurst(originPos) {
+    const burstX = originPos.x + (Math.random() - 0.5) * 26.0;
+    const burstY = 22.0 + Math.random() * 18.0;
+    const burstZ = originPos.z + (Math.random() - 0.5) * 26.0;
+    const colors = [0xfbbf24, 0xef4444, 0x10b981, 0x06b6d4, 0xa855f7, 0xf43f5e];
+    const burstColor = colors[Math.floor(Math.random() * colors.length)];
+
+    let spawned = 0;
+    for (let i = 0; i < this.fireworkSparks.length; i++) {
+      const spark = this.fireworkSparks[i];
+      if (!spark.mesh.visible && spawned < 28) {
+        spark.mesh.position.set(burstX, burstY, burstZ);
+        spark.mesh.material.color.setHex(burstColor);
+        spark.mesh.visible = true;
+        spark.mesh.material.opacity = 1.0;
+        spark.life = 1.3 + Math.random() * 0.6;
+        spark.maxLife = spark.life;
+
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(Math.random() * 2 - 1);
+        const speed = 6.0 + Math.random() * 14.0;
+        spark.vx = speed * Math.sin(phi) * Math.cos(theta);
+        spark.vy = speed * Math.cos(phi) + 2.0;
+        spark.vz = speed * Math.sin(phi) * Math.sin(theta);
+        spawned++;
+      }
+    }
+
+    if (window.gameClient && window.gameClient.audio) {
+      window.gameClient.audio.playFireworkBurst();
+    }
+  }
+
   update(dt, weatherType) {
     // Decaimento suave do screen shake
     if (this.screenShakeIntensity > 0) {
@@ -400,6 +493,35 @@ class ParticleSystem {
           c.mesh.rotation.x += c.rotSpeed * dt;
           c.mesh.rotation.y += c.rotSpeed * dt;
           c.mesh.material.opacity = Math.min(1.0, c.life / 1.5);
+        }
+      }
+    }
+
+    // 8. Atualizar Fogos de Artifício do Campeão (Lança estouros celestes periódicos)
+    if (this.victoryFireworksActive) {
+      this.fireworksTimer -= dt;
+      if (this.fireworksTimer <= 0) {
+        this.launchFireworkBurst(this.victoryOrigin);
+        this.fireworksTimer = 0.7 + Math.random() * 0.45;
+      }
+    }
+
+    for (let i = 0; i < this.fireworkSparks.length; i++) {
+      const s = this.fireworkSparks[i];
+      if (s.mesh.visible) {
+        s.life -= dt;
+        if (s.life <= 0) {
+          s.mesh.visible = false;
+        } else {
+          s.vy -= 9.8 * dt; // gravidade
+          s.vx *= 0.96; // resistência do ar
+          s.vz *= 0.96;
+          s.mesh.position.x += s.vx * dt;
+          s.mesh.position.y += s.vy * dt;
+          s.mesh.position.z += s.vz * dt;
+          const prog = s.life / s.maxLife;
+          s.mesh.material.opacity = Math.min(1.0, prog * 1.5);
+          s.mesh.scale.setScalar(0.7 + prog * 0.5);
         }
       }
     }

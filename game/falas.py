@@ -565,3 +565,96 @@ CLIMA_VIRADA = [
     "Atualizando o tempo! Agora é {clima}! A corrida continua!{quem}",
     "Isso muda a corrida! O tempo virou pra {clima}!{quem}",
 ]
+
+# ---------------------------------------------------------------------------
+# Seguidor e Curtidas em Rajada (>= 20 curtidas):
+# ---------------------------------------------------------------------------
+SEGUIDOR = [
+    # --- Originais ---
+    "Mais um seguidor na família! Muito obrigado, {nome}!",
+    "Seguiu a live! Seja muito bem-vindo, {nome}! Tamo junto!",
+    "Olha aí, o {nome} começou a seguir a live! Valeu demais!",
+    "Gratidão por seguir, {nome}! Bora de corrida!",
+    "A família cresceu! Valeu pelo follow, {nome}!",
+
+    # --- Empolgadas ---
+    "Aeee! {nome} seguiu a live! Seja bem-vindo à família!",
+    "Chegou mais um pra torcida! Valeu por seguir, {nome}!",
+    "Follow novo na área! Obrigado, {nome}! Bora torcer!",
+    "Uhuu! {nome} entrou pra família! Gratidão pelo follow!",
+    "É isso! {nome} seguiu a live! Seja muito bem-vindo!",
+    "A torcida cresceu! Valeu por seguir, {nome}!",
+    "Olha o follow! {nome} agora é da família! Valeu demais!",
+    "Boa, {nome}! Seguiu a live e entrou pra torcida! Obrigado!",
+
+    # --- Carinhosas ---
+    "Que alegria, {nome}! Obrigado por seguir a live!",
+    "Muito obrigado por seguir, {nome}! Aqui você sempre tem lugar!",
+    "{nome}, gratidão por fazer parte da família! Valeu pelo follow!",
+    "Que carinho seguir a live, {nome}! Seja muito bem-vindo!",
+    "Você é parte da família agora, {nome}! Obrigado pelo follow!",
+    "Que bom ter você por aqui, {nome}! Valeu por seguir!",
+    "Obrigado pela confiança, {nome}! Seguiu e já é da família!",
+    "{nome}, fica à vontade! Obrigado por seguir a live!",
+
+    # --- Divertidas ---
+    "Alô, alô! {nome} apertou o botão de seguir! Valeu!",
+    "Mais um craque no time! Valeu por seguir, {nome}!",
+    "O {nome} deu o follow e a live agradece! Bem-vindo!",
+    "Seguiu, entrou! Agora o {nome} é da família! Obrigado!",
+    "Chama a banda! {nome} seguiu a live! Valeu demais!",
+    "Mais um na arquibancada fixa! Obrigado, {nome}!",
+    "O {nome} não perde corrida! Seguiu a live! Valeu!",
+
+    # --- Curtas ---
+    "Valeu por seguir, {nome}!",
+    "Seguiu! Obrigado, {nome}!",
+    "Bem-vindo à família, {nome}!",
+    "Follow do {nome}! Gratidão!",
+    "Obrigado pelo follow, {nome}!",
+]
+
+CURTIDAS = [
+    # --- Originais ---
+    "Valeu pelas {quantidade} curtidas, {nome}! O dedo tá voando!",
+    "Olha a chuva de curtidas do {nome}! Muito obrigado pelo carinho!",
+    "Mais de vinte curtidas na tela! O {nome} tá fortalecendo a live!",
+    "Metralhadora de curtidas do {nome}! Gratidão demais, família!",
+
+    # --- Empolgadas ---
+    "Que rajada de curtidas! Valeu, {nome}! O dedo não para!",
+    "Explodiu de curtida! {nome} tá com tudo! Muito obrigado!",
+    "Chuva de coração! {nome} mandou {quantidade} curtidas! Valeu demais!",
+    "Olha o carinho! {nome} mandou {quantidade} curtidas de uma vez!",
+    "É curtida que não acaba! Valeu, {nome}! Gratidão total!",
+    "Que dedo rápido! {nome} mandou {quantidade} curtidas! Obrigado!",
+    "A tela encheu de coração! Valeu, {nome}!",
+    "{nome} mandou ver nas curtidas! Muito obrigado, família!",
+
+    # --- Carinhosas ---
+    "Que carinho, {nome}! Obrigado por tantas curtidas!",
+    "Muito obrigado pelas curtidas, {nome}! Isso ajuda demais a live!",
+    "{nome}, gratidão por cada curtida! Você é demais!",
+    "Que apoio lindo, {nome}! Valeu pelas {quantidade} curtidas!",
+    "Cada curtida conta! Obrigado, {nome}! Você é parte da torcida!",
+    "Obrigado por fortalecer a live, {nome}! Que carinho!",
+    "Isso aquece o coração! Valeu pelas curtidas, {nome}!",
+    "{nome}, seu carinho chegou! Valeu pelas curtidas, família!",
+
+    # --- Divertidas ---
+    "Tá com o dedo de ouro, {nome}! {quantidade} curtidas! Valeu!",
+    "O dedo do {nome} tá pegando fogo! Muito obrigado pelas curtidas!",
+    "Cuidado, {nome}! Assim a tela quebra de tanta curtida! Valeu!",
+    "Tapete vermelho pro {nome}! Mandou {quantidade} curtidas de uma vez!",
+    "Alô, alô! O {nome} tá curtindo sem parar! Gratidão!",
+    "Que velocidade! {nome} curtiu mais rápido que os cavalos!",
+    "O {nome} treinou o dedo! Valeu pelas curtidas, família!",
+    "Aplausos pro {nome}! Que rajada de curtidas! Obrigado!",
+
+    # --- Curtas ---
+    "Valeu pelas curtidas, {nome}!",
+    "Que rajada, {nome}! Obrigado!",
+    "{nome} mandou {quantidade} curtidas! Valeu!",
+    "Gratidão, {nome}! Chuva de curtidas!",
+    "Show, {nome}! Obrigado pelas curtidas!",
+]

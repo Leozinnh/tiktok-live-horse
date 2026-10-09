@@ -24,8 +24,14 @@ class FakeNarrador:
     def anunciar_presente(self, nome, quantidade, presente, cavalo):
         self.chamadas.append(("presente", nome, quantidade, presente, cavalo))
 
-    def anunciar_entrada(self, nome):
+    def anunciar_entrada(self, nome, fallback=""):
         self.chamadas.append(("entrada", nome))
+
+    def anunciar_follow(self, nome, fallback=""):
+        self.chamadas.append(("follow", nome))
+
+    def anunciar_curtidas(self, nome, quantidade, fallback=""):
+        self.chamadas.append(("curtidas", nome, quantidade))
 
     def anunciar_abertura(self, lider, segundo):
         self.chamadas.append(("abertura", lider, segundo))

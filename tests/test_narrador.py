@@ -514,3 +514,44 @@ def test_interromper_locucao_ativa_fade_out():
         n._categoria_atual = "vencedor"
     n.interromper_locucao()
     assert n._fade_out_solicitado.is_set() is False
+
+
+def test_limpeza_de_emojis_na_fala():
+    """Garante que emojis como 🇧🇷✋🏽😛🤚🏽 são removidos e a voz fala apenas o nome limpo."""
+    n = _narrador(boas_vindas=["Chegou {nome}!"])
+
+    # 1. Nome com emojis variados (bandeira, mãos, rostos)
+    fala = n.texto_de_entrada("caioba🇧🇷✋🏽😛🤚🏽", "caioba338")
+    assert fala == "Chegou caioba!"
+    assert "🇧🇷" not in fala
+    assert "✋" not in fala
+
+    # 2. Nome que é SÓ emoji: usa o username como fallback
+    fala_so_emoji = n.texto_de_entrada("👑🔥💎", "pedro_gamer")
+    assert fala_so_emoji == "Chegou pedrogamer!"
+
+    # 3. Presente enviado por usuário com emojis
+    fala_presente = n.texto_do_presente("caioba🇧🇷✋🏽😛🤚🏽", 1, "Rose", "Relâmpago")
+    assert "caioba" in fala_presente
+    assert "🇧🇷" not in fala_presente
+
+    # 4. _normalizar_para_fala remove qualquer resquício de emoji
+    limpo = Narrador._normalizar_para_fala("Bem-vindo caioba🇧🇷✋🏽😛🤚🏽!")
+    assert limpo == "Bem-vindo caioba!"
+
+
+def test_anunciar_follow_e_curtidas():
+    """Garante que novo seguidor e rajadas de 20+ curtidas são agradecidos na voz."""
+    n = _narrador()
+
+    # 1. Seguidor com emojis
+    follow = n.anunciar_follow("caioba🇧🇷✋🏽😛🤚🏽", fallback="caioba338")
+    assert follow is not None
+    assert "caioba" in follow
+    assert "🇧🇷" not in follow
+
+    # 2. Rajada de 25 curtidas
+    curtidas = n.anunciar_curtidas("ana_clara", 25)
+    assert curtidas is not None
+    assert "anaclara" in curtidas.lower()
+    assert "curtida" in curtidas.lower()

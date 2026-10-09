@@ -383,6 +383,20 @@ Para eliminar qualquer sensação de travamento (*stuttering*) ou engasgos decor
   $$z_{\text{novo}} = z + v \cdot \cos(\text{rot}_y) \cdot dt$$
 * **Amortecimento Ponderado por Tempo Real:** As coordenadas do servidor são integradas suavemente com fator $\min(1.0, dt \times 9.0)$, absorvendo imperceptivelmente qualquer atraso ou jitter de rede sem desacelerações repentinas.
 * **Resultado:** Animação de corrida sedosa e ultra-fluida a 60 FPS estáveis (e até 120/144 FPS em monitores de alta taxa de atualização).
+
+### 7.5 Celebração Triunfal do Campeão (Cavalo Empinando, Relincho e Fogos 3D)
+Ao término da prova, a tela de Pódio ganha um espetáculo visual cinematográfico:
+* **Cavalo Campeão Empinando nas 2 Patas Traseiras (*Rearing Horse*):**
+  * O tronco do vencedor ergue-se no ar a **~35º de inclinação**, elevando o corpo para **3.65m de altura**.
+  * As duas patas dianteiras **pedalam vitoriosamente no ar** com joelhos articulados em movimentos orgânicos alternados.
+  * As patas traseiras ficam **firmemente plantadas no solo do hipódromo**, suportando o peso do corpo empinado.
+  * Se o campeão for o Pégaso, suas **três camadas de asas de penas se abrem majestosamente** para o céu.
+* **Relincho Triunfal Procedural:** O sintetizador de áudio sintetiza em tempo real um relincho realista com varredura harmônica (650Hz a 1.450Hz) e vibrato laríngeo a 8Hz com formante passa-faixa.
+* **Show de Fogos de Artifício 3D (*Victory Fireworks*):**
+  * Foguetes pirotécnicos são disparados continuamente a cada 0.7s - 1.1s no entorno do vencedor.
+  * Explodem em alturas de **22m a 40m** no céu da arena em esferas radiantes de 30+ partículas em 6 cores esportivas (dourado `#fbbf24`, esmeralda `#10b981`, ciano `#06b6d4`, magenta `#f43f5e`, roxo `#a855f7` e escarlate).
+  * Físicas de gravidade parabólica, resistência aerodinâmica e decaimento luminoso, acompanhados de som de estouro e chuva de confetes.
+* **Câmera Heroica em Contra-Plongée:** O diretor de câmeras aproxima a tomada para **14.5m** em órbita suave de 360º, apontando de baixo para cima para realçar a magnitude e a glória do animal campeão.
 * **Torre dos Comissários e Cabine de Transmissão (*Stewards Tower*):** Edifício de observação envidraçado de 2 andares perto da linha de chegada, com base de madeira nobre, janelões panorâmicos em vidro azul espelhado, telhado colonial pontudo e mastro de antena esportiva.
 * **Tendas Brancas de Paddock VIP & Hospitality:** 3 gazebos brancos de evento com cúpulas cônicas, colunas brancas e mesas redondas posicionadas na área de hospitalidade à beira da reta.
 * **Cais de Madeira no Lago Ornamental:** Deck rústico de madeira com postes de amarração náuticos avançando sobre a água límpida do lago central.
@@ -434,26 +448,30 @@ A interface do usuário foi desenhada no padrão das transmissões da **Fórmula
 │ [───1───2──────3─────────4──5──────6──7────8────────🏁] │  ← Régua de Progresso
 ├────────────────────────────────────────────────────────┤
 │                                                        │
-│ ┌───────────────┐                                      │
-│ │ 🏁 POSIÇÕES   │                                      │
-│ │ 1. #1 RELÂM.  │                                      │
-│ │ 2. #2 TROVÃO  │                                      │
-│ │ 3. #4 RAIO ⚡ │           ÁREA 3D LIVRE              │
-│ │ 4. #3 FURACÃO │         (Mais de 85% da tela         │
-│ │ 5. #5 PANTERA │            desobstruída)             │
-│ │ 6. #7 NEVASCA │                                      │
-│ │ 7. #6 TITÃ    │                                      │
-│ │ 8. #8 FANTAS. │                                      │
-│ └───────────────┘                                      │
-│  (Torre Lateral                                        │
-│   Compacta F1)                                         │
+│                                                        │
+│                     ÁREA 3D LIVRE                      │
+│             (Toda a pista, cavalos e cenário           │
+│                 100% desobstruídos!)                   │
 │                                                        │
 │                                                        │
-│                                                        │
-│                     [ CENTRO / MODAIS ]                │
-│             (Votação, Contagem, Pódio, XP)             │
+├────────────────────────────────────────────────────────┤
+│ 🏁 CLASSIFICAÇÃO AO VIVO (Grid 4x2 no Rodapé)          │
+│ [1º #1 RELÂMP. 450m] [2º #2 TROVÃO 442m] ... [8º #8]   │  ← Footer Ticker
 └────────────────────────────────────────────────────────┘
 ```
+
+* **Classificação no Rodapé (Footer):** Em vez de uma torre lateral vertical cobrindo a pista onde os cavalos correm, a classificação ao vivo foi reposicionada no **rodapé da tela** (`bottom: 24px`) em um grid de **2 colunas amplas por 4 linhas**.
+  * **Exibição Estritamente em Corrida (`RACING`):** O HUD de posições fica **completamente oculto durante a votação (`VOTING`), contagem (`COUNTDOWN`), pódio e ranking**, evitando qualquer sobreposição sobre a cartela de escolha de cavalos. Ele surge automaticamente no momento da largada e desaparece ao cruzar a chegada.
+  * **Nomes 100% Visíveis:** As colunas amplas com ~500px cada garantem que todos os nomes dos animais (`RELÂMPAGO`, `FANTASMA`, `FURACÃO`) sejam exibidos por inteiro sem cortes nem reticências.
+* **Parser Inteligente e Flexível do Chat do TikTok (`tiktok/parser.py`):**
+  * Aceita dígitos simples (`1`, `2`...), dígitos com hashtag (`#1`, `# 2`), dígitos repetidos em spam (`111`, `888`), prefixos comuns (`cavalo 3`, `no 4`, `num 5`) e números inseridos no meio de frases (`vai 1`, `bora 3!`, `eu vou de 7`).
+  * Reconhece nomes de cavalos mesmo com letras e vogais repetidas pelo público empolgado da live (ex: `relampagooo`, `trovaooo`, `furacaooo`).
+* **Notificações Toast Sem Emojis Duplicados:** As notificações de clima exibem exatamente 1 emoji no distintivo lateral, eliminando o emoji repetido no corpo do texto.
+* **Agradecimento por Seguir e Rajada de 20+ Curtidas:**
+  * **Novo Seguidor (`FollowEvent`):** O narrador agradece imediatamente na voz com áudio ducking e exibe um toast com distintivo `➕` na tela.
+  * **20+ Curtidas (`LikeEvent`):** Ao atingir uma rajada de 20 ou mais curtidas seguidas, o narrador agradece o esforço do espectador na voz e exibe toast `❤️` na tela.
+* **Prioridade Imediata para Presentes (Zero Delay):** Quando um apoiador envia uma Rosa ou outro presente, o narrador corta instantaneamente qualquer locução antiga de pista que estiver tocando e reproduz o agradecimento em **2 a 3 segundos** (em vez de esperar 1 minuto na fila).
+* **Purga Automática de Áudio de Prova Anterior:** Ao término da corrida e no início da nova prova, todas as frases de corrida pendentes são descartadas e o áudio da prova anterior é interrompido via MCI, impedindo qualquer vazamento de áudio atrasado.
 
 ### A Top Bar ("CORRIDA #N") em detalhe:
 * **Badge da corrida:** troféu em chip dourado + rótulo `CORRIDA` + número `#N` com gradiente. Quando uma corrida NOVA abre, o número salta na tela (flash) — o olho do espectador acha o marcador sozinho.
@@ -485,6 +503,7 @@ Acesse em qualquer navegador em:
    * 🏁 **Finalizar Corrida:** Força o encerramento da corrida e avança para o pódio imediatamente.
    * 🔄 **Próxima Corrida:** Reinicia o ciclo e prepara a próxima prova.
 2. **Simulação de Comentários & Votos:** Digite ou clique nos botões rápidos (#1 ao #8, `/turbo`, etc.).
+   * **Simulação de Entrada de Espectador:** Botão `👤 Simular Entrada na LIVE (Oi da Voz)` (`POST /api/test/inject_join`) para testar o anúncio sonoro de boas-vindas com ducking de áudio e log no terminal.
 3. **Simulação de Presentes:** Dispare Rosa, Café, Donut, Boné, Leão (+2000 XP), Galáxia (+1500 XP) ou Dragão (+1800 XP).
 4. **Simulação de Curtidas:** Rajadas de 5, 10 ou 30 curtidas de uma vez (`POST /api/test/inject_like`) para ver o empurrão leve da torcida.
 5. **Rajada de Público:** Simule 20 ou 50 espectadores comentando e votando de uma vez só.
@@ -583,6 +602,12 @@ Quando alguém entra na live durante a narração:
 * O som atual que estiver tocando (seja narração da corrida ou agradecimento de presente) tem seu volume **reduzido pela metade (50%, volume 500)**.
 * A voz de boas-vindas toca em **volume máximo (100%, volume 1000)** com destaque sonoro imediato.
 * Assim que a saudação termina, o volume do áudio principal é **automaticamente restaurado para o volume original (1000)**.
+
+### 14.3 Higienização Fonética de Nomes e Remoção de Emojis na Fala
+Usuários do TikTok frequentemente possuem emojis em seus nomes de exibição (ex.: `caioba🇧🇷✋🏽😛🤚🏽`). Sem higienização, sintetizadores neurais leem literalmente o nome descritivo de cada emoji em português (*"caioba bandeira do brasil mão levantada rosto com língua..."*).
+* **Filtro Fonético de Nomes (`_limpar_nome_para_fala`):** Remove todos os emojis, símbolos e caracteres pictográficos, mantendo exclusivamente letras (com acentos), números e espaços (`caioba🇧🇷✋🏽😛🤚🏽` $\to$ `caioba`).
+* **Fallback Inteligente:** Se o nome de exibição do usuário for composto exclusivamente por emojis (ex.: `🔥💎👑`), o sistema utiliza automaticamente o seu `@username` limpo (ex.: `pedro_gamer` $\to$ `pedrogamer`), evitando saudações vazias ou genéricas.
+* **Filtro Geral de Síntese:** No método `_normalizar_para_fala`, qualquer resquício de emoji ou símbolo que chegue ao texto final é eliminado antes de chamar o `edge-tts`, garantindo uma locução 100% natural e humana.
 
 ### A locução ao vivo (o locutor da corrida)
 
