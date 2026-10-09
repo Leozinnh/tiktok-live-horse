@@ -114,31 +114,30 @@ class CinematicCameraDirector {
       }
 
       case "CAM_CHASE":
-        // Câmera guindaste/aérea esportiva: bem afastada para trás e para cima
-        // Enquadra perfeitamente todos os 8 cavalos, distâncias e ultrapassagens
+        // Câmera perseguição esportiva: ancorada no cavalo líder (nunca perde o foco mesmo em disparadas com Galáxia!)
         this.targetPos.set(
-          focusX - fwdX * 58.0 + normX * 18.0,
-          focusY + 30.0,
-          focusZ - fwdZ * 58.0 + normZ * 18.0
+          leaderPos.x - fwdX * 48.0 + normX * 16.0,
+          leaderPos.y + 26.0,
+          leaderPos.z - fwdZ * 48.0 + normZ * 16.0
         );
         this.targetLookAt.set(
-          focusX + fwdX * 6.0,
-          focusY + 2.0,
-          focusZ + fwdZ * 6.0
+          leaderPos.x + fwdX * 5.0,
+          leaderPos.y + 2.0,
+          leaderPos.z + fwdZ * 5.0
         );
         break;
 
       case "CAM_SIDE":
-        // Visão lateral de transmissão de TV (estilo helicóptero esportivo)
+        // Visão lateral de transmissão de TV (estilo helicóptero esportivo acompanhando o líder)
         this.targetPos.set(
-          focusX - fwdX * 14.0 + normX * 52.0,
-          focusY + 32.0,
-          focusZ - fwdZ * 14.0 + normZ * 52.0
+          leaderPos.x - fwdX * 12.0 + normX * 46.0,
+          leaderPos.y + 28.0,
+          leaderPos.z - fwdZ * 12.0 + normZ * 46.0
         );
         this.targetLookAt.set(
-          focusX + fwdX * 4.0,
-          focusY + 2.0,
-          focusZ + fwdZ * 4.0
+          leaderPos.x + fwdX * 4.0,
+          leaderPos.y + 2.0,
+          leaderPos.z + fwdZ * 4.0
         );
         break;
 
@@ -190,3 +189,5 @@ class CinematicCameraDirector {
     this.camera.lookAt(this.currentLookAt);
   }
 }
+
+window.CinematicCameraDirector = CinematicCameraDirector;

@@ -88,6 +88,7 @@ class TrackScene {
     this.startGateDoors = [];
     this.startSignalLights = [];
     this.gateOpenAngle = 0.0;
+    this.startGateTargetZ = 0.0;
 
     // Torcida instanciada (montada em buildGrandstands)
     this.crowdData = [];
@@ -1611,8 +1612,17 @@ class TrackScene {
       }
     }
 
-    // 7. Animação das Cancelas do Portão de Largada (Abertura Mecânica Fluida)
-    const portaoAberto = (directorState === "RACING");
+    // 7. Movimento do Portão Móvel de Largada (Reboque Automático para Fora da Pista)
+    // Na largada, o partidor móvel é rebocado para o Infield, liberando totalmente a reta de chegada!
+    const corridaOuPodio = (directorState === "RACING" || directorState === "PODIUM" || directorState === "XP_REWARDS" || directorState === "LEADERBOARD");
+    this.startGateTargetZ = corridaOuPodio ? -42.0 : 0.0;
+
+    if (this.startGate) {
+      this.startGate.position.z += (this.startGateTargetZ - this.startGate.position.z) * Math.min(1.0, dt * 2.5);
+    }
+
+    // Animação das Cancelas do Portão de Largada (Abertura Mecânica Fluida)
+    const portaoAberto = (directorState === "RACING" || directorState === "PODIUM");
     const anguloAlvo = portaoAberto ? 1.45 : 0.0;
     this.gateOpenAngle += (anguloAlvo - this.gateOpenAngle) * Math.min(1.0, dt * 8.0);
 

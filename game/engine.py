@@ -112,6 +112,15 @@ class RaceEngine:
         
         if (all_finished or post_win_timeout or timeout) and self.status == "RACING":
             self.status = "FINISHED"
+
+            # Garante que qualquer cavalo retardatário cruze a linha final de 1000m
+            # para que nenhum animal fique travado na pista fora da linha de chegada!
+            for h in self.horses:
+                if not h.finished:
+                    h.distance = self.track_length
+                    h.finished = True
+                    h.finish_time_ms = round(self.race_elapsed_ms, 1)
+
             # Monta pódio final ordenado
             # Quem terminou vem SEMPRE na frente de quem não terminou; entre os
             # que terminaram, vale o tempo de chegada (foto-finish).

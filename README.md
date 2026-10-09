@@ -60,7 +60,7 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
 - **Comentários & Votos:** Envie votos rápidos nos cavalos (#1 ao #8) ou comandos de torcida (`/turbo`, `bora torcida!`).
 - **Simulação de Entrada na LIVE:** Botão `👤 Simular Entrada na LIVE (Oi da Voz)` para testar o anúncio sonoro imediato com áudio ducking e log no terminal.
 - **Simulação de Seguidor & Curtidas:** Botões `➕ Simular Seguidor (Agradecimento)` e `💗 30 de uma vez` para testar o agradecimento na voz por novo seguidor e por rajadas de 20+ curtidas.
-- **Presentes & Super Raros:** a regra é simples — quanto mais valioso o presente, maior o bônus (velocidade e duração). Enviar em quantidade também amplia o bônus (cada unidade extra soma +10% do delta do presente, com teto).
+- **Presentes & Super Raros:** qualquer presente enviado é agradecido **NA HORA** pelo narrador com canal prioritário e áudio ducking (exatamente igual a novo seguidor ou chegada). Quanto mais valioso o presente, maior o bônus (velocidade e duração). Enviar em quantidade também amplia o bônus (cada unidade extra soma +10% do delta do presente, com teto).
   - 🌹 **Rosa** e ☕ **Café**: Turbo básico (`1.20`) e ágil.
   - 🧢 **Boné** e 🍩 **Donut**: Super Boost de velocidade (`1.35`).
   - 🌌 **Galáxia (+1500 XP)**: Overdrive cósmico (`1.60`) com vórtice estelar violeta e chamas nos cascos.

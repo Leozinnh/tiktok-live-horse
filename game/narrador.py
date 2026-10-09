@@ -108,6 +108,7 @@ CLIMA_VIRADA_PADRAO = CLIMA_VIRADA[0]
 # da live e fica.
 CORRIDA = "corrida"
 ENTRADA = "entrada"
+PRESENTE = "presente"
 
 # O teto da fila. Numa chuva de rosas, falas atrasadas viram ruído: é melhor
 # calar o presente antigo do que narrar o que já passou.
@@ -234,8 +235,8 @@ class Narrador:
         self._fila: queue.Queue[tuple[str, str | None] | None] = queue.Queue(
             maxsize=FILA_MAXIMA
         )
-        # Fila e canal prioritário de boas-vindas com áudio ducking
-        self._fila_boas_vindas: queue.Queue[str | None] = queue.Queue(maxsize=10)
+        # Fila e canal prioritário de eventos ao vivo (entradas, seguidores e presentes com áudio ducking imediato)
+        self._fila_boas_vindas: queue.Queue[str | None] = queue.Queue(maxsize=30)
         self._entradas_faladas: set[str] = set()
 
         # Baralhos (Shuffle Bags) por categoria: impede repetição consecutiva de frases
@@ -581,17 +582,21 @@ class Narrador:
     def anunciar_presente(
         self, nome: str, quantidade: int, presente: str, cavalo: str
     ) -> str | None:
-        """Enfileira a fala de um presente. Devolve o texto, ou None se calou.
+        """Enfileira a fala de um presente com canal prioritário e áudio ducking imediato.
 
         Nunca bloqueia: quem chama é o loop de eventos da live, e um presente
-        não pode esperar a voz do anterior para ser creditado.
+        é falado NA HORA com destaque sonoro, igual a novo seguidor ou chegada!
         """
         if not self.ativo:
             return None
 
-        return self._enfileirar(
-            self.texto_do_presente(nome, quantidade, presente, cavalo), nome
-        )
+        texto = self.texto_do_presente(nome, quantidade, presente, cavalo)
+        self._enfileirar(texto, nome, categoria=PRESENTE)
+        try:
+            self._fila_boas_vindas.put_nowait(texto)
+        except queue.Full:
+            pass
+        return texto
 
     def anunciar_entrada(self, nome: str, fallback: str = "") -> str | None:
         """Enfileira o oi de quem chegou com canal prioritário e áudio ducking.
@@ -841,8 +846,8 @@ class Narrador:
                 return
             texto, categoria = item
 
-            # Entrada de espectador é processada exclusivamente pelo canal de boas-vindas com ducking
-            if categoria == ENTRADA:
+            # Entrada de espectador e presentes são processados exclusivamente pelo canal prioritário com ducking
+            if categoria in (ENTRADA, PRESENTE):
                 continue
 
             caminho: str | None = None

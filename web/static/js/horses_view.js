@@ -384,6 +384,12 @@ class HorseVisualManager {
         if (Math.random() < 0.35) {
           this.particles.emitVictoryGlow(horseObj.group.position, hData.color_hex);
         }
+
+        // Eleva o badge de nome bem alto para flutuar majestosamente acima das orelhas sem o cavalo atravessá-lo
+        if (horseObj.badge) {
+          horseObj.badge.position.y = 8.8 + Math.sin(rearT * 1.5) * 0.15;
+          horseObj.badge.position.z = -0.5;
+        }
       } else {
         // Em repouso nos boxes ou parado na linha de chegada (parado naturalmente com as 4 patas no chão)
         horseObj.body.position.y = 2.4 + Math.sin(Date.now() * 0.003 + horseObj.id) * 0.04;
@@ -408,6 +414,12 @@ class HorseVisualManager {
           horseObj.wings.right.rotation.y = 0.35;
           horseObj.wings.right.rotation.x = 0.12;
         }
+
+        // Badge em altura padrão de corrida
+        if (horseObj.badge) {
+          horseObj.badge.position.y = 5.8;
+          horseObj.badge.position.z = 0.0;
+        }
       }
 
       // Emblema holográfico flutuante para QUALQUER presente recebido (Leão 🦁, Galáxia 🌌, Dragão 🐉, Rosa 🌹, Donut 🍩, etc)
@@ -419,7 +431,8 @@ class HorseVisualManager {
           horseObj.currentDonor = hData.donor_name;
         }
         horseObj.emblem.material.opacity = 1.0;
-        horseObj.emblem.position.y = 8.4 + Math.sin(Date.now() * 0.006) * 0.4;
+        const baseEmblemY = (isWinner && isPodiumPhase) ? 11.2 : 8.4;
+        horseObj.emblem.position.y = baseEmblemY + Math.sin(Date.now() * 0.006) * 0.4;
       } else {
         horseObj.emblem.material.opacity = 0.0;
         horseObj.currentEmblemEmoji = null;

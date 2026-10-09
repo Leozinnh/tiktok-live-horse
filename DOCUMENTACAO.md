@@ -256,6 +256,11 @@ Ao receber um presente, o cavalo correspondente exibe uma **pill 3D flutuante** 
 1. O **Emoji oficial do presente** renderizado em alta definição (`Segoe UI Emoji`).
 2. O **`@nome_do_apoiador`** em texto branco contrastante com fundo escuro translúcido.
 
+* **Agradecimento Sonoro Imediato (Canal Prioritário com Ducking):**
+  * Todo e qualquer presente (Rosa, Café, Donut, Boné, Galáxia, Leão, Dragão, etc.) agora é falado **NA HORA**, exatamente igual a um novo seguidor ou chegada.
+  * O áudio da corrida tem seu volume automaticamente reduzido para 50%, o narrador agradece o apoiador com 100% de volume em destaque absoluto (*"Olha o presente! Leonardo mandou Rosa pro Relâmpago!"*) e restaura o som suavemente ao terminar.
+  * O agradecimento **nunca mais espera em filas de comentários** nem sofre atrasos.
+
 ### 5.2 Tabela de Presentes e Escala de Valor (`game/director.py`)
 No topo de `game/director.py` existe a tabela `GIFT_TIERS`, que casa o nome do presente por substring (inglês e português) e define bônus, duração, XP, emoji e o tipo lendário:
 
@@ -361,6 +366,8 @@ O partidor foi desenhado com arquitetura **tubular aberta de alta tecnologia (*o
 * **Cancelas Dianteiras Vazadas em V (*V-Doors*):** Portas articuladas com hastes de aço e almofadas baixas na cor de cada cavalo. A cabeça, os olhos e o pescoço do cavalo ficam totalmente visíveis olhando para a frente da pista. No início da prova (`RACING`), abrem 85º para a frente em um movimento mecânico fluido.
 * **Placas Numeradas na Altura dos Olhos:** As placas 3D com as cores e números de cada cavalo ficam montadas no poste frontal a 2.3m de altura, sem cobrir o focinho nem os crachás flutuantes.
 * **Semáforo de Partida em Mastro Lateral:** Os 3 holofotes sincronizados ficam montados em um mastro estilizado na lateral do partidor ($z = zMin - 1.2$), visíveis pela câmera e sem sobrecarregar a visão dos boxes.
+* **Reboque Automático do Partidor Móvel (Towing System):** Reproduzindo os tratores dos hipódromos internacionais, o partidor móvel desliza suavemente sobre seus 4 conjuntos de pneus industriais para **fora da pista** (`z = -42.0m` no Infield) durante a corrida (`RACING`), pódio e rankings, deixando a reta final **100% livre e aberta para a chegada**. Ao iniciar uma nova prova (`VOTING`), o partidor retorna suavemente para a posição oficial da pista para acomodar os animais nos boxes.
+* **Chegada Integral dos Retardatários:** Quando o líder vence e a corrida encerra, a engine garante que todos os cavalos que ainda estavam correndo cruzem a marca de 1000m, posicionando todos os 8 animais alinhados ordenadamente na reta de chegada, sem que nenhum fique congelado ou abandonado nas curvas.
 
 ### 7.2 Cercas de Turfe de Trilho Duplo com Flores
 * **Cercas de Trilho Duplo (360 Graus):** Malha paramétrica contínua com **trilho superior a 1.35m** e **trilho intermediário a 0.75m**, além de tampas arredondadas no topo de cada poste vertical em PVC branco puro.
