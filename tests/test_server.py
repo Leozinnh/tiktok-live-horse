@@ -126,9 +126,12 @@ def _like_boosts(client):
 
 
 def test_like_burst_gives_light_boost(test_app):
+    from game.director import LIKE_EXTRA_SPEED
+
     client = TestClient(test_app)
 
-    # Rajada de 5+ curtidas de quem não escolheu cavalo: empurrão bem leve
+    # Rajada de 5+ curtidas de quem não escolheu cavalo: empurrão bem leve,
+    # somado como VELOCIDADE DIRETA (+0.2 m/s), nunca como multiplicador.
     res = client.post("/api/test/inject_like", json={
         "username": "torcedor", "display_name": "Torcedor", "count": 5})
     assert res.status_code == 200
@@ -136,15 +139,16 @@ def test_like_burst_gives_light_boost(test_app):
 
     like_boosts = _like_boosts(client)
     assert len(like_boosts) == 1
-    assert like_boosts[0]["power"] == 1.02
+    assert like_boosts[0]["power"] == LIKE_EXTRA_SPEED
+    assert like_boosts[0]["additive"] is True
     assert like_boosts[0]["emoji"] == "❤️"
 
-    # Rajada maior empurra um pouco mais, mas nunca passa do teto (1.05)
+    # Rajada maior não empurra mais forte: o extra por rajada é fixo — quem
+    # cresce é a SOMA, travada no teto do TORCIDA_EXTRA_CAP (0.9 m/s).
     client.post("/api/test/inject_like", json={
         "username": "torcedor", "display_name": "Torcedor", "count": 30})
     potencias = sorted(b["power"] for b in _like_boosts(client))
-    assert potencias == [1.02, 1.04]
-    assert max(potencias) <= 1.05
+    assert potencias == [LIKE_EXTRA_SPEED, LIKE_EXTRA_SPEED]
 
     # Menos de 5 de uma vez: nenhum boost
     client.post("/api/test/inject_like", json={

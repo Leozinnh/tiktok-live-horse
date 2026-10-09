@@ -54,16 +54,19 @@ GIFT_POWER_CAP = 1.8
 
 # Curtidas em rajada (>= LIKE_BURST_MIN de uma vez) dão um empurrão BEM leve.
 # Curtida é gratuita e infinita: não pode competir com presente.
+# O empurrão SOMA velocidade direta (m/s) — não multiplica: era um boost de
+# 1.04x, e rajadas a cada ~2s no mesmo cavalo empilhavam 1.04 × 1.04 × … até
+# o cavalo voar. Agora a soma é travada pelo TORCIDA_EXTRA_CAP (horses.py).
 LIKE_BURST_MIN = 5
-LIKE_DURATION_SECONDS = 3.0
-LIKE_POWER_BASE = 1.02
-LIKE_POWER_MAX = 1.05
+LIKE_DURATION_SECONDS = 1.5
+LIKE_EXTRA_SPEED = 0.2  # m/s por rajada (fixo: quem cresce é a soma, com teto)
 
 # O número digitado com a corrida ROLANDO é torcida: um empurrãozinho leve e
 # curto no cavalo citado, só para o público sentir que o comentário mexeu na
 # prova. Bem leve de propósito: quem quer decidir a corrida manda presente.
-TORCIDA_POWER = 1.03
-TORCIDA_DURATION_SECONDS = 2.5
+# Também SOMA velocidade direta (m/s) e entra no mesmo teto da curtida.
+TORCIDA_EXTRA_SPEED = 0.4
+TORCIDA_DURATION_SECONDS = 2.0
 
 # A virada do tempo no meio da prova: com essa chance, a corrida sorteia na
 # largada um ponto do trajeto (entre 35% e 70% da pista) em que o clima vira
@@ -276,12 +279,13 @@ class EventDirector:
         self.engine.apply_boost(
             horse_id=horse_id,
             boost_name="TORCIDA NO CHAT",
-            power=TORCIDA_POWER,
+            power=TORCIDA_EXTRA_SPEED,
             duration_seconds=TORCIDA_DURATION_SECONDS,
             is_legendary=False,
             legendary_kind=None,
             gift_emoji="💬",
-            donor_name=nome
+            donor_name=nome,
+            additive=True
         )
         self._adicionar_notificacao({
             "type": "CHEER",
@@ -290,7 +294,7 @@ class EventDirector:
             "horse_name": h_name,
             "badge": "💬"
         })
-        logger.info(f"💬 {nome} torceu pelo #{horse_id} {h_name} ({TORCIDA_POWER:.2f}x)")
+        logger.info(f"💬 {nome} torceu pelo #{horse_id} {h_name} (+{TORCIDA_EXTRA_SPEED:.1f} m/s)")
 
     async def handle_viewer_gift(
         self,
@@ -415,14 +419,26 @@ class EventDirector:
         if chosen_horse_id:
             self.engine.add_cheer(chosen_horse_id)
 
+    def _cavalo_da_curtida_sem_apoiador(self) -> int:
+        """Quem a curtida de anônimo empurra: o ÚLTIMO colocado da pista.
+
+        Curtida de quem não escolheu cavalo não pode alimentar quem já lidera
+        — o empurrão é de recuperação, e vai para quem está para trás. Sem
+        posição formada (votação, ou pista toda empatada), sorteia entre todos.
+        """
+        ordenados = sorted(self.engine.horses, key=lambda h: h.distance, reverse=True)
+        if ordenados and ordenados[0].distance > ordenados[-1].distance:
+            return ordenados[-1].id
+        return random.choice(ordenados).id
+
     async def handle_viewer_like(self, tiktok_username: str, display_name: str, count: int) -> None:
         """Rajada de curtidas (>= LIKE_BURST_MIN de uma vez) dá um empurrão leve.
 
         Bem leve de propósito: curtida é gratuita e infinita, então só empurra
-        o cavalo do apoiador — ou um SORTEADO, quando o autor não é
-        identificável (o TikTok para de mandar o autor depois de muitas
-        curtidas seguidas; o fallback velho, "o líder", empilhava tudo no
-        mesmo cavalo). Não grava nada no banco: curtida não rende XP.
+        o cavalo do apoiador — ou o ÚLTIMO colocado da pista, quando o autor
+        não é identificável (o TikTok para de mandar o autor depois de muitas
+        curtidas seguidas; o empurrão nunca vai para o líder). Não grava nada
+        no banco: curtida não rende XP.
         """
         if count < LIKE_BURST_MIN:
             return
@@ -434,22 +450,22 @@ class EventDirector:
                     chosen_horse_id = hid
                     break
         if chosen_horse_id is None:
-            chosen_horse_id = random.choice(self.config.horses).id
+            chosen_horse_id = self._cavalo_da_curtida_sem_apoiador()
 
-        power = min(LIKE_POWER_MAX, LIKE_POWER_BASE + 0.002 * min(count - LIKE_BURST_MIN, 10))
         self.engine.apply_boost(
             horse_id=chosen_horse_id,
             boost_name="GALERA CURTIU",
-            power=power,
+            power=LIKE_EXTRA_SPEED,
             duration_seconds=LIKE_DURATION_SECONDS,
             is_legendary=False,
             legendary_kind=None,
             gift_emoji="❤️",
-            donor_name=display_name or "Torcida"
+            donor_name=display_name or "Torcida",
+            additive=True
         )
         logger.info(
             f"❤️ Rajada de {count} curtidas de {display_name or 'anônimo'} → "
-            f"empurrão no #{chosen_horse_id} {self._nome_cavalo(chosen_horse_id)} ({power:.2f}x)"
+            f"empurrão no #{chosen_horse_id} {self._nome_cavalo(chosen_horse_id)} (+{LIKE_EXTRA_SPEED:.1f} m/s)"
         )
 
         # Se mandou mais de 20 curtidas, o narrador agradece na voz e exibe toast

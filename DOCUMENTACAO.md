@@ -94,7 +94,7 @@ tiktok_live_cavalo/
 │       └── test.html            # Interface de controle do streamer no navegador (/test)
 ├── tools/
 │   └── smoke_audio.py           # Teste de ouvido da voz, sem abrir live
-├── tests/                       # 43 testes automatizados (pytest) com 100% de aprovação
+├── tests/                       # 75 testes automatizados (pytest) com 100% de aprovação
 ├── main.py                      # Ponto de entrada do sistema (`python main.py`)
 ├── requirements.txt             # Dependências Python (fastapi, uvicorn, aiosqlite, etc.)
 ├── README.md                    # Guia rápido de inicialização
@@ -283,11 +283,12 @@ Exemplo: 10 rosas = `1.30` — mais forte que 1 rosa (`1.20`), porém mais fraco
 Para **adicionar um presente novo**, basta inserir uma linha em `GIFT_TIERS` (sem tocar em nenhuma lógica) e, se ele tiver efeitos visuais próprios no 3D, mapear o `legendary` correspondente no front-end.
 
 ### 5.2.1 Curtidas em Rajada (Boost de Torcida)
-Quando alguém manda **5 ou mais curtidas de uma vez** (`LIKE_BURST_MIN`), o cavalo que a pessoa apoia — ou um cavalo **sorteado**, quando o TikTok não informa o autor — recebe um boost `GALERA CURTIU` de `1.02` a `1.05` por 3 segundos.
+Quando alguém manda **5 ou mais curtidas de uma vez** (`LIKE_BURST_MIN`), o cavalo que a pessoa apoia — ou o **último colocado da pista**, quando o TikTok não informa o autor (sorteio só quando não há posição formada) — recebe um boost `GALERA CURTIU` de **`+0.2 m/s`** por **1,5s**.
+O empurrão **soma velocidade direta** em vez de multiplicar: era `1.04x`, e rajadas a cada ~2s no mesmo cavalo empilhavam `1.04 × 1.04 × …` até o cavalo voar. A soma de toda a torcida leve (curtida + comentário) fica travada no teto **`TORCIDA_EXTRA_CAP = 0.9 m/s`** (`game/horses.py`).
 Curtida é gratuita e infinita: o empurrão é de propósito **bem leve**, não rende XP e não grava nada no banco, para nunca competir com os presentes.
 
 ### 5.2.2 Torcida no Chat (número digitado com a corrida rolando)
-Quando alguém digita o **número de um cavalo durante a corrida** (fase `RACING`), o cavalo leva um empurrão de torcida `TORCIDA NO CHAT` (`+3%` por 2,5s — `TORCIDA_POWER`/`TORCIDA_DURATION_SECONDS` em `game/director.py`) e o telão anuncia *"{nome} torce pelo {cavalo}!"*.
+Quando alguém digita o **número de um cavalo durante a corrida** (fase `RACING`), o cavalo leva um empurrão de torcida `TORCIDA NO CHAT` (**`+0.4 m/s`** por 2s — `TORCIDA_EXTRA_SPEED`/`TORCIDA_DURATION_SECONDS` em `game/director.py`, somando no mesmo teto de `+0.9 m/s` da curtida) e o telão anuncia *"{nome} torce pelo {cavalo}!"*.
 É um carinho, não um voto: não vale na apuração, não mexe na lista de apoiadores do cavalo, não rende XP e não fala nada na voz — o chat pode incentivar a cada mensagem sem virar bagunça na fila da narração.
 
 ### 5.3 Presentes Míticos e Super Raros (Leão, Galáxia, Dragão)
@@ -412,7 +413,7 @@ Ao término da prova, a tela de Pódio ganha um espetáculo visual cinematográf
 * **Floresta Periférica:** Pinheiros e carvalhos 3D posicionados exclusivamente fora da pista (raio $\ge 92\text{m}$ nas curvas e $z \le -96\text{m}$ na reta oposta).
 * **Placas de Distância Oficiais:** Marcadores verticais de turfe ao longo da pista: `800m`, `600m`, `400m`, `200m`, `100m` e `FINAL`.
 
-### 7.4 Céu, Luz e Clima (o passe visual)
+### 7.6 Céu, Luz e Clima (o passe visual)
 
 O fundo liso de cor única e a luz chapada eram o maior "cheiro de protótipo" da cena. Agora:
 
@@ -560,7 +561,7 @@ Cada subida de nível gera uma notificação animada na tela com estrela dourada
 
 ## 13. Testes Automatizados e Garantia de Qualidade
 
-O projeto possui **68 testes automatizados** cobrindo todos os módulos vitais. Para executar:
+O projeto possui **75 testes automatizados** cobrindo todos os módulos vitais. Para executar:
 
 ```bash
 python -m pytest -v
@@ -575,7 +576,7 @@ Os testes verificam:
 * **Clima**: sorteio que nunca repete o clima da corrida anterior, intensidade que escala o efeito de verdade, rótulo falado ("chuva forte"), anúncio na abertura com os favoritos e a virada do tempo no meio da prova (agendada na largada, uma vez por corrida).
 * Máquina de estados do `EventDirector` (VOTING $\to$ COUNTDOWN $\to$ RACING $\to$ PODIUM $\to$ XP $\to$ LEADERBOARD).
 * Parser semântico de comandos do TikTok (números, nomes, presentes e comandos de torcida).
-* Torcida no chat: número digitado com a corrida rolando empurra o cavalo de leve (e nada acontece fora da corrida); presente e curtida de quem não escolheu cavalo caem em **cavalo sorteado**.
+* Torcida no chat: número digitado com a corrida rolando soma `+0.4 m/s` no cavalo (e nada acontece fora da corrida); curtida de quem não escolheu cavalo vai para o **último colocado** (nunca o líder; sorteio só sem posição formada) e a torcida leve (curtida + comentário) soma travada no teto de `+0.9 m/s`; presente de quem não escolheu cai em **cavalo sorteado**.
 * Endpoints REST do servidor FastAPI e sincronização WebSocket.
 * Voz da live: frases e fila do Narrador com gerador/tocador injetados (sem internet e sem placa de som), incluindo o descarte da fala mais antiga com a fila cheia e o **descarte da locução de corrida quando a chegada decide** (vencedor e foto-finish nunca são descartados).
 * **Anúncio Imediato na Chegada (Zero Atraso):** assim que o primeiro cavalo cruza a marca de 1000m, a voz dispara o anúncio do campeão na hora (sem aguardar o timeout pós-chegada da física), cortando falas de meio de prova pendentes via `interromper_locucao()`.

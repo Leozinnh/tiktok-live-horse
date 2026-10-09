@@ -75,7 +75,7 @@ async def test_numero_digitado_com_a_corrida_rodando_empurra_o_cavalo(tmp_path):
     LEVE no cavalo citado — e o voto (já travado na largada) não muda."""
     from game.director import (
         TORCIDA_DURATION_SECONDS,
-        TORCIDA_POWER,
+        TORCIDA_EXTRA_SPEED,
         DirectorState,
     )
     from game.director import EventDirector
@@ -98,7 +98,8 @@ async def test_numero_digitado_com_a_corrida_rodando_empurra_o_cavalo(tmp_path):
 
     cavalo = next(h for h in director.engine.horses if h.id == 5)
     boost = next(b for b in cavalo.active_boosts if b.name == "TORCIDA NO CHAT")
-    assert boost.power == TORCIDA_POWER
+    assert boost.power == TORCIDA_EXTRA_SPEED
+    assert boost.additive is True
     assert boost.remaining_seconds == TORCIDA_DURATION_SECONDS
 
     # Torcida de chat não é voto: a votação fechou na largada e ninguém
@@ -177,6 +178,52 @@ async def test_curtida_de_anonimo_cai_em_cavalo_sorteado(tmp_path):
 
     empurrados = {h.id for h in director.engine.horses if h.active_boosts}
     assert len(empurrados) >= 2, "toda curtida sem autor foi pro mesmo cavalo"
+
+
+@pytest.mark.asyncio
+async def test_curtida_de_anonimo_na_corrida_empurra_o_ultimo_colocado(tmp_path):
+    """Na prova, curtida de quem não escolheu cavalo vai para o ÚLTIMO colocado.
+
+    Curtida não pode alimentar quem já lidera ("o primeiro" da pista): o
+    empurrão é de recuperação e vai sempre para quem está atrás — nada de
+    empilhar no líder, nem por sorteio.
+    """
+    from game.director import DirectorState, EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+
+    repo = DatabaseRepository(db_path=str(tmp_path / "curtida_ultimo.db"))
+    await repo.init_db()
+    director = EventDirector(config=config, engine=RaceEngine(config), repository=repo)
+
+    await director.tick(0.15)  # VOTING -> COUNTDOWN
+    await director.tick(0.06)  # COUNTDOWN -> RACING
+    assert director.state == DirectorState.RACING
+
+    # A prova corre um pouco para as posições se separarem
+    for _ in range(150):
+        await director.tick(1.0 / 60.0)
+
+    ordenados = sorted(director.engine.horses, key=lambda h: h.distance, reverse=True)
+    lider, ultimo = ordenados[0], ordenados[-1]
+    assert lider.distance > ultimo.distance, "posições empatadas — corrida curta demais pro teste"
+
+    for _ in range(5):
+        await director.handle_viewer_like("", "", 10)
+
+    assert any(b.name == "GALERA CURTIU" for b in ultimo.active_boosts), \
+        "curtida de anônimo não foi para o último colocado"
+    assert not any(b.name == "GALERA CURTIU" for b in lider.active_boosts), \
+        "curtida de anônimo alimentou o líder"
+
+    # Nem por sorteio: ninguém além do último colocado foi empurrado
+    for h in director.engine.horses:
+        if h.id != ultimo.id:
+            assert not any(b.name == "GALERA CURTIU" for b in h.active_boosts), \
+                f"curtida de anônimo caiu no #{h.id}, que não é o último colocado"
 
 
 @pytest.mark.asyncio

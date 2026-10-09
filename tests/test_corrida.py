@@ -236,3 +236,46 @@ def test_chuva_ajuda_mas_nao_entrega_a_corrida():
     nevasca = vitorias.get(7, 0)
     assert nevasca <= corridas // 2, f"NEVASCA venceu {nevasca}/{corridas} na chuva — chuva virou roleta"
     assert len(vitorias) >= 3, f"na chuva só {len(vitorias)} cavalos venceram — clima decidiu sozinho"
+
+
+def test_torcida_leve_soma_velocidade_direta_com_teto():
+    """Curtida e comentário somam VELOCIDADE DIRETA (m/s), não multiplicam.
+
+    Bug que este teste trava: o empurrão de curtida era um boost multiplicativo
+    de 1.04x. Rajadas de 15 curtidas chegando a cada ~2s no MESMO cavalo
+    sobrepunham boosts de 3s e empilhavam 1.04 × 1.04 × … — o cavalo voava na
+    pista. Agora o extra é somado em m/s e travado em TORCIDA_EXTRA_CAP (0.9).
+
+    O espelho é exato de propósito: os dois cavalos recebem os MESMOS sorteios
+    por tick (random.seed antes de cada update) e o NEVASCA tem fator de
+    personalidade constante 1.00 — a única diferença entre eles é o boost.
+    """
+    from game.horses import TORCIDA_EXTRA_CAP
+
+    config = load_config()
+    hc = next(c for c in config.horses if c.personality == "COLD_TACTICIAN")
+    dt = 1.0 / 60.0
+
+    def corre_4s(extras):
+        random.seed(99)
+        h = HorseState(hc, lane=1)
+        for extra in extras:
+            h.add_boost("TORCIDA NO CHAT", extra, 60.0, additive=True)
+        for i in range(240):
+            random.seed(1000 + i)
+            h.update_physics(dt, 1000.0, 1, 1.0, int(i * dt * 1000))
+        return h.speed
+
+    base = corre_4s([])
+
+    # Três rajadas seguidas: 3 × 0.2 = +0.6 m/s, somadas direto na velocidade
+    tres_rajadas = corre_4s([0.2, 0.2, 0.2])
+    assert tres_rajadas - base == pytest.approx(0.6, abs=0.02)
+
+    # Vinte rajadas (4.0 m/s de extra bruto): o teto segura em +0.9 m/s
+    vinte_rajadas = corre_4s([0.2] * 20)
+    assert vinte_rajadas - base == pytest.approx(TORCIDA_EXTRA_CAP, abs=0.02)
+
+    # Curtida + comentários misturados também somam — e também respeitam o teto
+    misturado = corre_4s([0.2, 0.4, 0.4])
+    assert misturado - base == pytest.approx(TORCIDA_EXTRA_CAP, abs=0.02)

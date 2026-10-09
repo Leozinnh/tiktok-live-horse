@@ -68,7 +68,7 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
   - 🦁 **Leão (+2000 XP)**: Fúria dourada (`1.70`) com pilar de luz celeste de 90m, onda de choque e screen shake.
   - *Exemplo de quantidade:* 10 rosas (`1.30`) superam 1 rosa (`1.20`), mas continuam abaixo de 1 galáxia (`1.60`). O multiplicador final nunca passa de `1.80`.
   - *Presentes enviados durante a fase de votação já ficam acumulados para a largada!*
-- **Curtidas em Rajada:** quando alguém manda **5 ou mais curtidas de uma vez**, o cavalo que a pessoa apoia (ou o líder da pista) recebe um empurrão **bem leve** (`1.02` a `1.05`) por 3 segundos. Curtida é gratuita e infinita, então não rende XP nem compete com presentes.
+- **Curtidas em Rajada:** quando alguém manda **5 ou mais curtidas de uma vez**, o cavalo que a pessoa apoia — ou o **último colocado da pista**, quando o autor não é identificável — recebe **+0.2 m/s** de velocidade por 1,5 segundo. O empurrão **soma** (não multiplica) e toda a torcida leve fica travada em **+0.9 m/s**: por mais que o chat curta, o cavalo nunca acelera fora de controle. Curtida é gratuita e infinita: não rende XP nem compete com presentes.
 - **Rajada em Massa:** Simule 20 ou 50 espectadores votando simultaneamente para testes de estresse.
 - **Controle de Clima:** Sol Claro, Pôr do Sol, Noite com Refletores do Estádio, Chuva, Tempestade e Vento.
 

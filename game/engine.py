@@ -54,11 +54,12 @@ class RaceEngine:
         is_legendary: bool = False,
         legendary_kind: Optional[str] = None,
         gift_emoji: str = "⚡",
-        donor_name: str = ""
+        donor_name: str = "",
+        additive: bool = False
     ) -> bool:
         for h in self.horses:
             if h.id == horse_id:
-                h.add_boost(boost_name, power, duration_seconds, is_legendary, legendary_kind, gift_emoji, donor_name)
+                h.add_boost(boost_name, power, duration_seconds, is_legendary, legendary_kind, gift_emoji, donor_name, additive)
                 return True
         return False
 

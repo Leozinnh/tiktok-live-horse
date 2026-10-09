@@ -12,7 +12,8 @@ class ActiveBoost:
         is_legendary: bool = False,
         legendary_kind: str | None = None,
         gift_emoji: str = "⚡",
-        donor_name: str = ""
+        donor_name: str = "",
+        additive: bool = False
     ):
         self.name = name
         self.power = power
@@ -21,6 +22,17 @@ class ActiveBoost:
         self.legendary_kind = legendary_kind
         self.gift_emoji = gift_emoji
         self.donor_name = donor_name
+        # Additive: `power` é VELOCIDADE DIRETA (m/s) somada — não multiplica.
+        # É o caso da torcida leve (curtida/comentário); presentes continuam
+        # multiplicativos (1.20x-1.80x).
+        self.additive = additive
+
+# A torcida leve (curtida e comentário) soma VELOCIDADE DIRETA em m/s — não
+# multiplica. Com boost multiplicativo, rajadas a cada ~2s no mesmo cavalo
+# sobrepunham boosts de 3s e empilhavam 1.04 × 1.04 × … — o cavalo voava na
+# pista. Somando, o teto segura: por mais que o chat curta e comente, o extra
+# nunca passa de +0.9 m/s.
+TORCIDA_EXTRA_CAP = 0.9
 
 class HorseState:
     def __init__(self, config: HorseConfig, lane: int = 1):
@@ -91,10 +103,11 @@ class HorseState:
         is_legendary: bool = False,
         legendary_kind: str | None = None,
         gift_emoji: str = "⚡",
-        donor_name: str = ""
+        donor_name: str = "",
+        additive: bool = False
     ) -> None:
         self.active_boosts.append(
-            ActiveBoost(name, power, duration_seconds, is_legendary, legendary_kind, gift_emoji, donor_name)
+            ActiveBoost(name, power, duration_seconds, is_legendary, legendary_kind, gift_emoji, donor_name, additive)
         )
 
     def add_cheer(self) -> None:
@@ -190,15 +203,22 @@ class HorseState:
 
         progress = min(1.0, self.distance / max(1.0, track_length))
         
-        # 1. Atualizar timers de boosts ativos
+        # 1. Atualizar timers de boosts ativos: presentes MULTIPLICAM
+        #    (1.20x-1.80x); torcida leve (curtida/comentário) SOMA velocidade
+        #    direta em m/s, com o total travado no teto da torcida.
         boost_mult = 1.0
+        extra_speed = 0.0
         remaining_boosts = []
         for b in self.active_boosts:
             b.remaining_seconds -= dt
             if b.remaining_seconds > 0:
-                boost_mult *= b.power
+                if b.additive:
+                    extra_speed += b.power
+                else:
+                    boost_mult *= b.power
                 remaining_boosts.append(b)
         self.active_boosts = remaining_boosts
+        extra_speed = min(TORCIDA_EXTRA_CAP, extra_speed)
         
         # 2. Bônus de torcida coletiva (máx +5%)
         cheer_bonus = min(0.05, (self.cheer_count * 0.002))
@@ -225,7 +245,7 @@ class HorseState:
                 self.surge_count += 1
         organic_jitter = 1.0 + random.uniform(-0.02, 0.02) * (self.config.luck / 10.0)
 
-        # Velocidade instantânea alvo
+        # Velocidade instantânea alvo (a torcida leve entra somada, em m/s)
         target_speed = (
             self.config.base_speed
             * personality_mult
@@ -236,7 +256,7 @@ class HorseState:
             * self.form
             * self.surge_mult
             * organic_jitter
-        )
+        ) + extra_speed
 
         # Reação aleatória de partidor nos primeiros 35m (permite que qualquer cavalo largue na frente)
         if self.distance < 35.0:
@@ -290,7 +310,7 @@ class HorseState:
             "legendary_kind": next((b.legendary_kind for b in self.active_boosts if b.is_legendary), None),
             "gift_emoji": self.active_boosts[-1].gift_emoji if self.active_boosts else None,
             "donor_name": self.active_boosts[-1].donor_name if self.active_boosts else None,
-            "boosts": [{"name": b.name, "power": round(b.power, 2), "legendary": b.is_legendary, "emoji": b.gift_emoji} for b in self.active_boosts],
+            "boosts": [{"name": b.name, "power": round(b.power, 2), "additive": b.additive, "legendary": b.is_legendary, "emoji": b.gift_emoji} for b in self.active_boosts],
             "supporter_count": self.supporter_count,
             "cheer_count": self.cheer_count,
             "description": self.config.description
