@@ -1670,7 +1670,7 @@ class TrackScene {
         const x = caixa[0] + rnd() * (caixa[2] - caixa[0]);
         const z = caixa[1] + rnd() * (caixa[3] - caixa[1]);
         if (!localValido(x, z, folga)) continue;
-        pontos.push({ x, z, escala: 0.7 + rnd() * 0.8, giro: rnd() * Math.PI * 2 });
+        pontos.push({ x, z, escala: 0.85 + rnd() * 0.85, giro: rnd() * Math.PI * 2 });
       }
       return pontos;
     };
@@ -1682,18 +1682,18 @@ class TrackScene {
     const FRENTE = [-1150, 214, 1150, 1000]; // fora das arquibancadas
 
     const arvores = [
-      ...sortear(40, INFIELD, 20.0),
-      ...sortear(45, FUNDOS, 20.0),
-      ...sortear(18, CURVA_DIR, 20.0),
-      ...sortear(17, CURVA_ESQ, 20.0),
-      ...sortear(10, FRENTE, 20.0),
+      ...sortear(55, INFIELD, 20.0),
+      ...sortear(60, FUNDOS, 20.0),
+      ...sortear(25, CURVA_DIR, 20.0),
+      ...sortear(24, CURVA_ESQ, 20.0),
+      ...sortear(16, FRENTE, 20.0),
     ];
     const arbustos = [
-      ...sortear(90, INFIELD, 17.0),
-      ...sortear(70, FUNDOS, 17.0),
-      ...sortear(28, CURVA_DIR, 17.0),
-      ...sortear(27, CURVA_ESQ, 17.0),
-      ...sortear(25, FRENTE, 17.0),
+      ...sortear(120, INFIELD, 17.0),
+      ...sortear(95, FUNDOS, 17.0),
+      ...sortear(38, CURVA_DIR, 17.0),
+      ...sortear(37, CURVA_ESQ, 17.0),
+      ...sortear(30, FRENTE, 17.0),
     ];
 
     // --- Árvores: tronco + 3 camadas de copa (mesmas medidas do pinheiro que
