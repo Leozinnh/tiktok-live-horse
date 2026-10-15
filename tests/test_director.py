@@ -148,6 +148,51 @@ async def test_numero_digitado_fora_da_corrida_nao_empurra(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_presente_de_quem_torceu_segue_o_cavalo_da_torcida(tmp_path):
+    """Quem torceu no chat não pode ver o presente cair em OUTRO cavalo.
+
+    O presente só procurava o VOTO do espectador, e a torcida (número
+    digitado com a prova rolando) não deixava registro nenhum: quem torcia
+    pelo #7 e mandava uma galáxia via o boost cair num cavalo sorteado, na
+    frente da live inteira ("torceu pelo #7" e "presente pro #3" no mesmo
+    minuto). A torcida continua não sendo voto — não rende XP nem entra na
+    contagem de apoiadores.
+    """
+    from game.director import DirectorState, EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+
+    repo = DatabaseRepository(db_path=str(tmp_path / "torcida_presente.db"))
+    await repo.init_db()
+    director = EventDirector(config=config, engine=RaceEngine(config), repository=repo)
+
+    await director.tick(0.15)  # VOTING -> COUNTDOWN
+    await director.tick(0.06)  # COUNTDOWN -> RACING
+    assert director.state == DirectorState.RACING
+
+    # "Ana" (grafada assim no chat) torce pelo 7 e manda uma galáxia
+    await director.handle_viewer_choice("Ana", "Ana", 7)
+    await director.handle_viewer_gift("ana", "Ana", "Galaxy", 1)
+
+    cavalo7 = next(h for h in director.engine.horses if h.id == 7)
+    boost_presente = [b for b in cavalo7.active_boosts if b.name != "TORCIDA NO CHAT"]
+    assert boost_presente, "o presente não caiu no cavalo pelo qual ela torceu"
+    assert not [
+        h.id for h in director.engine.horses if h.id != 7 and h.active_boosts
+    ], "o presente vazou pra outro cavalo"
+
+    # Torcida não é voto: ninguém entrou como apoiador.
+    assert all(not sups for sups in director.horse_supporters.values())
+
+    # A torcida morre com a corrida: no ciclo novo o presente volta a sortear.
+    await director.reset_to_new_race()
+    assert director.torcida_por_viewer == {}
+
+
+@pytest.mark.asyncio
 async def test_presente_de_quem_nao_escolheu_cai_em_cavalo_sorteado(tmp_path):
     """Presente sem dono cai em cavalo SORTEADO, não sempre no #1.
 

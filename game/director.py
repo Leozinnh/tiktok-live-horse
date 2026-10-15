@@ -140,6 +140,10 @@ class EventDirector:
         
         # Mapa: horse_id -> lista de dicionários de espectadores que escolheram
         self.horse_supporters: Dict[int, List[Dict[str, Any]]] = {h.id: [] for h in self.config.horses}
+        # Mapa: username (normalizado) -> horse_id da última torcida da corrida.
+        # Não é voto e não mexe em XP/banco: serve só para o presente de quem
+        # já disse por quem torce cair no MESMO cavalo. Zera a cada corrida.
+        self.torcida_por_viewer: Dict[str, int] = {}
         # Mapa: user_id -> viewer_dict
         self.viewers_cache: Dict[str, Dict[str, Any]] = {}
         # Fila de notificações para o HUD
@@ -296,6 +300,15 @@ class EventDirector:
         """
         nome = display_name or tiktok_username or "Torcida"
         h_name = self._nome_cavalo(horse_id)
+
+        # Guarda por quem essa pessoa torceu: se ela mandar presente antes de
+        # a corrida acabar, o presente vai pro MESMO cavalo (quem torceu pelo
+        # #7 e viu o presente cair no #3 acha — com razão — que é bug). A
+        # chave é normalizada igual à do banco (`strip().lower()`), senão
+        # "Ana" e "ana" viram duas pessoas; torcida sem username não grava
+        # nada (senão todo anônimo cairia no mesmo cavalo).
+        if tiktok_username:
+            self.torcida_por_viewer[tiktok_username.strip().lower()] = horse_id
         self.engine.apply_boost(
             horse_id=horse_id,
             boost_name="TORCIDA NO CHAT",
@@ -334,7 +347,14 @@ class EventDirector:
                 break
 
         if not chosen_horse_id:
-            # Sem voto do espectador, o presente vai pra um cavalo SORTEADO.
+            # Sem voto, o presente segue a TORCIDA: quem digitou o número do
+            # cavalo com a prova rolando já disse por quem está. Sem isto, o
+            # presente de quem torceu caía em cavalo sorteado — a live via
+            # "torceu pelo #7" e "presente pro #3" no mesmo minuto.
+            chosen_horse_id = self.torcida_por_viewer.get(viewer["tiktok_username"])
+
+        if not chosen_horse_id:
+            # Sem voto e sem torcida, o presente vai pra um cavalo SORTEADO.
             # "Pro líder" parecia justo, mas na votação o líder é SEMPRE o
             # #1 (a engine o inicializa assim): uma live de galera sem voto
             # empilhava tudo no #1 e o #1 vencia sempre.
@@ -656,6 +676,9 @@ class EventDirector:
         self.race_number += 1
         self.engine.reset()
         self.horse_supporters = {h.id: [] for h in self.config.horses}
+        # A torcida é da corrida que acabou: no ciclo novo ninguém torceu
+        # ainda, e um presente dado antes de torcer volta a ser sorteado.
+        self.torcida_por_viewer = {}
         self.state = DirectorState.VOTING
         self.state_timer = 0.0
         self.last_race_rewards = []
@@ -813,6 +836,8 @@ class EventDirector:
                 self.race_number += 1
                 self.engine.reset()
                 self.horse_supporters = {h.id: [] for h in self.config.horses}
+                # A torcida é da corrida que acabou (ver `reset_to_new_race`).
+                self.torcida_por_viewer = {}
                 self.state = DirectorState.VOTING
                 self.state_timer = 0.0
                 self.last_race_rewards = []

@@ -105,8 +105,11 @@ window.HorseBodyRegistry["unicorn"] = function buildUnicornHorse(cfg, scene) {
   neck.add(head);
 
   // CHIFRE ARCO-ÍRIS ESPIRAL MONUMENTAL (1.85 METROS DE PURO BRILHO)
+  // A base fica DENTRO do crânio (a cabeça é uma caixa de 0,82 de altura,
+  // ou seja topo em +0,41): em 0,85 ele nascia 0,35 acima do topo e na
+  // aresta da frente, aparecendo solto/flutuando na frente do cavalo.
   const hornGroup = new THREE.Group();
-  hornGroup.position.set(0, 0.85, 0.55);
+  hornGroup.position.set(0, 0.30, 0.45);
   hornGroup.rotation.x = Math.PI / 4.2;
 
   // Cone Principal do Chifre com textura Arco-Íris

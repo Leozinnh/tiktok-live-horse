@@ -282,6 +282,8 @@ Exemplo: 10 rosas = `1.30` — mais forte que 1 rosa (`1.20`), porém mais fraco
 
 **Presente sem escolha vai para um cavalo SORTEADO.** Se o presente chega de quem nunca digitou o número de nenhum cavalo, o empurrão cai num cavalo sorteado — e não mais no líder da pista. Sortear mata dois vícios de uma vez: o líder parava de ganhar combustível de graça (era ele que vencia quase sempre) e quem doa sem escolher espalha emoção pelo páreo inteiro.
 
+**O alvo do presente é resolvido nesta ordem:** voto (lista de apoiadores) → **torcida da corrida** → sorteio. O passo do meio existe porque o presente lia só o voto: quem digitava o número do cavalo com a prova rolando (`_empurrao_da_torcida`) não deixava registro nenhum, então a live via *"torceu pelo #7"* e, segundos depois, *"presente pro #3"* — que parece bug de quem assiste. A escolha da torcida vive em `director.torcida_por_viewer` (username normalizado → cavalo), **não é voto** (não rende XP, não entra na contagem de apoiadores) e **zera a cada corrida**, junto com `horse_supporters`: no ciclo novo, quem ainda não torceu tem o presente sorteado como sempre.
+
 Para **adicionar um presente novo**, basta inserir uma linha em `GIFT_TIERS` (sem tocar em nenhuma lógica) e, se ele tiver efeitos visuais próprios no 3D, mapear o `legendary` correspondente no front-end.
 
 ### 5.2.1 Curtidas em Rajada (Boost de Torcida)
@@ -607,6 +609,8 @@ Mesmo motor do `tiktok-live-pixel`, portado inteiro e ampliado: uma **thread com
 2. A thread da fila sintetiza o mp3 com o **edge-tts** (nuvem da Microsoft, sem chave de API) num arquivo temporário.
 3. A reprodução usa o **MCI do Windows** via `ctypes` (biblioteca padrão): nenhum binário externo nem pacote de áudio para instalar.
 4. Terminou de tocar, o arquivo é apagado.
+
+**Versão mínima: `edge-tts>=7.3.1`** (está no `requirements.txt`). O serviço da Microsoft passou a exigir o token `Sec-MS-GEC` **v2** — com a 7.2.8 ou anterior, **toda** fala volta `403 Invalid response status` e a live fica **muda**: cada frase aparece no log como `[voz]` e morre no aviso `Não consegui falar`, inclusive na troca de voz do rodízio (o 403 não é da voz, é do serviço). O piso cobre também o conserto da leitura da data do servidor dependente de locale (7.3.1), que falhava em Windows pt-BR. O jogo não quebra: a locução é opcional por projeto e o que não vira voz continua no telão.
 
 ### 14.1 Anúncio Imediato do Vencedor com Fade-Out Suave (Zero Corte Seco)
 Antes, o anúncio do vencedor aguardava os 3.5 segundos da desaceleração da engine pós-chegada para só então sintetizar a voz, acumulando até 8 segundos de espera, e um corte abrupto podia acontecer no meio da palavra.

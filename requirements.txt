@@ -7,3 +7,9 @@ TikTokLive>=6.0.0
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
 httpx>=0.28.0
+# Voz da live (game/narrador.py). O PISO é obrigatório: o serviço da Microsoft
+# passou a exigir o token Sec-MS-GEC v2 e a 7.3.1 conserta a leitura da data do
+# servidor (que quebra em Windows pt-BR). Com versão antiga TODA fala volta
+# 403 e a live fica muda, só com aviso no log.
+edge-tts>=7.3.1
+
