@@ -24,8 +24,12 @@
           </div>
           <span class="weather-chip" id="hudWeather" style="display: none;">☀️ SOL</span>
           <!-- Legenda do quadro da TV: quem a câmera está mostrando e por quê.
-               Sem ela, um corte para o último colocado parece falha de câmera. -->
-          <span class="camera-chip" id="hudCamera" style="display: none;">🎥 NA PONTA</span>
+               Sem ela, um corte para o último colocado parece falha de câmera.
+               O texto vive num span próprio para poder encolher quando o nome
+               do doador é comprido (o chip sozinho não encolhia: o texto
+               passava por cima do relógio, no canto direito) — e, se nem
+               encolhido couber, a legenda simplesmente não aparece. -->
+          <span class="camera-chip" id="hudCamera" style="display: none;"><span class="camera-chip-text" id="hudCameraText">🎥 NA PONTA</span></span>
         </div>
 
         <div class="bar-right">

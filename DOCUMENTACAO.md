@@ -94,7 +94,7 @@ tiktok_live_cavalo/
 │       └── test.html            # Interface de controle do streamer no navegador (/test)
 ├── tools/
 │   └── smoke_audio.py           # Teste de ouvido da voz, sem abrir live
-├── tests/                       # 77 testes automatizados (pytest) com 100% de aprovação
+├── tests/                       # 92 testes automatizados (pytest) com 100% de aprovação
 ├── main.py                      # Ponto de entrada do sistema (`python main.py`)
 ├── requirements.txt             # Dependências Python (fastapi, uvicorn, aiosqlite, etc.)
 ├── README.md                    # Guia rápido de inicialização
@@ -172,7 +172,7 @@ horses/
   "id": 1,
   "number": 1,
   "name": "RELÂMPAGO",
-  "body_model": "slender_racer",        // Modelo 3D ("classic", "armored", "pegasus", "cyber", "heavy_tank", "unicorn", "spectral", "slender_racer", "lightning_racer")
+  "body_model": "lightning_racer",      // Modelo 3D ("classic", "armored", "pegasus", "cyber", "heavy_tank", "unicorn", "spectral", "slender_racer", "lightning_racer")
   "visual_style": "solar",              // Estilo temático ("solar", "storm", "fire", "nature", "shadow", "earth", "ice", "spectral")
   "color_hex": "#F59E0B",               // Cor principal da pelagem do cavalo
   "secondary_color_hex": "#FEF3C7",     // Cor da manta de sela
@@ -305,7 +305,7 @@ O número digitado com o **pódio, o XP ou o ranking** na tela é **voto para a 
 * A corrida que acabou **não** ganha apoiador retroativo, e a fase de `RACING` continua sendo torcida (empurrão leve, sem voto) — a votação segue travada na largada.
 
 ### 5.2.4 O Efeito de Boost no Cavalo (halo de energia + fitas de velocidade)
-Todo boost — presente, curtida em rajada ou torcida do chat — acende o **mesmo** efeito no cavalo. Ele é montado num único lugar (`createAuras`, em `web/static/js/bodies/body_helpers.js`) e animado em `horses_view.js`, então os 8 modelos de corpo o herdam sem exceção:
+Todo boost — presente, curtida em rajada ou torcida do chat — acende o **mesmo** efeito no cavalo. Ele é montado num único lugar (`createAuras`, em `web/static/js/bodies/body_helpers.js`) e animado em `horses_view.js`, então todos os modelos de corpo o herdam sem exceção:
 
 * **Halo de energia no chão:** disco de riscos radiais girando rente à areia, com anel de choque na borda, **na cor da pelagem do cavalo** (o RELÂMPAGO dourado acende dourado; a PANTERA escura acende azul-aço). Substituiu a esfera wireframe que envolvia o animal — um balão que escondia o modelo e não dizia nada de velocidade.
 * **Fitas de velocidade na garupa:** 7 caudas de luz que nascem curtas, esticam com a velocidade e tremulam em onda atrás do cavalo — o rastro é o que se vê no quadro de perseguição (`CAM_CHASE`), o mais usado na live.
@@ -491,6 +491,7 @@ O sujeito da câmera **não é mais fixo no líder**: um rodízio de motivos tro
 * A ordem do rodízio é `PONTA, PERSEGUICAO, PELOTAO, PONTA, SUBINDO, LANTERNA, PONTA, PERSEGUICAO, SUBINDO, PELOTAO` (constante `RODIZIO_DE_QUADROS` em `camera.js`).
 * **Presente interrompe o rodízio na hora**: o diretor detecta um boost novo (lista de boosts crescendo ou força subindo — o payload não traz id de boost) e corta para o cavalo que recebeu. É o único jeito de o doador se ver na tela. Presentes mandados **na votação** não disparam corte na largada (a primeira leitura da corrida só marca o que já está na pista).
 * *Empates e quedas:* boost vencendo (força caindo) **não** é presente novo; e se ninguém subiu de posição, o `SUBINDO` cai no penúltimo colocado.
+* A legenda do presente é a mais longa da barra (`🌌 PRESENTE DE @DOADOR • #1 RELÂMPAGO`): o apelido de quem mandou entra cortado em **12 letras** e o chip da câmera é o único item da barra que pode **encolher**. Se nem encolhido o texto couber (tela estreita), a legenda **não aparece** — badge picada no meio ("PRESEN…") não informa nada. Antes o texto não encolhia e passava por cima da pill "AO VIVO" e do relógio, tudo encavalado na mesma linha.
 * Nas tomadas de cor (`PELOTAO`, `SUBINDO`, `LANTERNA`) o cavalo fica o resto da tomada — só `PONTA` e `PERSEGUICAO` seguem a ordem viva da pista, porque ali a troca de dono **é** a notícia. E todo quadro só reinicia o relógio quando o motivo muda: sem isso uma ultrapassagem a cada segundo deixaria a câmera presa num motivo só.
 * Quem já cruzou a linha sai da fila do rodízio: o sujeito passa para o próximo cavalo na pista.
 
@@ -628,7 +629,7 @@ Cada subida de nível gera uma notificação animada na tela com estrela dourada
 
 ## 13. Testes Automatizados e Garantia de Qualidade
 
-O projeto possui **77 testes automatizados** cobrindo todos os módulos vitais. Para executar:
+O projeto possui **92 testes automatizados** cobrindo todos os módulos vitais. Para executar:
 
 ```bash
 python -m pytest -v

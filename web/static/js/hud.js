@@ -10,6 +10,24 @@ const WEATHER_INFO = {
   WIND: { icon: "💨", label: "VENTO" },
 };
 
+// Apelido de quem mandou o presente: o TikTok permite até 24 letras e, na
+// legenda do quadro ("🌌 PRESENTE DE @… • #1 RELÂMPAGO"), um nome desse
+// tamanho empurrava o relógio da barra de cima — tudo encavalado na mesma
+// linha. Doze letras cabem com o nome do cavalo ao lado.
+function cortaNome(nome) {
+  const limpo = (nome || "ANÔNIMO").toUpperCase();
+  return limpo.length > 12 ? `${limpo.slice(0, 12)}…` : limpo;
+}
+
+// A barra de cima é uma linha só. Se nem a legenda já encurtada couber (tela
+// estreita no painel de teste), ela sai cortada no meio — "PRESEN…" não diz
+// nada a ninguém. Melhor não mostrar legenda nenhuma do que mostrar picada.
+// A medida é no SPAN do texto: o chip não transborda (ele recorta o texto),
+// então é o span que sabe se a legenda está sendo picada.
+function cabeNaBarra(chip, textoEl) {
+  return (textoEl || chip).scrollWidth <= (textoEl || chip).clientWidth + 1;
+}
+
 // A cor da pill de status por fase (as classes moram no styles.css).
 const STATE_PILL_CLASS = {
   VOTING: "betting",
@@ -40,6 +58,7 @@ class BroadcastHUD {
     this.raceNumberEl = document.getElementById("hudRaceNumber");
     this.weatherEl = document.getElementById("hudWeather");
     this.cameraEl = document.getElementById("hudCamera");
+    this.cameraTextEl = document.getElementById("hudCameraText");
     this.statePillEl = document.getElementById("hudStatePill");
     this.stateTextEl = document.getElementById("hudStateText");
     this.timerEl = document.getElementById("hudTimer");
@@ -193,16 +212,22 @@ class BroadcastHUD {
     if (foco.motivo === "PRESENTE") {
       // Presente é a estrela da tomada: a legenda vira o agradecimento a
       // quem mandou (é ele que está vendo a live procurando o próprio nome).
-      texto = `${foco.emoji || "🎁"} PRESENTE DE ${(foco.doador || "ANÔNIMO").toUpperCase()}`;
+      // O nome vai cortado em 12 letras: apelido de TikTok chega a 24 e, com
+      // o cavalo junto, a legenda empurrava o relógio da barra de cima.
+      texto = `${foco.emoji || "🎁"} PRESENTE DE ${cortaNome(foco.doador)}`;
       classe += " camera-presente";
     }
     texto += ` • ${numero}${nome}`;
 
     if (texto === this.cameraText) return;
     this.cameraText = texto;
-    this.cameraEl.innerText = texto;
+    // O texto vive num span que pode encolher (o chip é que não podia: sem
+    // isso o nome comprido passava por cima do canto direito).
+    (this.cameraTextEl || this.cameraEl).textContent = texto;
     this.cameraEl.className = classe;
     this.cameraEl.style.display = "flex";
+    // Só depois de medir: ou a legenda aparece inteira, ou não aparece.
+    if (!cabeNaBarra(this.cameraEl, this.cameraTextEl)) this.cameraEl.style.display = "none";
   }
 
   renderTimer(state, stateData) {

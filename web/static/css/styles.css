@@ -108,6 +108,8 @@ html, body {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden; /* a barra é uma linha só: o que não couber é cortado, não empurrado */
 }
 
 /* O troféu vira um chip com moldura dourada e brilho — o cantinho mais
@@ -199,6 +201,16 @@ html, body {
   border: 1px solid currentColor;
   background: rgba(255, 255, 255, 0.06);
   color: #fcd34d;
+  /* É o único item da barra que pode encolher: no quadro de presente o texto
+     carrega o nome de quem mandou (até 24 letras) e, sem encolher, ele
+     empurrava o relógio e o "AO VIVO" — tudo encavalado na mesma linha. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.camera-chip-text {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .camera-chip.camera-presente {
