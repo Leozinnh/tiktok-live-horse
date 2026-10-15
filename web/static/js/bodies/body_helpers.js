@@ -103,8 +103,11 @@ window.HorseBodyUtils = {
   },
 
   createBadgeAndEmblem(group, cfg) {
+    // Emblema e badge em 2x (512 de largura em vez de 256): os dois sprites
+    // têm 5,5m e 6m de largura, ou seja ~450px na tela em 1080p — com 256px
+    // de origem o texto e o emoji chegavam esticados na transmissão.
     const emblemCanvas = document.createElement("canvas");
-    emblemCanvas.width = 256; emblemCanvas.height = 128;
+    emblemCanvas.width = 512; emblemCanvas.height = 256;
     const eCtx = emblemCanvas.getContext("2d");
     const emblemTex = new THREE.CanvasTexture(emblemCanvas);
     if (THREE.sRGBEncoding) emblemTex.encoding = THREE.sRGBEncoding;
@@ -114,40 +117,40 @@ window.HorseBodyUtils = {
     group.add(emblemSprite);
 
     const setEmblem = (emoji, donor) => {
-      eCtx.clearRect(0, 0, 256, 128);
+      eCtx.clearRect(0, 0, 512, 256);
       eCtx.fillStyle = "rgba(15, 23, 42, 0.88)";
-      eCtx.roundRect ? eCtx.roundRect(8, 8, 240, 112, 20) : eCtx.fillRect(8, 8, 240, 112);
+      eCtx.roundRect ? eCtx.roundRect(16, 16, 480, 224, 40) : eCtx.fillRect(16, 16, 480, 224);
       eCtx.fill();
       eCtx.strokeStyle = "#fbbf24";
-      eCtx.lineWidth = 4;
+      eCtx.lineWidth = 8;
       eCtx.stroke();
 
-      eCtx.font = "52px 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif";
+      eCtx.font = "104px 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif";
       eCtx.textAlign = "center";
       eCtx.textBaseline = "middle";
-      eCtx.fillText(emoji || "🎁", 128, 48);
+      eCtx.fillText(emoji || "🎁", 256, 96);
 
       if (donor) {
         eCtx.fillStyle = "#ffffff";
-        eCtx.font = "bold 20px sans-serif";
-        eCtx.fillText(`@${donor.slice(0, 14)}`, 128, 95);
+        eCtx.font = "bold 40px sans-serif";
+        eCtx.fillText(`@${donor.slice(0, 14)}`, 256, 190);
       }
       emblemTex.needsUpdate = true;
     };
 
     const badgeCanvas = document.createElement("canvas");
-    badgeCanvas.width = 256; badgeCanvas.height = 64;
+    badgeCanvas.width = 512; badgeCanvas.height = 128;
     const bCtx = badgeCanvas.getContext("2d");
     bCtx.fillStyle = "rgba(15, 23, 42, 0.85)";
-    bCtx.roundRect ? bCtx.roundRect(4, 4, 248, 56, 12) : bCtx.fillRect(4, 4, 248, 56);
+    bCtx.roundRect ? bCtx.roundRect(8, 8, 496, 112, 24) : bCtx.fillRect(8, 8, 496, 112);
     bCtx.fill();
     bCtx.strokeStyle = cfg.color_hex || "#ffffff";
-    bCtx.lineWidth = 4;
+    bCtx.lineWidth = 8;
     bCtx.stroke();
     bCtx.fillStyle = "#ffffff";
-    bCtx.font = "bold 26px sans-serif";
+    bCtx.font = "bold 52px sans-serif";
     bCtx.textAlign = "center";
-    bCtx.fillText(`#${cfg.number} ${cfg.name}`, 128, 40);
+    bCtx.fillText(`#${cfg.number} ${cfg.name}`, 256, 80);
 
     const badgeTexture = new THREE.CanvasTexture(badgeCanvas);
     if (THREE.sRGBEncoding) badgeTexture.encoding = THREE.sRGBEncoding;

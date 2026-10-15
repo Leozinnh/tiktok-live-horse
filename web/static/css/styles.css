@@ -1,3 +1,7 @@
+.race-badge .label{
+  display: none;
+}
+
 :root {
   --primary-gold: #fbbf24;
   --secondary-gold: #d97706;

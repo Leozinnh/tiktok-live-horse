@@ -345,20 +345,34 @@ class TrackScene {
 
   // Textura procedural de grama (canvas): manchas tonais que quebram o
   // "verde plástico" do fundo liso, sem baixar nenhum asset.
+  // 1024px num tile de 12m = ~85 px/m. Antes eram 256px num tile de 33m
+  // (7,7 px/m): na tela isso virava mancha ampliada e borrada.
   criarTexturaGrama(repeatX, repeatY, base) {
     const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 256;
+    canvas.width = canvas.height = 1024;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = base;
-    ctx.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 2600; i++) {
+    ctx.fillRect(0, 0, 1024, 1024);
+    // Camada 1 — manchas largas (8 a 30cm): o tom geral do gramado.
+    for (let i = 0; i < 420; i++) {
       ctx.fillStyle =
-        Math.random() < 0.55 ? "rgba(20, 83, 45, 0.45)" : "rgba(134, 239, 172, 0.10)";
+        Math.random() < 0.55 ? "rgba(20, 83, 45, 0.32)" : "rgba(134, 239, 172, 0.10)";
       ctx.fillRect(
-        Math.random() * 256,
-        Math.random() * 256,
-        1 + Math.random() * 3,
-        1 + Math.random() * 3
+        Math.random() * 1024,
+        Math.random() * 1024,
+        7 + Math.random() * 18,
+        7 + Math.random() * 18
+      );
+    }
+    // Camada 2 — grão fino (1 a 4cm): é o que dá cara de "folha" de perto.
+    for (let i = 0; i < 9000; i++) {
+      ctx.fillStyle =
+        Math.random() < 0.5 ? "rgba(21, 90, 48, 0.35)" : "rgba(120, 214, 158, 0.14)";
+      ctx.fillRect(
+        Math.random() * 1024,
+        Math.random() * 1024,
+        1 + Math.random() * 2.5,
+        1 + Math.random() * 2.5
       );
     }
     const tex = new THREE.CanvasTexture(canvas);
@@ -371,39 +385,43 @@ class TrackScene {
 
   // Textura procedural da areia da pista: grãos, mosqueados e estrias
   // longitudinais (o casco bate sempre na mesma direção).
+  // 1024px cobrindo 14m na largura (2 fitas) e 9,4m na volta = 73/109 px/m.
+  // Antes eram 9/16 px/m: de perto a areia virava um borrão liso.
   criarTexturaAreia() {
     const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 256;
+    canvas.width = canvas.height = 1024;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#ca9868"; // areia batida dourada esportiva
-    ctx.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 3200; i++) {
+    ctx.fillRect(0, 0, 1024, 1024);
+    // Grãos de 1,4 a 7cm: com o canvas antigo cada grão tinha até 38cm.
+    for (let i = 0; i < 6000; i++) {
       const r = Math.random();
       ctx.fillStyle =
         r < 0.5
-          ? "rgba(169, 123, 79, 0.5)"
+          ? "rgba(169, 123, 79, 0.38)"
           : r < 0.85
-          ? "rgba(224, 185, 136, 0.45)"
-          : "rgba(120, 84, 48, 0.4)";
+          ? "rgba(224, 185, 136, 0.34)"
+          : "rgba(120, 84, 48, 0.3)";
       ctx.fillRect(
-        Math.random() * 256,
-        Math.random() * 256,
-        1 + Math.random() * 2.5,
-        1 + Math.random() * 2.5
+        Math.random() * 1024,
+        Math.random() * 1024,
+        1 + Math.random() * 4,
+        1 + Math.random() * 4
       );
     }
-    for (let i = 0; i < 26; i++) {
+    // Estrias de casco: 4 a 15cm de largura, ondulando devagar na volta.
+    for (let i = 0; i < 16; i++) {
       ctx.strokeStyle = `rgba(140, 100, 60, ${0.05 + Math.random() * 0.09})`;
-      ctx.lineWidth = 1 + Math.random() * 2.5;
-      const x = Math.random() * 256;
+      ctx.lineWidth = 3 + Math.random() * 8;
+      const x = Math.random() * 1024;
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x + (Math.random() - 0.5) * 14, 256);
+      ctx.lineTo(x + (Math.random() - 0.5) * 56, 1024);
       ctx.stroke();
     }
     const tex = new THREE.CanvasTexture(canvas);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(1, 192); // 1 fita de 22m de largura × ~15,6m por tile na volta
+    tex.repeat.set(2, 320); // 2 fitas de 14m de largura × ~9,4m por tile na volta
     tex.encoding = THREE.sRGBEncoding;
     tex.anisotropy = this.renderer ? this.renderer.capabilities.getMaxAnisotropy() : 4;
     return tex;
@@ -414,7 +432,7 @@ class TrackScene {
     // 2400x2400 cobre o oval de 3000m inteiro com folga (antes 1600x1400).
     const grassGeo = new THREE.PlaneGeometry(2400, 2400, 32, 32);
     const grassMat = new THREE.MeshLambertMaterial({
-      map: this.criarTexturaGrama(72, 72, "#226926"),
+      map: this.criarTexturaGrama(200, 200, "#226926"),
       side: THREE.DoubleSide,
     });
     const grass = new THREE.Mesh(grassGeo, grassMat);
@@ -753,24 +771,26 @@ class TrackScene {
     jumbotronGroup.add(frame);
 
     // Tela de LED acesa
+    // 1024x512 numa tela de 31x13,5m: dá 33 px/m e o texto sai legível a
+    // distância (com 512x256 eram 16 px/m e as letras borravam).
     const canvas = document.createElement("canvas");
-    canvas.width = 512; canvas.height = 256;
+    canvas.width = 1024; canvas.height = 512;
     const ctx = canvas.getContext("2d");
-    const grad = ctx.createLinearGradient(0, 0, 512, 256);
+    const grad = ctx.createLinearGradient(0, 0, 1024, 512);
     grad.addColorStop(0, "#0f172a");
     grad.addColorStop(1, "#1e3a8a");
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 512, 256);
+    ctx.fillRect(0, 0, 1024, 512);
     ctx.strokeStyle = "#fbbf24";
-    ctx.lineWidth = 12;
-    ctx.strokeRect(6, 6, 500, 244);
+    ctx.lineWidth = 24;
+    ctx.strokeRect(12, 12, 1000, 488);
     ctx.fillStyle = "#fbbf24";
-    ctx.font = "bold 44px sans-serif";
+    ctx.font = "bold 88px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("🏇 TIKTOK LIVE DERBY 🏇", 256, 110);
+    ctx.fillText("🏇 TIKTOK LIVE DERBY 🏇", 512, 220);
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 26px sans-serif";
-    ctx.fillText("APÓIE SEU CAVALO NO CHAT!", 256, 170);
+    ctx.font = "bold 52px sans-serif";
+    ctx.fillText("APÓIE SEU CAVALO NO CHAT!", 512, 340);
 
     const screenTex = new THREE.CanvasTexture(canvas);
     screenTex.encoding = THREE.sRGBEncoding;
@@ -1588,10 +1608,11 @@ class TrackScene {
       return malha;
     };
 
-    // Areia batida (mesma textura da pista principal, tile menor porque a
-    // pista de treino é 1/3 do tamanho)
+    // Areia batida (mesma textura da pista principal). Aqui a faixa tem 9m de
+    // largura e a volta ~1230m: 1×150 deixa o tile em ~8m, perto do da pista
+    // principal (14m na largura, 9,4m na volta).
     const areiaTex = this.criarTexturaAreia();
-    areiaTex.repeat.set(1, 260);
+    areiaTex.repeat.set(1, 150);
     const areiaMat = new THREE.MeshStandardMaterial({ map: areiaTex, roughness: 0.95 });
     this.scene.add(criarFaixa(0, LARGURA, areiaMat, 0.05));
 

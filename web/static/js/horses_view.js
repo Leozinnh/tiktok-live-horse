@@ -178,7 +178,9 @@ class HorseVisualManager {
 
     // 6.2 Emblema Holográfico Flutuante (Leão / Galáxia / Dragão / Rosa / etc)
     const emblemCanvas = document.createElement("canvas");
-    emblemCanvas.width = 256; emblemCanvas.height = 128;
+    // 512x256 para um sprite de 5,5x2,75m: em 1080p o emblema aparece com
+    // ~400px de largura, então 256px de origem chegava esticado na tela.
+    emblemCanvas.width = 512; emblemCanvas.height = 256;
     const eCtx = emblemCanvas.getContext("2d");
     const emblemTex = new THREE.CanvasTexture(emblemCanvas);
     emblemTex.encoding = THREE.sRGBEncoding;
@@ -188,42 +190,44 @@ class HorseVisualManager {
     group.add(emblemSprite);
 
     const setEmblem = (emoji, donor) => {
-      eCtx.clearRect(0, 0, 256, 128);
+      eCtx.clearRect(0, 0, 512, 256);
       eCtx.fillStyle = "rgba(15, 23, 42, 0.88)";
-      eCtx.roundRect ? eCtx.roundRect(8, 8, 240, 112, 20) : eCtx.fillRect(8, 8, 240, 112);
+      eCtx.roundRect ? eCtx.roundRect(16, 16, 480, 224, 40) : eCtx.fillRect(16, 16, 480, 224);
       eCtx.fill();
       eCtx.strokeStyle = "#fbbf24";
-      eCtx.lineWidth = 4;
+      eCtx.lineWidth = 8;
       eCtx.stroke();
 
-      eCtx.font = "52px 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif";
+      eCtx.font = "104px 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif";
       eCtx.textAlign = "center";
       eCtx.textBaseline = "middle";
-      eCtx.fillText(emoji || "🎁", 128, 48);
+      eCtx.fillText(emoji || "🎁", 256, 96);
 
       if (donor) {
         eCtx.fillStyle = "#ffffff";
-        eCtx.font = "bold 20px sans-serif";
-        eCtx.fillText(`@${donor.slice(0, 14)}`, 128, 95);
+        eCtx.font = "bold 40px sans-serif";
+        eCtx.fillText(`@${donor.slice(0, 14)}`, 256, 190);
       }
       emblemTex.needsUpdate = true;
     };
 
     // 7. Badge de Nome Flutuante (Canvas Textura)
     const badgeCanvas = document.createElement("canvas");
-    badgeCanvas.width = 256;
-    badgeCanvas.height = 64;
+    // 512x128 num sprite de 6x1,5m: é o texto que o viewer lê o tempo todo,
+    // e a 256x64 ele chegava esticado (~450px de tela para 256 de origem).
+    badgeCanvas.width = 512;
+    badgeCanvas.height = 128;
     const ctx = badgeCanvas.getContext("2d");
     ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
-    ctx.roundRect ? ctx.roundRect(4, 4, 248, 56, 12) : ctx.fillRect(4, 4, 248, 56);
+    ctx.roundRect ? ctx.roundRect(8, 8, 496, 112, 24) : ctx.fillRect(8, 8, 496, 112);
     ctx.fill();
     ctx.strokeStyle = horseConfig.color_hex || "#ffffff";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 8;
     ctx.stroke();
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 26px sans-serif";
+    ctx.font = "bold 52px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(`#${horseConfig.number} ${horseConfig.name}`, 128, 40);
+    ctx.fillText(`#${horseConfig.number} ${horseConfig.name}`, 256, 80);
 
     const badgeTexture = new THREE.CanvasTexture(badgeCanvas);
     badgeTexture.encoding = THREE.sRGBEncoding;
