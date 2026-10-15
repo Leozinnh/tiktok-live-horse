@@ -72,7 +72,7 @@ class Settings(BaseModel):
     countdown_duration_seconds: float = 5.0
     podium_duration_seconds: float = 8.0
     xp_duration_seconds: float = 6.0
-    leaderboard_duration_seconds: float = 10.0
+    leaderboard_duration_seconds: float = 5.0
     track_length_meters: float = 3000.0
     tick_rate: int = 60
     tts: TtsConfig = Field(default_factory=TtsConfig)

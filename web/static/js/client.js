@@ -122,8 +122,11 @@ class GameClient {
         }
         this.scene.update(now / 1000.0, directorState, foco);
 
-        // 4. Atualizar câmera cinematográfica
+        // 4. Atualizar câmera cinematográfica. A legenda do quadro sai daqui:
+        // o diretor de câmera sabe quem está na tela e por quê, e o HUD só
+        // escreve na tela quando o quadro MUDA (não a cada frame).
         this.cameraDirector.update(dt, directorState, engineData);
+        if (this.hud) this.hud.setCameraFocus(this.cameraDirector.foco);
 
         // 5. Atualizar áudio dinâmico durante a corrida
         if (directorState === "RACING" && horses.length > 0) {

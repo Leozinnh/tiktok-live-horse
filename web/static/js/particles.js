@@ -27,7 +27,11 @@ class ParticleSystem {
     this.confettiParticles = [];
     this.initConfetti();
 
-    // 6. Fogos de Artifício Triunfantes do Campeão
+    // 6.1 Anéis de Impacto do Boost Comum (curtida, torcida, presente pequeno)
+    this.boostRings = [];
+    this.initBoostRings();
+
+    // 7. Fogos de Artifício Triunfantes do Campeão
     this.fireworkSparks = [];
     this.fireworkPoolSize = 160;
     this.initFireworks();
@@ -101,7 +105,9 @@ class ParticleSystem {
     }
   }
 
-  emitTurboSparks(pos) {
+  // Faíscas do turbo comum. Com a cor do cavalo elas ficam na identidade dele
+  // (o ouro do RELÂMPAGO, o verde do FURACÃO) em vez do azul fixo de antes.
+  emitTurboSparks(pos, cor = null) {
     for (let k = 0; k < 3; k++) {
       const s = this.sparks.find((item) => !item.mesh.visible);
       if (!s) break;
@@ -110,6 +116,7 @@ class ParticleSystem {
         pos.y + 1.2 + (Math.random() - 0.5) * 0.8,
         pos.z + (Math.random() - 0.5) * 1.0
       );
+      if (cor !== null) s.mesh.material.color.setHex(cor);
       s.mesh.visible = true;
       s.life = 0.45;
       s.vx = (Math.random() - 0.5) * 4.0;
@@ -159,6 +166,57 @@ class ParticleSystem {
       m.visible = false;
       this.scene.add(m);
       this.mythicEmbers.push({ mesh: m, life: 0, vx: 0, vy: 0, vz: 0 });
+    }
+  }
+
+  initBoostRings() {
+    // Anel rasteiro do "kick" do boost comum: bem menor que a onda de choque
+    // lendária (que varre 35m) — é um empurrão, não um impacto mítico.
+    for (let i = 0; i < 8; i++) {
+      const ringGeo = new THREE.RingGeometry(0.6, 2.0, 28);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.0,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.visible = false;
+      this.scene.add(ring);
+      this.boostRings.push({ mesh: ring, life: 0, maxLife: 0.55, cor: 0x38bdf8 });
+    }
+  }
+
+  // Disparado no primeiro frame em que o cavalo ganha um boost (curtida,
+  // torcida ou presente pequeno): o anel no chão avisa que o empurrão pegou.
+  emitBoostBurst(pos, cor = 0x38bdf8) {
+    const ring = this.boostRings.find((r) => !r.mesh.visible);
+    if (ring) {
+      ring.mesh.position.set(pos.x, 0.22, pos.z);
+      ring.mesh.material.color.setHex(cor);
+      ring.mesh.material.opacity = 0.8;
+      ring.mesh.visible = true;
+      ring.life = ring.maxLife;
+      ring.mesh.scale.set(1, 1, 1);
+    }
+
+    for (let k = 0; k < 8; k++) {
+      const s = this.sparks.find((item) => !item.mesh.visible);
+      if (!s) break;
+      s.mesh.position.set(
+        pos.x + (Math.random() - 0.5) * 2.4,
+        pos.y + 0.6 + Math.random() * 2.2,
+        pos.z + (Math.random() - 0.5) * 2.4
+      );
+      s.mesh.material.color.setHex(cor);
+      s.mesh.visible = true;
+      s.life = 0.5;
+      s.vx = (Math.random() - 0.5) * 9.0;
+      s.vy = 3.0 + Math.random() * 5.0;
+      s.vz = (Math.random() - 0.5) * 9.0;
+      s.mesh.material.opacity = 0.95;
     }
   }
 
@@ -410,6 +468,22 @@ class ParticleSystem {
           const currentScale = 1.0 + prog * 16.0;
           s.mesh.scale.set(currentScale, currentScale, 1.0);
           s.mesh.material.opacity = Math.max(0, 0.95 * (1.0 - prog));
+        }
+      }
+    }
+
+    // 2.1 Atualizar Anéis do Boost Comum
+    for (let i = 0; i < this.boostRings.length; i++) {
+      const r = this.boostRings[i];
+      if (r.mesh.visible) {
+        r.life -= dt;
+        if (r.life <= 0) {
+          r.mesh.visible = false;
+        } else {
+          const prog = 1.0 - (r.life / r.maxLife);
+          const escala = 1.0 + prog * 4.5;
+          r.mesh.scale.set(escala, escala, 1.0);
+          r.mesh.material.opacity = Math.max(0, 0.8 * (1.0 - prog));
         }
       }
     }

@@ -114,7 +114,7 @@ Para calibrar o ritmo da transmissão sem encostar em código Python, edite `con
   "countdown_duration_seconds": 5.0,    // Contagem regressiva antes da largada (5.. 4.. 3..)
   "podium_duration_seconds": 8.0,       // Duração da tela de pódio dos vencedores
   "xp_duration_seconds": 6.0,           // Duração da tela de distribuição de XP
-  "leaderboard_duration_seconds": 10.0, // Duração da tela de TOP jogadores da LIVE
+  "leaderboard_duration_seconds": 5.0,  // Duração da tela de TOP jogadores da LIVE
   "track_length_meters": 3000.0,        // Comprimento da pista oval em metros virtuais
   "tick_rate": 60,                      // Taxa de atualização física por segundo (60 Hz)
   "tts": {
@@ -172,7 +172,7 @@ horses/
   "id": 1,
   "number": 1,
   "name": "RELÂMPAGO",
-  "body_model": "slender_racer",        // Modelo 3D ("classic", "armored", "pegasus", "cyber", "heavy_tank", "unicorn", "spectral", "slender_racer")
+  "body_model": "slender_racer",        // Modelo 3D ("classic", "armored", "pegasus", "cyber", "heavy_tank", "unicorn", "spectral", "slender_racer", "lightning_racer")
   "visual_style": "solar",              // Estilo temático ("solar", "storm", "fire", "nature", "shadow", "earth", "ice", "spectral")
   "color_hex": "#F59E0B",               // Cor principal da pelagem do cavalo
   "secondary_color_hex": "#FEF3C7",     // Cor da manta de sela
@@ -203,6 +203,7 @@ Cada modelo 3D é um arquivo JavaScript independente na pasta `web/static/js/bod
 | **`unicorn`** | `unicorn_body.js` | **Unicórnio Místico Radiante:** Chifre espiral arco-íris monumental de 1.85m iluminado com gradiente em 6 cores (magenta, violeta, ciano, esmeralda, dourado e diamante), gemas espiraladas, estrela de diamante no topo, crina em 4 mechas multicoloridas pastel e cauda mágica tricolor. |
 | **`spectral`** | `spectral_body.js` | **Fantasma Espectral:** Materiais translúcidos com brilho etéreo próprio, costelas fantasmagóricas visíveis, cauda fluida e olhos azuis brilhantes. |
 | **`slender_racer`** | `slender_racer_body.js` | **Velocista Aerodinâmico:** Corpo afilado e rebaixado (3.5m), pescoço esticado em cunha e jóquei deitado em postura ultra-aerodinâmica de dragster. |
+| **`lightning_racer`** | `lightning_racer_body.js` | **Corcel do Trovão:** Velocista dourado cravado de eletricidade — pelagem que devolve luz própria (emissiva), 3 raios em ziguezague por flanco, aerofólio de dragster com endplates de raio, crina de 7 espinhos incandescentes, cascos e olhos acesos e **arcos elétricos azul-gelo** que saltam de um lado ao outro do corpo enquanto ele corre (modelo do #1 RELÂMPAGO). |
 
 ### 4.2 Como Criar um Novo Modelo de Corpo 3D
 1. Crie um arquivo em `web/static/js/bodies/meu_modelo.js`.
@@ -230,7 +231,7 @@ Cada modelo 3D é um arquivo JavaScript independente na pasta `web/static/js/bod
 
 | Nº | Nome | Arquivo JSON | Modelo 3D (`body_model`) | Cor / Crina | Arquétipo |
 |:---:|:---|:---:|:---:|:---:|:---|
-| **#1** | **RELÂMPAGO** | `1_relampago.json` | `slender_racer` | Ouro / Âmbar | `FRONT_RUNNER` |
+| **#1** | **RELÂMPAGO** | `1_relampago.json` | `lightning_racer` | Ouro / Âmbar | `FRONT_RUNNER` |
 | **#2** | **TROVÃO** | `2_trovao.json` | `cyber` | Azul / Meia-noite | `CLOSER` |
 | **#3** | **FURACÃO** | `3_furacao.json` | `classic` | Verde / Floresta | `PACER` |
 | **#4** | **RAIO** | `4_raio.json` | `pegasus` | Vermelho / Bordô | `DRAFTER` |
@@ -294,6 +295,24 @@ Curtida é gratuita e infinita: o empurrão é de propósito **bem leve**, não 
 ### 5.2.2 Torcida no Chat (número digitado com a corrida rolando)
 Quando alguém digita o **número de um cavalo durante a corrida** (fase `RACING`), o cavalo leva um empurrão de torcida `TORCIDA NO CHAT` (**`+0.4 m/s`** por 2s — `TORCIDA_EXTRA_SPEED`/`TORCIDA_DURATION_SECONDS` em `game/director.py`, somando no mesmo teto de `+0.9 m/s` da curtida) e o telão anuncia *"{nome} torce pelo {cavalo}!"*.
 É um carinho, não um voto: não vale na apuração, não mexe na lista de apoiadores do cavalo, não rende XP e não fala nada na voz — o chat pode incentivar a cada mensagem sem virar bagunça na fila da narração.
+
+### 5.2.3 Voto no Fim da Corrida (pódio, XP e ranking)
+O número digitado com o **pódio, o XP ou o ranking** na tela é **voto para a PRÓXIMA corrida** (fases `PODIUM`, `XP_REWARDS` e `LEADERBOARD`, constante `FASES_DE_PRE_VOTO` em `game/director.py`). Antes o comentário era descartado e o espectador via a escolha não contabilizar — bem no trecho em que a live fica parada olhando o resultado, o que é justamente quando o chat digita.
+
+* O voto **não** entra em `horse_supporters` na hora: esse mapa é zerado quando o ciclo vira e o voto iria junto. Ele fica em `director._pre_votos` (username normalizado → voto, com o espectador já criado no banco) e é despejado no mapa de apoios por `_aplicar_pre_votos()`, logo depois da virada — tanto no fim natural do ranking quanto no 🔄 do painel.
+* Ao abrir a votação nova o voto **já está contando**: aparece na grade do HUD (`recent_supporters`), entra no `record_choice` da largada e rende XP como qualquer outro. Quem votou também fica marcado como torcedor daquele cavalo, então um presente enviado depois cai no **mesmo** cavalo.
+* Dois números digitados na mesma fase: vale o **último** (trocar de ideia no pódio é normal). O aviso *"{nome} escolheu {cavalo}!"* sai na hora, para o chat ver que o comentário valeu.
+* A corrida que acabou **não** ganha apoiador retroativo, e a fase de `RACING` continua sendo torcida (empurrão leve, sem voto) — a votação segue travada na largada.
+
+### 5.2.4 O Efeito de Boost no Cavalo (halo de energia + fitas de velocidade)
+Todo boost — presente, curtida em rajada ou torcida do chat — acende o **mesmo** efeito no cavalo. Ele é montado num único lugar (`createAuras`, em `web/static/js/bodies/body_helpers.js`) e animado em `horses_view.js`, então os 8 modelos de corpo o herdam sem exceção:
+
+* **Halo de energia no chão:** disco de riscos radiais girando rente à areia, com anel de choque na borda, **na cor da pelagem do cavalo** (o RELÂMPAGO dourado acende dourado; a PANTERA escura acende azul-aço). Substituiu a esfera wireframe que envolvia o animal — um balão que escondia o modelo e não dizia nada de velocidade.
+* **Fitas de velocidade na garupa:** 7 caudas de luz que nascem curtas, esticam com a velocidade e tremulam em onda atrás do cavalo — o rastro é o que se vê no quadro de perseguição (`CAM_CHASE`), o mais usado na live.
+* **Pelagem em brasa:** a capa do cavalo passa a devolver luz própria (`emissiveIntensity` em pulso com o halo) — o cavalo apoiado brilha mesmo no escuro da arena.
+* **Estouro do presente:** no instante em que o boost entra, um anel de choque e 8 faíscas na cor do cavalo saltam do ponto onde ele está; enquanto o turbo dura, faíscas continuam saindo pelos cascos.
+* **Entrada rápida e saída suave:** o efeito sobe em ~0,11s e apaga em ~0,33s quando o boost vence — nunca corta seco, e nunca fica aceso depois (travado por verificação no navegador: `halo 0.00 / fitas 0.00` no cavalo sem boost).
+* **Arcos elétricos junto:** os arcos do modelo `lightning_racer` respondem à mesma intensidade — quanto mais rápido o cavalo e mais forte o boost, mais arcos acendem por frame.
 
 ### 5.3 Presentes Míticos e Super Raros (Leão, Galáxia, Dragão)
 Quando um presente raro é enviado, os seguintes efeitos são ativados simultaneamente:
@@ -444,17 +463,44 @@ Com a pista triplicada (3000m), o miolo do infield virou um gramado liso de ~900
 
 ## 8. Câmeras Cinematográficas (`web/static/js/camera.js`)
 
-A câmera alterna de modo automaticamente conforme os acontecimentos da corrida:
+O diretor de câmera tem duas decisões separadas: **QUEM** está na tela (`sujeito` + `motivo`) e **de que ângulo** a câmera olha o sujeito (o modo).
+
+### Ângulos
 
 1. **`CAM_START`:** Visão aberta panorâmica e elevada (portão de largada $-450$ deslocado em $-65, +36, +76$) focando os boxes de largada durante a votação e contagem.
-2. **`CAM_CHASE`:** Câmera aérea esportiva recuada a **44m de distância** e **24m de altura** do cavalo líder, enquadrando os 8 cavalos sem aperto no formato vertical do celular.
-3. **`CAM_SIDE`:** Câmera lateral aberta de helicóptero a **46m de distância lateral** e **28m de altura**, perfeita para acompanhar ultrapassagens nas curvas.
-4. **`CAM_FINISH`:** Câmera angular na reta final (linha de chegada deslocada em $-42, +17, +34$) focando a aproximação em alta velocidade para cruzar a linha quadriculada.
-5. **`CAM_PODIUM`:** Órbita circular de 360 graus a 22m de raio ao redor do vencedor durante a celebração com chuva de confetes.
+2. **`CAM_CHASE`:** Câmera aérea esportiva recuada a **48m de distância** e **26m de altura** do cavalo do quadro. Na tomada de presente ela fecha para **34m / 17m** — o cavalo empurrado passa na cara do público.
+3. **`CAM_SIDE`:** Câmera lateral aberta de helicóptero a **46m de distância lateral** e **28m de altura**, perfeita para acompanhar ultrapassagens nas curvas. Na tomada da lanterna desce para **34m / 15m** (rente ao chão, no drama do último colocado).
+4. **`CAM_WIDE`:** Plano aberto do pelotão: câmera alta e **por fora da pista** (92m de afastamento pela normal externa do ponto), olhando o meio do grupo — é a tomada que mostra a corrida inteira de uma vez.
+5. **`CAM_DUEL`:** Plano da perseguição: de lado, no **meio** dos dois primeiros, com a câmera se afastando conforme a diferença entre eles ($34 + 0{,}9 \times vão$, teto de 80m) — os dois ficam no quadro mesmo quando o líder dispara.
+6. **`CAM_FINISH`:** Câmera angular na reta final (linha de chegada deslocada em $-42, +17, +34$) focando a aproximação em alta velocidade para cruzar a linha quadriculada.
+7. **`CAM_PODIUM`:** Órbita circular de 360 graus a 22m de raio ao redor do vencedor durante a celebração com chuva de confetes.
+
+### Rodízio de Quadros (durante a corrida)
+
+O sujeito da câmera **não é mais fixo no líder**: um rodízio de motivos troca a cada **9 segundos**, e o líder fica com cerca de 30% das tomadas.
+
+| Motivo | Quem entra na tela | Ângulo | Legenda no HUD |
+|---|---|---|---|
+| `PONTA` | 1º colocado | `CAM_CHASE` / `CAM_SIDE` (alterna) | 🎥 NA PONTA |
+| `PERSEGUICAO` | 2º colocado | `CAM_DUEL` | 🎥 A PERSEGUIÇÃO |
+| `PELOTAO` | o do meio do pelotão | `CAM_WIDE` | 🎥 O PELOTÃO |
+| `SUBINDO` | quem mais ganhou posições na última amostra (6s) | `CAM_SIDE` | 🎥 VEM SUBINDO |
+| `LANTERNA` | último colocado | `CAM_SIDE` (rente ao chão) | 🎥 NA LANTERNA |
+| `PRESENTE` | quem acabou de receber boost | `CAM_CHASE` (fechado) | 🌌 PRESENTE DE *doador* |
+
+* A ordem do rodízio é `PONTA, PERSEGUICAO, PELOTAO, PONTA, SUBINDO, LANTERNA, PONTA, PERSEGUICAO, SUBINDO, PELOTAO` (constante `RODIZIO_DE_QUADROS` em `camera.js`).
+* **Presente interrompe o rodízio na hora**: o diretor detecta um boost novo (lista de boosts crescendo ou força subindo — o payload não traz id de boost) e corta para o cavalo que recebeu. É o único jeito de o doador se ver na tela. Presentes mandados **na votação** não disparam corte na largada (a primeira leitura da corrida só marca o que já está na pista).
+* *Empates e quedas:* boost vencendo (força caindo) **não** é presente novo; e se ninguém subiu de posição, o `SUBINDO` cai no penúltimo colocado.
+* Nas tomadas de cor (`PELOTAO`, `SUBINDO`, `LANTERNA`) o cavalo fica o resto da tomada — só `PONTA` e `PERSEGUICAO` seguem a ordem viva da pista, porque ali a troca de dono **é** a notícia. E todo quadro só reinicia o relógio quando o motivo muda: sem isso uma ultrapassagem a cada segundo deixaria a câmera presa num motivo só.
+* Quem já cruzou a linha sai da fila do rodízio: o sujeito passa para o próximo cavalo na pista.
+
+### Legenda do quadro (HUD)
+
+`camera.js` expõe `this.foco` (`{id, numero, nome, motivo, legenda, doador, emoji}`), que `client.js` entrega ao HUD (`hud.setCameraFocus`). O chip `#hudCamera` na barra do topo escreve **"🎥 VEM SUBINDO • #4 RAIO"** — sem ele, um corte para o último colocado parece falha de câmera. Fora da corrida (votação, pódio, XP, ranking) a legenda some, e o HUD só encosta no DOM quando o texto muda (não a cada quadro).
 
 ### Transição Contínua Pós-Chegada:
 * Quando o cavalo vencedor cruza a linha de chegada (3000m), a câmera **não congela**: ela foca automaticamente no próximo cavalo ativo disputando o 2º e 3º lugares!
-* A engine fecha a prova 3.5 segundos após a vitória e dispara imediatamente a tela de **PÓDIO** com órbita 360º.
+* A engine fecha a prova **10,5 segundos** após a vitória (janela para os retardatários cruzarem com tempos distintos) e dispara imediatamente a tela de **PÓDIO** com órbita 360º.
 
 ---
 
@@ -464,7 +510,7 @@ A interface do usuário foi desenhada no padrão das transmissões da **Fórmula
 
 ```text
 ┌────────────────────────────────────────────────────────┐
-│ [🏇 CORRIDA #42 ⚡TEMPESTADE]  [🔴 AO VIVO]  [2.847m] [🔊]│  ← Top Bar
+│ [🏇 CORRIDA #42 ⚡TEMPESTADE 🎥 NA PONTA] [🔴 AO VIVO] [2.847m] [🔊]│  ← Top Bar
 ├────────────────────────────────────────────────────────┤
 │ [───1───2──────3─────────4──5──────6──7────8────────🏁] │  ← Régua de Progresso
 ├────────────────────────────────────────────────────────┤

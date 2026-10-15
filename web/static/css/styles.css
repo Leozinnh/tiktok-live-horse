@@ -183,6 +183,29 @@ html, body {
   color: #7dd3fc;
 }
 
+/* Legenda do quadro da câmera ("🎥 VEM SUBINDO • #4 RAIO"): diz para o
+   público por que a câmera está naquele cavalo. O quadro do presente é o
+   único que acende — é o momento de quem mandou. */
+.camera-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 3px 9px;
+  white-space: nowrap;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fcd34d;
+}
+
+.camera-chip.camera-presente {
+  color: #f472b6;
+  background: rgba(244, 114, 182, 0.14);
+}
+
 .weather-chip.weather-sunset { color: #fb923c; }
 .weather-chip.weather-night_lights { color: #c4b5fd; }
 .weather-chip.weather-rain { color: #60a5fa; }

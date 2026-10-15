@@ -1,3 +1,7 @@
+// Branco usado para "esquentar" o emissivo das pelagens: um emissivo na cor
+// pura do cavalo escurece justamente nos cavalos escuros (PANTERA, FANTASMA).
+const COR_BRANCA = new THREE.Color(0xffffff);
+
 class HorseVisualManager {
   constructor(scene, particleSystem) {
     this.scene = scene;
@@ -150,31 +154,12 @@ class HorseVisualManager {
     tail.rotation.x = -Math.PI / 3;
     body.add(tail);
 
-    // 6. Aura de Turbo / Boost
-    const auraGeo = new THREE.SphereGeometry(2.4, 16, 16);
-    const auraMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.0,
-    });
-    const auraMesh = new THREE.Mesh(auraGeo, auraMat);
-    auraMesh.position.y = 2.0;
-    group.add(auraMesh);
-
-    // 6.1 Aura Mítica Lendária (Leão / Galáxia)
-    const mythicAuraGeo = new THREE.TorusGeometry(3.2, 0.4, 8, 24);
-    const mythicAuraMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.0,
-      side: THREE.DoubleSide
-    });
-    const mythicAura = new THREE.Mesh(mythicAuraGeo, mythicAuraMat);
-    mythicAura.rotation.x = Math.PI / 2;
-    mythicAura.position.y = 2.2;
-    group.add(mythicAura);
+    // 6. Auras de Turbo e Mítica (mesmo efeito dos modelos do registro, para
+    // o corpo de reserva não ficar com o visual antigo)
+    const auras = (window.HorseBodyUtils && HorseBodyUtils.createAuras)
+      ? HorseBodyUtils.createAuras(group, horseConfig)
+      : { aura: null, auraBlades: null, mythicAura: null };
+    const mythicAura = auras.mythicAura;
 
     // 6.2 Emblema Holográfico Flutuante (Leão / Galáxia / Dragão / Rosa / etc)
     const emblemCanvas = document.createElement("canvas");
@@ -248,7 +233,9 @@ class HorseVisualManager {
       neck: neck,
       legs: { frontL, frontR, backL, backR },
       tail: tail,
-      aura: auraMesh,
+      aura: auras.aura,
+      auraBlades: auras.auraBlades,
+      auraBladeMat: auras.auraBladeMat,
       mythicAura: mythicAura,
       emblem: emblemSprite,
       setEmblem: setEmblem,
@@ -469,13 +456,111 @@ class HorseVisualManager {
         horseObj.mythicAura.material.opacity = 0.0;
       }
 
-      // Efeito de Boost / Turbo Comum
-      if (hData.boost_active) {
-        horseObj.aura.material.opacity = 0.55 + Math.sin(Date.now() * 0.015) * 0.25;
-        horseObj.aura.rotation.y += dt * 4.0;
-        this.particles.emitTurboSparks(horseObj.group.position);
-      } else {
-        horseObj.aura.material.opacity = 0.0;
+      // Efeito de Boost / Turbo Comum: halo de energia no chão + fitas de
+      // velocidade na garupa + o próprio cavalo "carregado" (pelagem emissiva).
+      // A intensidade sobe rápido quando o boost entra e cai macio quando ele
+      // expira, então nada pisca na virada nem sobra efeito aceso.
+      if (horseObj.boostInt === undefined) {
+        horseObj.boostInt = 0.0;
+        horseObj.boostAnterior = false;
+        horseObj.corEmissiva = null;
+      }
+      const boostAtivo = !!hData.boost_active;
+      const alvoInt = boostAtivo ? 1.0 : 0.0;
+      const velInt = alvoInt > horseObj.boostInt ? 9.0 : 3.0;
+      horseObj.boostInt += (alvoInt - horseObj.boostInt) * Math.min(1.0, dt * velInt);
+      const bInt = horseObj.boostInt;
+
+      // O "kick" do primeiro frame: anel no chão + faíscas na cor do cavalo
+      if (boostAtivo && !horseObj.boostAnterior) {
+        this.particles.emitBoostBurst(horseObj.group.position, this._corDoCavalo(horseObj, hData));
+      }
+      horseObj.boostAnterior = boostAtivo;
+
+      const tBoost = Date.now() * 0.006;
+      const pulso = 0.5 + Math.sin(tBoost * 2.0 + horseObj.id) * 0.5;
+
+      if (horseObj.aura && horseObj.aura.material) {
+        // Halo rasteiro girando: a textura já traz os riscos radiais
+        horseObj.aura.material.opacity = bInt * (0.30 + pulso * 0.22);
+        horseObj.aura.rotation.z -= dt * (1.6 + bInt * 2.2);
+        const escalaHalo = 0.8 + bInt * (0.22 + pulso * 0.12);
+        horseObj.aura.scale.set(escalaHalo, escalaHalo, 1.0);
+      }
+
+      if (horseObj.auraBlades && horseObj.auraBladeMat) {
+        // Fitas esticando para trás: cada uma em uma fase, então o rastro
+        // fermenta em vez de pulsar todo junto
+        horseObj.auraBladeMat.opacity = bInt * (0.42 + pulso * 0.24);
+        for (let k = 0; k < horseObj.auraBlades.length; k++) {
+          const fita = horseObj.auraBlades[k];
+          const onda = 0.5 + 0.5 * Math.sin(tBoost * 3.4 + fita.phase);
+          const comp = (2.2 + onda * 4.4) * bInt;
+          fita.mesh.visible = bInt > 0.03;
+          fita.mesh.scale.set(0.7 + bInt * 0.5, 0.7 + bInt * 0.5, comp);
+          fita.mesh.position.z = -2.3 - comp * 0.5;
+        }
+      }
+
+      const matCapa = horseObj.body && horseObj.body.material;
+      if (matCapa && matCapa.emissive) {
+        if (horseObj.corEmissiva !== hData.color_hex) {
+          matCapa.emissive.set(hData.color_hex || "#38bdf8");
+          matCapa.emissive.lerp(COR_BRANCA, 0.3);
+          horseObj.corEmissiva = hData.color_hex;
+        }
+        matCapa.emissiveIntensity = bInt * (0.17 + pulso * 0.13);
+      }
+
+      if (bInt > 0.05) {
+        this.particles.emitTurboSparks(horseObj.group.position, this._corDoCavalo(horseObj, hData));
+      }
+
+      // Arcos elétricos do RELÂMPAGO: acendem com a velocidade e o boost
+      if (horseObj.arcos && horseObj.arcos.length) {
+        this._atualizarArcos(horseObj, dt, speed, bInt);
+      }
+    }
+  }
+
+  // Cor do cavalo em inteiro (0xRRGGBB), do jeito que o sistema de partículas
+  // espera. Fica guardada no próprio cavalo: o payload é remontado a cada
+  // frame e converter a string sempre seria lixo novo no GC.
+  _corDoCavalo(horseObj, hData) {
+    if (horseObj.corInt === undefined || horseObj.corHex !== hData.color_hex) {
+      horseObj.corHex = hData.color_hex;
+      horseObj.corInt = new THREE.Color(hData.color_hex || "#38bdf8").getHex();
+    }
+    return horseObj.corInt;
+  }
+
+  // Arcos elétricos: cada arco é uma corrente de faíscas que salta de um lado
+  // ao outro do corpo. Os pontos são sorteados por frame em torno do caminho
+  // base, então o desenho do raio nunca se repete e o arco "corre" sozinho.
+  _atualizarArcos(horseObj, dt, velocidade, bInt) {
+    const intensidade = Math.min(1.0, 0.25 + (velocidade / 28.0) * 0.5 + bInt * 0.55);
+    horseObj.arcoMat.opacity = 0.35 + intensidade * 0.55;
+
+    for (let a = 0; a < horseObj.arcos.length; a++) {
+      const arco = horseObj.arcos[a];
+      arco.timer -= dt;
+      if (arco.timer <= 0) {
+        // Pisca: o raio some e volta, como descarga de verdade
+        arco.timer = 0.04 + Math.random() * 0.16;
+        arco.grupo.visible = Math.random() < 0.35 + intensidade * 0.6;
+      }
+      if (!arco.grupo.visible) continue;
+
+      for (let i = 0; i < arco.segmentos.length; i++) {
+        const seg = arco.segmentos[i];
+        const jitter = (Math.random() - 0.5) * (0.35 + intensidade * 0.65);
+        seg.mesh.position.set(
+          seg.base.x * (0.85 + Math.random() * 0.3),
+          seg.base.y + jitter,
+          seg.base.z + jitter * 1.4 + (i % 2 === 0 ? 0 : 0.12)
+        );
+        seg.mesh.scale.setScalar(0.55 + Math.random() * (0.5 + intensidade * 0.6));
+        seg.mesh.rotation.z = Math.random() * Math.PI;
       }
     }
   }

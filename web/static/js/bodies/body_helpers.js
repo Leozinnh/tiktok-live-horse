@@ -85,12 +85,95 @@ window.HorseBodyUtils = {
     return jockeyGroup;
   },
 
-  createAuras(group) {
-    const auraGeo = new THREE.SphereGeometry(2.4, 16, 16);
-    const auraMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true, transparent: true, opacity: 0 });
-    const auraMesh = new THREE.Mesh(auraGeo, auraMat);
-    auraMesh.position.y = 2.0;
-    group.add(auraMesh);
+  // Textura do halo de energia: riscos radiais saindo de baixo do cavalo mais
+  // um anel de choque na borda. Desenhada uma única vez e compartilhada por
+  // todos os cavalos — quem carrega a cor é o material de cada um.
+  auraTexture() {
+    if (HorseBodyUtils._auraTex) return HorseBodyUtils._auraTex;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    const cx = 128;
+    const cy = 128;
+
+    // Os riscos começam longe do centro (44% do raio): embaixo do cavalo o
+    // halo fica limpo, senão o bicho vira um borrão branco no meio da luz.
+    ctx.lineCap = "round";
+    for (let i = 0; i < 56; i++) {
+      const ang = (i / 56) * Math.PI * 2;
+      const r0 = 46 + (i % 3) * 7;
+      const r1 = 96 + (i % 5) * 12;
+      const x0 = cx + Math.cos(ang) * r0;
+      const y0 = cy + Math.sin(ang) * r0;
+      const x1 = cx + Math.cos(ang) * r1;
+      const y1 = cy + Math.sin(ang) * r1;
+      const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+      grad.addColorStop(0, "rgba(255,255,255,0.95)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = i % 4 === 0 ? 3 : 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+    }
+
+    // Anel de borda: em pista clara (areia) os riscos sozinhos somem.
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 105, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const tex = new THREE.CanvasTexture(canvas);
+    if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+    HorseBodyUtils._auraTex = tex;
+    return tex;
+  },
+
+  // Aura de boost: halo de energia girando no chão + fitas de velocidade
+  // atrás do cavalo. Substituiu a esfera wireframe que envolvia o animal —
+  // um balão que escondia o modelo e não dizia nada. O halo marca o
+  // "empurrão no chão" em qualquer ângulo de câmera e as fitas dão o rastro
+  // de velocidade no enquadramento de perseguição, que é o mais usado na live.
+  createAuras(group, cfg) {
+    const boostColor = new THREE.Color((cfg && cfg.color_hex) || "#38bdf8");
+
+    const haloMat = new THREE.MeshBasicMaterial({
+      map: HorseBodyUtils.auraTexture(),
+      color: boostColor,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(11, 11), haloMat);
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.y = 0.09;
+    halo.renderOrder = 3;
+    group.add(halo);
+
+    // Fitas de velocidade: caudas de luz na garupa (o modelo corre para +z,
+    // então o rastro sai no -z). Nascem curtas e são esticadas em update().
+    const bladeMat = new THREE.MeshBasicMaterial({
+      color: boostColor,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const blades = [];
+    for (let i = 0; i < 7; i++) {
+      const lateral = (i / 6) - 0.5; // leque de -1,1m a +1,1m
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 1.0), bladeMat);
+      blade.position.set(lateral * 2.2, 1.25 + (i % 3) * 0.7, -2.3);
+      blade.renderOrder = 3;
+      group.add(blade);
+      blades.push({ mesh: blade, phase: i * 0.9 });
+    }
 
     const mythicAuraGeo = new THREE.TorusGeometry(3.2, 0.4, 8, 24);
     const mythicAuraMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, wireframe: true, transparent: true, opacity: 0, side: THREE.DoubleSide });
@@ -99,7 +182,13 @@ window.HorseBodyUtils = {
     mythicAura.position.y = 2.2;
     group.add(mythicAura);
 
-    return { aura: auraMesh, mythicAura: mythicAura };
+    return {
+      aura: halo,
+      auraHaloMat: haloMat,
+      auraBlades: blades,
+      auraBladeMat: bladeMat,
+      mythicAura: mythicAura,
+    };
   },
 
   createBadgeAndEmblem(group, cfg) {

@@ -39,6 +39,7 @@ class BroadcastHUD {
     this.raceBadgeEl = document.getElementById("raceBadge");
     this.raceNumberEl = document.getElementById("hudRaceNumber");
     this.weatherEl = document.getElementById("hudWeather");
+    this.cameraEl = document.getElementById("hudCamera");
     this.statePillEl = document.getElementById("hudStatePill");
     this.stateTextEl = document.getElementById("hudStateText");
     this.timerEl = document.getElementById("hudTimer");
@@ -52,6 +53,8 @@ class BroadcastHUD {
     // número da contagem já foi exibido (evita remontar/piscar a cada update).
     this.votingPanelState = null;
     this.countdownShown = null;
+    // Última legenda de câmera escrita na tela (só reescreve quando muda).
+    this.cameraText = null;
   }
 
   applyConfig(config) {
@@ -166,6 +169,40 @@ class BroadcastHUD {
     this.weatherEl.innerText = `${info.icon} ${info.label}`;
     this.weatherEl.className = `weather-chip weather-${weather.toLowerCase()}`;
     this.weatherEl.style.display = "flex";
+  }
+
+  /** Legenda do quadro da câmera: "🎥 VEM SUBINDO • #4 RAIO".
+   *
+   * A câmera troca de cavalo no meio da prova — sem dizer QUEM está na tela
+   * (e por quê), o corte parece falha de câmera em vez de transmissão.
+   * Recebe o foco do diretor de câmera a cada quadro do jogo: por isso só
+   * encosta no DOM quando o texto muda (nada de repintar 60x por segundo).
+   */
+  setCameraFocus(foco) {
+    if (!this.cameraEl) return;
+    if (!foco) {
+      if (this.cameraEl.style.display !== "none") this.cameraEl.style.display = "none";
+      this.cameraText = null;
+      return;
+    }
+
+    const nome = foco.nome || `#${foco.numero}`;
+    const numero = foco.numero !== undefined ? `#${foco.numero} ` : "";
+    let texto = `🎥 ${foco.legenda || foco.motivo}`;
+    let classe = "camera-chip";
+    if (foco.motivo === "PRESENTE") {
+      // Presente é a estrela da tomada: a legenda vira o agradecimento a
+      // quem mandou (é ele que está vendo a live procurando o próprio nome).
+      texto = `${foco.emoji || "🎁"} PRESENTE DE ${(foco.doador || "ANÔNIMO").toUpperCase()}`;
+      classe += " camera-presente";
+    }
+    texto += ` • ${numero}${nome}`;
+
+    if (texto === this.cameraText) return;
+    this.cameraText = texto;
+    this.cameraEl.innerText = texto;
+    this.cameraEl.className = classe;
+    this.cameraEl.style.display = "flex";
   }
 
   renderTimer(state, stateData) {

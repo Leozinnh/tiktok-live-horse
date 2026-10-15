@@ -85,7 +85,7 @@ window.HorseBodyRegistry["armored"] = function buildArmoredHorse(cfg, scene) {
   body.add(tail);
 
   // 7. Auras, Badge e Emblema
-  const auras = HorseBodyUtils.createAuras(group);
+  const auras = HorseBodyUtils.createAuras(group, cfg);
   const badgeObj = HorseBodyUtils.createBadgeAndEmblem(group, cfg);
 
   scene.add(group);
@@ -101,6 +101,9 @@ window.HorseBodyRegistry["armored"] = function buildArmoredHorse(cfg, scene) {
     legs: legs,
     tail: tail,
     aura: auras.aura,
+    auraHaloMat: auras.auraHaloMat,
+    auraBlades: auras.auraBlades,
+    auraBladeMat: auras.auraBladeMat,
     mythicAura: auras.mythicAura,
     emblem: badgeObj.emblem,
     setEmblem: badgeObj.setEmblem,

@@ -117,6 +117,15 @@ MARGEM_FOTO_FINISH_MS = 150.0
 # de lembrete — o locutor de rádio não fica mudo pedindo voto.
 CHAMADA_VOTACAO_INTERVALO = 12.0
 
+# Fases de fim de corrida (pódio, XP, ranking): a votação da próxima prova
+# ainda não abriu, mas o chat já está digitando número. Esses votos são
+# PRÉ-VOTOS — guardados para a corrida seguinte em vez de jogados no lixo.
+FASES_DE_PRE_VOTO = (
+    DirectorState.PODIUM,
+    DirectorState.XP_REWARDS,
+    DirectorState.LEADERBOARD,
+)
+
 
 class EventDirector:
     def __init__(
@@ -144,6 +153,11 @@ class EventDirector:
         # Não é voto e não mexe em XP/banco: serve só para o presente de quem
         # já disse por quem torce cair no MESMO cavalo. Zera a cada corrida.
         self.torcida_por_viewer: Dict[str, int] = {}
+        # Mapa: username (normalizado) -> voto digitado no FIM da corrida
+        # anterior (pódio, XP, ranking), à espera da votação nova. Não entra em
+        # `horse_supporters` na hora porque esse mapa é zerado quando o ciclo
+        # vira — o voto sumiria. É despejado lá por `_aplicar_pre_votos`.
+        self._pre_votos: Dict[str, Dict[str, Any]] = {}
         # Mapa: user_id -> viewer_dict
         self.viewers_cache: Dict[str, Dict[str, Any]] = {}
         # Fila de notificações para o HUD
@@ -245,14 +259,19 @@ class EventDirector:
 
         Na votação é o VOTO (vale XP e entra no banco); com a corrida
         ROLANDO é torcida — um empurrãozinho leve no cavalo citado, sem
-        tocar em voto nem em banco (ver `_empurrao_da_torcida`). Fora
-        desses dois momentos o comentário chegou tarde: é ignorado.
+        tocar em voto nem em banco (ver `_empurrao_da_torcida`). No fim da
+        corrida (pódio, XP, ranking) é PRÉ-VOTO: a votação ainda não abriu,
+        mas o comentário vale para a prova seguinte.
         """
         if horse_id not in [h.id for h in self.config.horses]:
             return False
 
         if self.state == DirectorState.RACING:
             self._empurrao_da_torcida(tiktok_username, display_name, horse_id)
+            return True
+
+        if self.state in FASES_DE_PRE_VOTO:
+            await self._guardar_pre_voto(tiktok_username, display_name, horse_id)
             return True
 
         # Aceita votos tanto na fase VOTING quanto na contagem COUNTDOWN
@@ -289,6 +308,63 @@ class EventDirector:
         })
 
         return True
+
+    async def _guardar_pre_voto(self, tiktok_username: str, display_name: str, horse_id: int) -> None:
+        """Voto digitado com o pódio/XP/ranking na tela (a votação ainda não abriu).
+
+        Não pode entrar em `horse_supporters` agora: esse mapa é zerado quando
+        o ciclo vira, e o voto iria junto. Fica esperando aqui — com o
+        espectador já criado no banco, que é a identidade usada pelo
+        `record_choice` da largada — e é despejado por `_aplicar_pre_votos`.
+        O aviso sai na hora para o chat ver que o comentário valeu.
+        """
+        viewer = await self.repository.get_or_create_viewer(tiktok_username, display_name)
+        self.viewers_cache[viewer["tiktok_username"]] = viewer
+        # Chave normalizada igual à do banco: "Ana" e "ana" são a MESMA pessoa,
+        # e o voto novo do mesmo usuário substitui o anterior (trocar de ideia
+        # no pódio é normal).
+        self._pre_votos[viewer["tiktok_username"]] = {
+            "viewer_id": viewer["id"],
+            "tiktok_username": viewer["tiktok_username"],
+            "display_name": viewer["display_name"],
+            "level": viewer["level"],
+            "horse_id": horse_id,
+        }
+        h_name = self._nome_cavalo(horse_id)
+        self._adicionar_notificacao({
+            "type": "CHOICE",
+            "text": f"{viewer['display_name']} escolheu {h_name}!",
+            "horse_id": horse_id,
+            "horse_name": h_name,
+            "badge": "🏇"
+        })
+        logger.info(
+            f"🏇 {viewer['display_name']} escolheu #{horse_id} {h_name} "
+            f"para a próxima corrida (voto no fim da corrida #{self.race_number})."
+        )
+
+    def _aplicar_pre_votos(self) -> None:
+        """Despeja os pré-votos no mapa de apoios da corrida que vai começar.
+
+        Chamado logo DEPOIS de zerar os apoios, na virada do ciclo: quem
+        digitou o número no pódio entra na votação nova já com o cavalo
+        escolhido — contando no placar, na grade do HUD e no `record_choice`
+        da largada, exatamente como um voto normal.
+        """
+        if not self._pre_votos:
+            return
+        for chave, voto in self._pre_votos.items():
+            horse_id = voto["horse_id"]
+            self.horse_supporters[horse_id].append(
+                {k: v for k, v in voto.items() if k != "horse_id"}
+            )
+            self.engine.set_supporter_count(horse_id, len(self.horse_supporters[horse_id]))
+            # Quem escolheu já disse por quem torce: se mandar presente durante
+            # a prova, o presente cai no MESMO cavalo (igual à torcida do chat).
+            if chave:
+                self.torcida_por_viewer[chave] = horse_id
+        logger.info(f"🏇 {len(self._pre_votos)} voto(s) do fim da corrida anterior já contando.")
+        self._pre_votos.clear()
 
     def _empurrao_da_torcida(self, tiktok_username: str, display_name: str, horse_id: int) -> None:
         """O empurrãozinho de quem digita o número com a corrida rolando.
@@ -711,6 +787,8 @@ class EventDirector:
         # A torcida é da corrida que acabou: no ciclo novo ninguém torceu
         # ainda, e um presente dado antes de torcer volta a ser sorteado.
         self.torcida_por_viewer = {}
+        # Quem votou no pódio/XP/ranking já entra como apoiador da corrida nova.
+        self._aplicar_pre_votos()
         self.state = DirectorState.VOTING
         self.state_timer = 0.0
         self.last_race_rewards = []
@@ -870,6 +948,9 @@ class EventDirector:
                 self.horse_supporters = {h.id: [] for h in self.config.horses}
                 # A torcida é da corrida que acabou (ver `reset_to_new_race`).
                 self.torcida_por_viewer = {}
+                # Quem votou no pódio/XP/ranking já entra como apoiador da
+                # corrida nova — senão o comentário do fim da corrida some.
+                self._aplicar_pre_votos()
                 self.state = DirectorState.VOTING
                 self.state_timer = 0.0
                 self.last_race_rewards = []

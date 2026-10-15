@@ -2,7 +2,7 @@
   "id": 1,
   "number": 1,
   "name": "RELÂMPAGO",
-  "body_model": "slender_racer",
+  "body_model": "lightning_racer",
   "visual_style": "solar",
   "color_hex": "#F59E0B",
   "secondary_color_hex": "#FEF3C7",

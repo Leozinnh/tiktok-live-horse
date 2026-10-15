@@ -219,9 +219,10 @@ async def test_numero_digitado_com_a_corrida_rodando_empurra_o_cavalo(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_numero_digitado_fora_da_corrida_nao_empurra(tmp_path):
-    """Número digitado só vale na votação (voto) ou na corrida (torcida):
-    comentário atrasado no pódio não empurra mais ninguém."""
+async def test_numero_digitado_no_podio_nao_empurra_ninguem(tmp_path):
+    """Número digitado só EMPURRA cavalo na votação (voto) ou na corrida
+    (torcida): comentário que chega no pódio não mexe mais na prova que
+    acabou — ele vira voto para a próxima (ver os testes de pré-voto)."""
     from game.director import DirectorState, EventDirector
     from game.engine import RaceEngine
 
@@ -243,9 +244,84 @@ async def test_numero_digitado_fora_da_corrida_nao_empurra(tmp_path):
             break
     assert director.state == DirectorState.PODIUM
 
-    assert await director.handle_viewer_choice("ana", "Ana", 5) is False
+    await director.handle_viewer_choice("ana", "Ana", 5)
     assert not any(n["type"] == "CHEER" for n in director.notifications_queue)
     assert all(not h.active_boosts for h in director.engine.horses)
+    # A corrida que acabou não ganha apoiador retroativo.
+    assert all(not sups for sups in director.horse_supporters.values())
+
+
+@pytest.mark.asyncio
+async def test_voto_durante_o_xp_conta_para_a_corrida_seguinte(tmp_path):
+    """O chat digita número com o XP/ranking na tela: o voto não pode sumir.
+
+    Antes o comentário era descartado (`return False`) e o espectador via a
+    escolha não contabilizar. Agora ele espera a votação nova abrir e entra
+    nela como qualquer outro voto — no placar da grade e na largada.
+    """
+    from game.director import DirectorState, EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.track_length_meters = 120.0
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+    config.podium_duration_seconds = 0.05
+    config.xp_duration_seconds = 30.0  # segura a fase de XP para o teste
+
+    repo = DatabaseRepository(db_path=str(tmp_path / "prevoto.db"))
+    await repo.init_db()
+    director = EventDirector(config=config, engine=RaceEngine(config), repository=repo)
+
+    await director.tick(0.15)
+    await director.tick(0.06)
+    for _ in range(400):
+        await director.tick(0.1)
+        if director.state == DirectorState.XP_REWARDS:
+            break
+    assert director.state == DirectorState.XP_REWARDS
+
+    assert await director.handle_viewer_choice("ana", "Ana", 4) is True
+    assert director._pre_votos["ana"]["horse_id"] == 4
+    # Enquanto o XP está na tela ninguém apoia a corrida que acabou.
+    assert all(not sups for sups in director.horse_supporters.values())
+
+    # A votação nova abre: o pré-voto tem de estar contando.
+    config.xp_duration_seconds = 0.05
+    config.leaderboard_duration_seconds = 0.05
+    for _ in range(40):
+        await director.tick(0.05)
+        if director.state == DirectorState.VOTING:
+            break
+    assert director.state == DirectorState.VOTING
+    assert director.race_number == 2
+    assert director.get_current_choices_summary()[4]["supporters_count"] == 1
+    assert director.get_current_choices_summary()[4]["recent_supporters"] == ["Ana"]
+    assert not director._pre_votos  # despejado, não sobra para a corrida seguinte
+
+
+@pytest.mark.asyncio
+async def test_trocar_de_ideia_no_ranking_vale_so_o_ultimo_numero(tmp_path):
+    """Dois números digitados na mesma fase de fim de corrida: vale o último."""
+    from game.director import DirectorState, EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.voting_duration_seconds = 0.1
+
+    repo = DatabaseRepository(db_path=str(tmp_path / "troca.db"))
+    await repo.init_db()
+    director = EventDirector(config=config, engine=RaceEngine(config), repository=repo)
+    director.state = DirectorState.LEADERBOARD
+
+    await director.handle_viewer_choice("ana", "Ana", 3)
+    await director.handle_viewer_choice("ana", "Ana", 7)
+
+    assert list(director._pre_votos) == ["ana"]
+    await director.reset_to_new_race()
+    resumo = director.get_current_choices_summary()
+    assert resumo[7]["supporters_count"] == 1
+    assert resumo[3]["supporters_count"] == 0
 
 
 @pytest.mark.asyncio
