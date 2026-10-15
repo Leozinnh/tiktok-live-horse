@@ -10,6 +10,15 @@
 
   <div class="header">
     <h1>🏇 TikTok LIVE - Painel de Controle e Testes</h1>
+    <div class="identity-bar">
+      <label for="viewerUser">🙋 Espectador de teste:</label>
+      <input type="text" id="viewerUser" value="Leonardo" placeholder="Nome do espectador"
+             oninput="aoTrocarNome()" onchange="aoTrocarNome()">
+      <span class="identity-hint">
+        voto, torcida, presente, curtida, entrada e follow saem TODOS como
+        <strong class="who-echo">@leonardo</strong> — e a lista de usuários agrupa por esse nome
+      </span>
+    </div>
     <div id="connectionStatus" class="status-badge disconnected">
       <span class="status-indicator"></span> CONECTANDO...
     </div>
@@ -55,13 +64,26 @@
       </div>
     </div>
 
-    <!-- Card 2: Simular Comentários -->
+    <!-- Card 2: Corrida ao Vivo (posição, apoios e boost de cada cavalo) -->
+    <div class="card card-corrida">
+      <div class="card-title" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <span>🏁 Corrida ao Vivo</span>
+        <span style="font-size: 12px; color: #94a3b8;" id="corridaResumo">aguardando a largada…</span>
+      </div>
+      <div id="corridaAoVivo" style="max-height: 360px; overflow-y: auto;">
+        <div style="color: #64748b; font-size: 13px;">A classificação, os apoios e o boost de cada cavalo aparecem aqui ao vivo.</div>
+      </div>
+      <p style="margin-top: 8px; font-size: 11px; color: #94a3b8; line-height: 1.5;">
+        👥 é a contagem de votos/apoiadores do cavalo; a última coluna mostra o boost que está
+        empurrando agora e quem mandou.
+      </p>
+    </div>
+
+    <!-- Card 3: Simular Comentários -->
     <div class="card">
       <div class="card-title">💬 Simulação de Comentários / Votos</div>
-      <div class="form-group">
-        <label>Nome do Espectador:</label>
-        <input type="text" id="commentUser" value="Leonardo" placeholder="Nome do usuário">
-      </div>
+      <div class="who-chip">🙋 Comentando como <strong class="who-echo">@leonardo</strong>
+        <span>— trocar o nome é na barra de cima</span></div>
       <div class="form-group">
         <label>Mensagem / Comando:</label>
         <input type="text" id="commentText" value="1" placeholder="Ex: 1, relampago, /turbo, vai!">
@@ -69,7 +91,7 @@
       <button class="btn btn-primary" onclick="sendComment()">Enviar Comentário</button>
       <button class="btn btn-secondary" style="margin-top: 8px;" onclick="simulateJoin()">👤 Simular Entrada na LIVE (Oi da Voz)</button>
       <button class="btn btn-secondary" style="margin-top: 8px;" onclick="simulateFollow()">➕ Simular Seguidor (Agradecimento)</button>
-      
+
       <label style="margin-top: 14px;">Escolha Rápida de Cavalo:</label>
       <div class="quick-buttons">
         <button class="quick-btn" onclick="sendComment('1')">#1 Relâmpago</button>
@@ -85,24 +107,28 @@
         <button class="quick-btn" onclick="sendComment('/turbo')">⚡ /turbo</button>
         <button class="quick-btn" onclick="sendComment('vai bora!')">📣 Bora torcida!</button>
       </div>
+      <p style="margin-top: 10px; font-size: 11px; color: #94a3b8; line-height: 1.5;">
+        Vote com a votação aberta e o número vira <strong>torcida</strong> com a corrida rolando.
+        Mande o presente <strong>sem trocar o nome</strong>: ele cai no cavalo em que você votou/torceu —
+        é esse o caminho que a live vê.
+      </p>
     </div>
 
     <!-- Card 3: Simular Presentes e Rajadas -->
     <div class="card">
       <div class="card-title">🎁 Simulação de Presentes e Boosts</div>
-      <div class="form-group">
-        <label>Nome do Doador:</label>
-        <input type="text" id="giftUser" value="João_Silva" placeholder="Nome do usuário">
-      </div>
+      <div class="who-chip">🎁 Doador <strong class="who-echo">@leonardo</strong>
+        <span>— o mesmo nome do voto: presente e torcida caem no MESMO cavalo</span></div>
       <div class="form-group">
         <label>Presente do TikTok:</label>
         <select id="giftSelect">
-          <option value="Rose">🌹 Rose (Turbo Básico +100 XP)</option>
-          <option value="Coffee">☕ Coffee (Turbo Ágil +100 XP)</option>
-          <option value="Cap">🧢 Cap (Super Boost +250 XP)</option>
-          <option value="Donut">🍩 Donut (Super Boost +250 XP)</option>
-          <option value="Galaxy">🌌 Galaxy (Overdrive Místico +500 XP)</option>
-          <option value="Lion">🦁 Lion (Overdrive Místico +500 XP)</option>
+          <option value="Rose">🌹 Rose — Turbo 1.20x por 12s (+150 XP)</option>
+          <option value="Coffee">☕ Coffee — Turbo 1.20x por 13,5s (+150 XP)</option>
+          <option value="Cap">🧢 Cap — Super Boost 1.35x por 16,5s (+300 XP)</option>
+          <option value="Donut">🍩 Donut — Super Boost 1.35x por 16,5s (+300 XP)</option>
+          <option value="Galaxy">🌌 Galaxy — Overdrive 1.60x por 24s (+1500 XP)</option>
+          <option value="Lion">🦁 Lion — Fúria 1.70x por 27s (+2000 XP)</option>
+          <option value="Dragon">🐉 Dragon — Impacto 1.65x por 25,5s (+1800 XP)</option>
         </select>
       </div>
       <div class="form-group">
@@ -117,7 +143,19 @@
         <button class="quick-btn" style="background: linear-gradient(135deg, #7c3aed, #06b6d4); font-weight: 800;" onclick="sendGift('Galaxy')">🌌 GALÁXIA (+1500 XP)</button>
         <button class="quick-btn" style="background: linear-gradient(135deg, #b91c1c, #f59e0b); font-weight: 800;" onclick="sendGift('Dragon')">🐉 DRAGÃO (+1800 XP)</button>
       </div>
-      
+
+      <label style="margin-top: 14px;">⚡ Turbo Manual por Cavalo (sem passar pelo chat):</label>
+      <div class="quick-buttons" style="grid-template-columns: repeat(4, 1fr);">
+        <button class="quick-btn" onclick="boostHorse(1)">#1 Relâmpago</button>
+        <button class="quick-btn" onclick="boostHorse(2)">#2 Trovão</button>
+        <button class="quick-btn" onclick="boostHorse(3)">#3 Furacão</button>
+        <button class="quick-btn" onclick="boostHorse(4)">#4 Raio</button>
+        <button class="quick-btn" onclick="boostHorse(5)">#5 Pantera</button>
+        <button class="quick-btn" onclick="boostHorse(6)">#6 Titã</button>
+        <button class="quick-btn" onclick="boostHorse(7)">#7 Nevasca</button>
+        <button class="quick-btn" onclick="boostHorse(8)">#8 Fantasma</button>
+      </div>
+
       <label style="margin-top: 14px;">💗 Simulação de Curtidas (Rajada):</label>
       <div class="quick-buttons" style="grid-template-columns: repeat(3, 1fr);">
         <button class="quick-btn" onclick="simulateLikes(5)">💗 5 de uma vez</button>
@@ -132,34 +170,11 @@
       </div>
     </div>
 
-    <!-- Card 4: Ajuste do Tamanho e Posição do Placar (HUD) -->
-    <div class="card">
-      <div class="card-title">📐 Ajuste do Placar no OBS (Tempo Real)</div>
-      
-      <div class="form-group">
-        <label>Tamanho do Placar (Escala): <strong id="hudScaleVal" style="color: #38bdf8;">100%</strong></label>
-        <div class="quick-buttons" style="grid-template-columns: repeat(3, 1fr);">
-          <button class="quick-btn" onclick="changeHudScale(-0.1)">➖ Menor (-10%)</button>
-          <button class="quick-btn" onclick="resetHudScale()">🔄 Padrão (100%)</button>
-          <button class="quick-btn" onclick="changeHudScale(0.1)">➕ Maior (+10%)</button>
-        </div>
-      </div>
+    <!-- Card 4 (removido): o ajuste do placar no OBS. A classificação ficou
+         ancorada no rodapé e o layout está fechado — o cartão virou a
+         "Corrida ao Vivo" lá em cima, que é o que se olha durante a live. -->
 
-      <div class="form-group" style="margin-top: 14px;">
-        <label>Posição Vertical (Altura): <strong id="hudTopVal" style="color: #38bdf8;">195px</strong></label>
-        <div class="quick-buttons" style="grid-template-columns: repeat(2, 1fr);">
-          <button class="quick-btn" onclick="changeHudTop(-25)">▲ Subir (-25px)</button>
-          <button class="quick-btn" onclick="changeHudTop(25)">▼ Descer (+25px)</button>
-        </div>
-      </div>
-
-      <div class="form-group" style="margin-top: 14px;">
-        <label>Elementos da Transmissão:</label>
-        <button class="btn btn-secondary" onclick="toggleProgressHud()">🏁 Ocultar / Mostrar Régua do Topo</button>
-      </div>
-    </div>
-
-    <!-- Card 6: Usuários & Ranking (Admin) -->
+    <!-- Card 5: Usuários & Ranking (Admin) -->
     <div class="card">
       <div class="card-title" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
         <span>👥 Usuários Cadastrados</span>
@@ -172,6 +187,9 @@
       <div id="viewersList" style="margin-top: 10px; max-height: 340px; overflow-y: auto;">
         <div style="color: #64748b; font-size: 13px;">Clique em "Atualizar Lista" para carregar os usuários...</div>
       </div>
+      <p style="margin-top: 8px; font-size: 11px; color: #94a3b8;">
+        A lista se atualiza sozinha quando a corrida termina (é quando o XP muda de mão).
+      </p>
     </div>
 
     <!-- Card 5: Console de Logs & Histórico -->

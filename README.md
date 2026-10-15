@@ -48,13 +48,14 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
 
 ### 1. Controles Imediatos de Corrida:
 - ⏩ **Iniciar Corrida Logo:** Pula o tempo de votação de 30s e inicia a contagem e largada na hora.
-- 🏁 **Finalizar Corrida:** Força o encerramento da corrida e avança imediatamente para o pódio.
+- 🏁 **Finalizar Corrida:** Encerra a prova na hora e entrega o **fim de corrida completo**: o pódio sai na ordem em que os cavalos estavam na pista, o campeão é anunciado na voz e o resultado vai para o banco — igual ao fim natural.
 - 🔄 **Próxima Corrida:** Reinicia o ciclo e prepara a próxima prova com um clique.
 
-### 2. Calibração do HUD no OBS em Tempo Real:
-- **Tamanho do Placar (Escala):** Botões `➖ Menor (-10%)` | `🔄 Padrão (100%)` | `➕ Maior (+10%)` (calibra de 60% a 160%).
-- **Posição Vertical:** Botões `▲ Subir (-25px)` e `▼ Descer (+25px)` para posicionar o placar com liberdade milimétrica.
-- **Régua do Topo:** Botão para ocultar ou exibir a régua de progresso da pista.
+### 2. Corrida ao Vivo (o que se olha durante a transmissão):
+- **Classificação em tempo real:** os 8 cavalos em ordem de chegada, com a barra de progresso da prova de 3000m, a distância em metros e o 🏁 em quem já cruzou.
+- **👥 Apoios:** quantos votos/apoiadores cada cavalo tem — é a leitura da votação enquanto ela corre.
+- **Boost ativo:** o que está empurrando cada cavalo agora e **quem mandou** — presente aparece como multiplicador (`1.70x`), torcida e curtida como velocidade somada (`+0.20 m/s`).
+- **Espectador de teste (identidade única):** um só nome na barra de cima vale para **tudo** — voto, torcida, presente, curtida, entrada e follow. É ele que o painel lembra entre recarregamentos: teste "votei no #7 e mandei presente" sem redigitar nada (o presente cai no mesmo cavalo).
 
 ### 3. Simulação de Eventos & Público:
 - **Comentários & Votos:** Envie votos rápidos nos cavalos (#1 ao #8) ou comandos de torcida (`/turbo`, `bora torcida!`).
@@ -69,6 +70,7 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
   - *Exemplo de quantidade:* 10 rosas (`1.30`) superam 1 rosa (`1.20`), mas continuam abaixo de 1 galáxia (`1.60`). O multiplicador final nunca passa de `1.80`.
   - *Presentes enviados durante a fase de votação já ficam acumulados para a largada!*
 - **Curtidas em Rajada:** quando alguém manda **5 ou mais curtidas de uma vez**, o cavalo que a pessoa apoia — ou o **último colocado da pista**, quando o autor não é identificável — recebe **+0.2 m/s** de velocidade por 1,5 segundo. O empurrão **soma** (não multiplica) e toda a torcida leve fica travada em **+0.9 m/s**: por mais que o chat curta, o cavalo nunca acelera fora de controle. Curtida é gratuita e infinita: não rende XP nem compete com presentes.
+- **⚡ Turbo Manual por Cavalo:** aplica o mesmo Super Boost do Boné (`1.35` por `16,5s`) direto no cavalo escolhido (#1 ao #8), sem passar pelo chat — para levantar um cavalo específico na hora.
 - **Rajada em Massa:** Simule 20 ou 50 espectadores votando simultaneamente para testes de estresse.
 - **Controle de Clima:** Sol Claro, Pôr do Sol, Noite com Refletores do Estádio, Chuva, Tempestade e Vento.
 
@@ -76,11 +78,13 @@ Acesse em qualquer navegador em: **`http://localhost:8000/test`**
 - **👥 Usuários Cadastrados:** lista todos os espectadores no banco com XP, nível, corridas e vitórias, ordenados por XP.
 - **🧹 Zerar (por usuário):** zera XP, nível e estatísticas de um espectador específico, mantendo a identidade dele no banco.
 - **🧨 Zerar TODOS:** zera XP, nível e estatísticas de todos os espectadores de uma vez. Útil para começar uma temporada nova.
+- A lista se atualiza sozinha no fim de cada corrida (é quando o XP muda de mão).
 
 ### 5. Console com Histórico e Filtros:
 - Abas de filtragem: `Todos`, `🎁 Presentes`, `💬 Votos`, `🏁 Fases`.
 - Contadores em tempo real do total de presentes e votos na transmissão.
 - Botões para `🗑️ Limpar` e `📋 Copiar Histórico`.
+- O console conta a **mesma história que a live vê**: voto (`escolheu NEVASCA!`), torcida (`torce pelo FURACÃO!`), presente com o cavalo e o boost que caiu nele, curtida, seguidor e a virada de clima. Cada linha vem do servidor com id único — nada mais se repete nem se perde.
 
 ---
 

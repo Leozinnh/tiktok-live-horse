@@ -58,6 +58,107 @@ async def test_director_state_transitions(tmp_path):
     assert director.state == DirectorState.RACING
 
 
+@pytest.mark.asyncio
+async def test_finish_forcado_monta_o_podio_com_a_corrida_que_estava_na_pista(tmp_path):
+    """🏁 no painel: o pódio tem de ser a corrida que estava acontecendo.
+
+    O `force_finish_race` empurrava todo cavalo para a linha com o MESMO
+    `finish_time_ms` e não montava `final_results` — o diretor lia o pódio do
+    engine e recebia lista VAZIA. Na tela o pódio subia sem cavalo nenhum e o
+    2º/3º lugar virava a ordem do arquivo de configuração (tempos iguais →
+    ordenação estável). Encerrar na mão tem de respeitar quem estava na frente
+    no momento do clique.
+    """
+    from game.director import DirectorState
+    from game.director import EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+
+    repo = DatabaseRepository(db_path=str(tmp_path / "podio_forcado.db"))
+    await repo.init_db()
+    engine = RaceEngine(config)
+    director = EventDirector(config=config, engine=engine, repository=repo)
+
+    await director.tick(0.15)  # VOTING -> COUNTDOWN
+    await director.tick(0.06)  # COUNTDOWN -> RACING
+    for _ in range(20):
+        await director.tick(0.5)  # 10s de prova: o pelotão já se separou
+
+    # Quem estava na frente no exato momento do clique, do 1º ao 8º.
+    na_pista = [h.id for h in sorted(engine.horses, key=lambda h: h.distance, reverse=True)]
+
+    await director.force_finish_race()
+    assert director.state == DirectorState.PODIUM
+
+    assert len(director.podium_data) == 3, "o pódio subiu vazio"
+    assert [p["horse_id"] for p in director.podium_data] == na_pista[:3], (
+        "o pódio não respeitou a corrida que estava na pista"
+    )
+    assert [p["final_position"] for p in director.podium_data] == [1, 2, 3]
+    assert engine.winner_horse_id == na_pista[0]
+
+    # Nada de tempos empatados: com todos no mesmo milissegundo, a ordem do
+    # pódio passa a ser a do arquivo de configuração.
+    tempos = [p["finish_time_ms"] for p in engine.final_results]
+    assert len(set(tempos)) == len(tempos), f"tempos empatados no pódio: {tempos}"
+    assert tempos == sorted(tempos)
+
+
+@pytest.mark.asyncio
+async def test_finish_forcado_nao_grava_o_podio_duas_vezes(tmp_path):
+    """O tick de 60Hz não pode fechar a corrida de novo durante a gravação.
+
+    `force_finish_race` grava os resultados no banco — um `await`, e o loop de
+    simulação roda justamente aí. Se o diretor ainda estivesse em RACING nesse
+    instante, o tick veria o engine FINISHED e fecharia a corrida outra vez: o
+    campeão saía duas vezes no log e as 8 linhas do pódio entravam em dobro em
+    `race_results`.
+    """
+    import sqlite3
+    from game.director import DirectorState
+    from game.director import EventDirector
+    from game.engine import RaceEngine
+
+    config = load_config()
+    config.voting_duration_seconds = 0.1
+    config.countdown_duration_seconds = 0.05
+
+    caminho = tmp_path / "podio_unico.db"
+    repo = DatabaseRepository(db_path=str(caminho))
+    await repo.init_db()
+    engine = RaceEngine(config)
+    director = EventDirector(config=config, engine=engine, repository=repo)
+
+    await director.tick(0.15)
+    await director.tick(0.06)  # RACING
+    for _ in range(8):
+        await director.tick(0.5)
+
+    gravacoes = []
+    original = repo.finish_race
+
+    async def finish_race_com_o_tick_rodando(*args, **kwargs):
+        gravacoes.append(kwargs.get("race_id"))
+        await director.tick(0.1)  # é o que o loop de simulação faz nesse await
+        return await original(*args, **kwargs)
+
+    repo.finish_race = finish_race_com_o_tick_rodando
+
+    await director.force_finish_race()
+    assert director.state == DirectorState.PODIUM
+    assert len(gravacoes) == 1, "o pódio foi gravado mais de uma vez"
+
+    with sqlite3.connect(str(caminho)) as db:
+        linhas = db.execute(
+            "SELECT final_position, COUNT(*) FROM race_results GROUP BY final_position"
+        ).fetchall()
+    assert linhas, "o pódio forçado não foi gravado"
+    assert all(qtd == 1 for _, qtd in linhas), f"posições repetidas no banco: {linhas}"
+
+
 async def _director_votando(tmp_path, nome):
     """Director em VOTING (votação longa: quem manda no relógio é o teste)."""
     from game.director import EventDirector

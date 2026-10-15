@@ -531,26 +531,58 @@ class EventDirector:
         self.state_timer = 0.0
 
     async def force_finish_race(self) -> None:
-        """Força a finalização da corrida e avança para o pódio."""
-        if self.state == DirectorState.RACING:
-            logger.info("⏭️ Corrida finalizada manualmente pelo painel.")
-            # Força avanço dos cavalos para cruzar a linha
-            for h in self.engine.horses:
-                if not h.finished:
-                    h.distance = self.engine.track_length
-                    h.finished = True
-                    # Fallback do painel: se o relógio da corrida já andou, usa
-                    # ele; senão, um tempo plausível de prova de 3000m.
-                    h.finish_time_ms = self.engine.race_elapsed_ms or 107000.0
-            self.engine.status = "FINISHED"
-            self.state = DirectorState.PODIUM
-            self.state_timer = 0.0
-            # A prova acabou por decisão do painel: a locução que sobrou na
-            # fila era passado, e o tempo não vira mais nesta corrida.
-            self._virada_clima_em = None
-            self._descartar_locucao()
-            snapshot = self.engine.get_snapshot()
-            self.podium_data = snapshot.get("final_results", [])[:3]
+        """Força a finalização da corrida e avança para o pódio.
+
+        Este botão tem de entregar o MESMO fim de corrida que a prova teria
+        sozinha — pódio cheio, campeão na voz e resultados no banco. Antes ele
+        empurrava os cavalos na mão e pulava o resto: o pódio subia vazio (o
+        engine não montava `final_results`), o vencedor não era anunciado (a
+        live emendava pódio, XP e ranking em SILÊNCIO) e a corrida nunca era
+        gravada. No log: 15s de pódio sem uma fala.
+        """
+        if self.state != DirectorState.RACING:
+            return
+
+        logger.info("⏭️ Corrida finalizada manualmente pelo painel.")
+        # A prova acabou por decisão do painel: a locução que sobrou na fila era
+        # passado, e o tempo não vira mais nesta corrida.
+        self._virada_clima_em = None
+        self._descartar_locucao()
+
+        # Quem fecha a prova é o ENGINE, pelo mesmo caminho do fim natural:
+        # é daqui que saem o campeão e o pódio ordenado.
+        self.engine.force_finish()
+        snapshot = self.engine.get_snapshot()
+        self.podium_data = snapshot.get("final_results", [])[:3]
+
+        # SAI DA CORRIDA ANTES DE QUALQUER `await`: o tick de 60Hz roda no meio
+        # do caminho e, com o engine já FINISHED e o diretor ainda em RACING,
+        # ele fecharia a corrida UMA SEGUNDA VEZ — o campeão saía duas vezes no
+        # log e o pódio ia em dobro para `race_results`.
+        self.state = DirectorState.PODIUM
+        self.state_timer = 0.0
+
+        if self.podium_data and not self._vitoria_anunciada:
+            self._vitoria_anunciada = True
+            top = self.podium_data[0]
+            resto = ", ".join(
+                f"{p['final_position']}º #{p['horse_id']}" for p in self.podium_data[1:]
+            )
+            logger.info(
+                f"🏆 Corrida #{self.race_number}: venceu o #{top['horse_id']} {top['name']}!"
+                + (f" ({resto})" if resto else "")
+            )
+            if self.narrador is not None:
+                self.narrador.interromper_locucao()
+                self.narrador.anunciar_vencedor(top["horse_id"], top["name"])
+
+        # A prova valeu: os resultados vão para o banco igual ao fim natural.
+        if self.current_db_race_id and self.engine.winner_horse_id:
+            await self.repository.finish_race(
+                race_id=self.current_db_race_id,
+                winner_horse_id=self.engine.winner_horse_id,
+                results=snapshot.get("final_results", []),
+            )
 
     def _descartar_locucao(self) -> None:
         """Manda a voz jogar fora a locução da prova já decidida.

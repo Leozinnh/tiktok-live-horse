@@ -248,6 +248,34 @@ async def test_finish_forcado_descarta_a_locucao(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_finish_forcado_anuncia_o_campeao(tmp_path):
+    """Encerrar pelo painel não pode deixar a live muda.
+
+    O caminho normal anuncia o campeão no cruzamento da linha (com fallback
+    quando a corrida fecha). O `force_finish_race` pulava esse trecho: apertar
+    🏁 levava direto pro pódio **em silêncio** — no log da live foram 15s de
+    pódio, XP e ranking sem uma única fala.
+    """
+    voz = FakeNarrador()
+    director = await _director_em_corrida(tmp_path, "forcado_voz.db", voz)
+
+    await director.tick(0.15)
+    await director.tick(0.06)  # RACING
+    for _ in range(8):
+        await director.tick(0.5)  # a prova andou: há um líder de verdade
+    voz.chamadas.clear()
+
+    await director.force_finish_race()
+
+    vencedores = [c for c in voz.chamadas if c[0] == "vencedor"]
+    assert vencedores, "o pódio forçado ficou mudo"
+    numero, nome = vencedores[0][1], vencedores[0][2]
+    assert nome and numero, "anunciou o campeão sem dizer quem foi"
+    # E o campeão anunciado é o mesmo que o pódio mostra.
+    assert director.podium_data[0]["name"] == nome
+
+
+@pytest.mark.asyncio
 async def test_reset_no_meio_da_corrida_descarta_a_locucao(tmp_path):
     """Reiniciar o ciclo no meio da prova: a locução da corrida velha sai."""
     voz = FakeNarrador()
@@ -569,6 +597,14 @@ def test_anunciar_follow_e_curtidas():
     curtidas = n.anunciar_curtidas("ana_clara", 25)
     assert curtidas is not None
     assert "anaclara" in curtidas.lower()
-    # O radical cobre "curtida", "curtidas" e "curtindo" — as frases variam
-    # com o sorteio do baralho, então a asserção não pode exigir uma flexão só.
-    assert "curtid" in curtidas.lower()
+    assert "curt" in curtidas.lower()
+
+    # A frase sai de um baralho EMBARALHADO: qual delas vem depende do sorteio,
+    # e a garantia tem de valer para a lista inteira. Era uma frase fora do
+    # padrão ("Que rajada, {nome}! Obrigado!", que agradecia sem dizer por quê)
+    # que derrubava esta asserção — mas só quando a suíte rodava inteira, porque
+    # os testes anteriores mudavam o ponto do baralho.
+    from game.falas import CURTIDAS
+    for frase in CURTIDAS:
+        assert "curt" in frase.lower(), f"agradece sem dizer por quê: {frase}"
+        assert "{nome}" in frase, f"não chama o espectador pelo nome: {frase}"

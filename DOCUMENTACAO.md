@@ -505,11 +505,12 @@ A interface do usuário foi desenhada no padrão das transmissões da **Fórmula
 * **Cartela de votação:** grade 4×2 com o número, o nome e os **apoiadores ao vivo** de cada cavalo. Ela **fica na tela também durante a contagem regressiva** (o cabeçalho vira "VOTAÇÃO ENCERRADA!") — o número do countdown flutua **por cima** da cena, em vez de substituir o painel. Antes, a virada para a contagem trocava o modal inteiro e a cartela sumia de uma vez, bem na hora em que o público quer conferir os números finais.
 * **Atualização sem piscar:** a cartela é montada uma vez por fase e só o texto dos contadores muda a cada voto (sem remontar o DOM). Remontar a cada update reiniciava a animação de entrada — o painel piscava a cada voto novo no chat.
 
-### Controles de Calibração do HUD no Painel Admin (`/test`):
-No **Card 4** de `http://localhost:8000/test`, você ajusta a interface do OBS ao vivo:
-* **Tamanho do Placar (Escala):** Botões `➖ Menor (-10%)` e `➕ Maior (+10%)` (calibra de 60% a 160%).
-* **Posição Vertical (Altura):** Botões `▲ Subir (-25px)` e `▼ Descer (+25px)` (posicionamento milimétrico).
-* **Régua do Topo:** Botão para ocultar ou exibir a régua de progresso com um clique.
+### Corrida ao Vivo no Painel Admin (`/test`):
+O cartão **🏁 Corrida ao Vivo** (em monitor largo ele ocupa o dobro da largura) mostra, a cada ~3 atualizações por segundo:
+* **A classificação real** dos 8 cavalos, com barra de progresso da prova, distância em metros e 🏁 em quem já cruzou.
+* **👥 Apoios:** a contagem de votos/apoiadores do cavalo — a leitura da votação enquanto ela corre.
+* **Boost ativo:** o último boost que está empurrando o cavalo, com emoji, força e **doador**. A força é escrita do jeito que ela age: presente **multiplica** (`1.70x`), torcida do chat e curtida **somam velocidade** (`0.20 m/s`).
+* A configuração do HUD continua disponível pelo servidor (`POST /api/test/hud_config`, merge: `scale`, `top`, `bottom`, `showProgress`) para quem quiser ajustar o layout por script — o cartão de calibração saiu do painel quando o layout foi fechado.
 
 ---
 
@@ -518,22 +519,29 @@ No **Card 4** de `http://localhost:8000/test`, você ajusta a interface do OBS a
 Acesse em qualquer navegador em:
 👉 **`http://localhost:8000/test`**
 
+**Nada do painel vem do cache do navegador.** O servidor manda `Cache-Control: no-cache` no painel, no HUD e na API (o navegador revalida e recebe `304` quando o arquivo não mudou). Sem isso o navegador guardava o JS por conta própria e a página abria com o HTML novo e o JS velho: cartões vazios, botões antigos, WebSocket conectado — parece que o código novo não funciona. Se você já tinha o painel aberto antes desta mudança, um **Ctrl+F5** uma única vez resolve; daí em diante ele nunca mais abre velho.
+
 ### Recursos Disponíveis:
-1. **Controles Diretos de Corrida:**
+1. **🙋 Espectador de Teste — identidade única:** um só nome, na barra do topo, vale para **todas** as ações do painel (voto, torcida, presente, curtida, entrada e follow) e fica guardado entre recarregamentos da página. Antes havia dois campos — "Nome do Espectador" (`Leonardo`) e "Nome do Doador" (`João_Silva`) — com valores diferentes de fábrica: o voto saía como `@leonardo` e o presente como `@joão_silva`, dois espectadores para a mesma pessoa. Testar "votei no #7 e mandei presente" (o presente tem de cair no #7) só fechava redigitando o nome no segundo campo. O `username` vai normalizado (`strip().lower()`, igual ao banco) e o `display_name` como digitado — é ele que aparece no HUD e na voz.
+2. **Controles Diretos de Corrida:**
    * ⏩ **Iniciar Corrida Logo:** Pula os 30s de votação e inicia a contagem e largada na hora.
-   * 🏁 **Finalizar Corrida:** Força o encerramento da corrida e avança para o pódio imediatamente.
+   * 🏁 **Finalizar Corrida:** Encerra a prova na hora e entrega o **fim de corrida completo** — pódio na ordem em que os cavalos estavam na pista no momento do clique, campeão anunciado na voz e resultado gravado no banco. É o mesmo fecho do fim natural (o motor fecha a prova nos dois casos): o botão não pode deixar a live muda nem subir um pódio vazio.
    * 🔄 **Próxima Corrida:** Reinicia o ciclo e prepara a próxima prova.
-2. **Simulação de Comentários & Votos:** Digite ou clique nos botões rápidos (#1 ao #8, `/turbo`, etc.).
+   * As três linhas do console dizem o que o servidor **respondeu** (a fase em que ficou), não o que o botão prometia.
+3. **🏁 Corrida ao Vivo:** classificação, apoios (👥) e boost ativo com doador, atualizados ao vivo (detalhes na seção acima, no HUD).
+4. **Simulação de Comentários & Votos:** Digite ou clique nos botões rápidos (#1 ao #8, `/turbo`, etc.).
    * **Simulação de Entrada de Espectador:** Botão `👤 Simular Entrada na LIVE (Oi da Voz)` (`POST /api/test/inject_join`) para testar o anúncio sonoro de boas-vindas com ducking de áudio e log no terminal.
-3. **Simulação de Presentes:** Dispare Rosa, Café, Donut, Boné, Leão (+2000 XP), Galáxia (+1500 XP) ou Dragão (+1800 XP).
-4. **Simulação de Curtidas:** Rajadas de 5, 10 ou 30 curtidas de uma vez (`POST /api/test/inject_like`) para ver o empurrão leve da torcida.
-5. **Rajada de Público:** Simule 20 ou 50 espectadores comentando e votando de uma vez só.
-6. **Controles de Clima:** Sol, Pôr do Sol, Noite com Refletores, Chuva, Tempestade e Vento.
-7. **👥 Gerenciamento de Usuários (Admin):** lista todos os espectadores cadastrados (XP, nível, corridas, vitórias) com botão **🧹 Zerar** por usuário e **🧨 Zerar TODOS** — zera XP, nível e estatísticas sem apagar as contas (`GET /api/test/viewers`, `POST /api/test/reset_viewer`, `POST /api/test/reset_all_viewers`).
-8. **Console de Eventos Avançado:**
+5. **Simulação de Presentes:** Dispare Rosa, Café, Donut, Boné, Leão (+2000 XP), Galáxia (+1500 XP) ou Dragão (+1800 XP) — o menu mostra a força e a duração reais de cada um.
+   * **⚡ Turbo Manual por Cavalo:** aplica o mesmo Super Boost do Boné (`1.35` por `16,5s`) no cavalo clicado (`POST /api/test/boost_horse`), sem passar pelo chat.
+6. **Simulação de Curtidas:** Rajadas de 5, 10 ou 30 curtidas de uma vez (`POST /api/test/inject_like`) para ver o empurrão leve da torcida.
+7. **Rajada de Público:** Simule 20 ou 50 espectadores comentando e votando de uma vez só.
+8. **Controles de Clima:** Sol, Pôr do Sol, Noite com Refletores, Chuva, Tempestade e Vento.
+9. **👥 Gerenciamento de Usuários (Admin):** lista todos os espectadores cadastrados (XP, nível, corridas, vitórias) com botão **🧹 Zerar** por usuário e **🧨 Zerar TODOS** — zera XP, nível e estatísticas sem apagar as contas (`GET /api/test/viewers`, `POST /api/test/reset_viewer`, `POST /api/test/reset_all_viewers`). A lista se atualiza sozinha quando a corrida termina.
+10. **Console de Eventos Avançado:**
    * Abas de filtro: `[Todos]`, `[🎁 Presentes]`, `[💬 Votos]`, `[🏁 Fases]`.
    * Contadores em tempo real de presentes e votos acumulados.
    * Botões para `🗑️ Limpar` e `📋 Copiar Histórico`.
+   * O console conta a **mesma história que a live vê**: voto, torcida (`torce pelo #N`), presente com o cavalo e o boost que caiu nele, curtida, seguidor e a virada de clima — tudo vindo do servidor com id único (aviso repetido não é mais engolido por ter o mesmo texto).
 
 ---
 

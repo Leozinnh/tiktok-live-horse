@@ -115,33 +115,63 @@ class RaceEngine:
         timeout = self.race_elapsed_ms > int((self.settings.race_duration_seconds + 10) * 1000)
         
         if (all_finished or post_win_timeout or timeout) and self.status == "RACING":
-            self.status = "FINISHED"
+            self._finalizar_corrida()
 
-            # Garante que qualquer cavalo retardatário cruze a linha final de 3000m
-            # para que nenhum animal fique travado na pista fora da linha de chegada!
-            for h in self.horses:
-                if not h.finished:
-                    h.distance = self.track_length
-                    h.finished = True
-                    h.finish_time_ms = round(self.race_elapsed_ms, 1)
+    def _finalizar_corrida(self) -> None:
+        """Fecha a prova: cruza os retardatários, elege o campeão e monta o pódio.
 
-            # Monta pódio final ordenado
-            # Quem terminou vem SEMPRE na frente de quem não terminou; entre os
-            # que terminaram, vale o tempo de chegada (foto-finish).
-            results_order = sorted(
-                self.horses,
-                key=lambda h: (h.finished, -h.finish_time_ms if h.finished else h.distance),
-                reverse=True
-            )
-            self.final_results = []
-            for pos, h in enumerate(results_order, start=1):
-                self.final_results.append({
-                    "horse_id": h.id,
-                    "final_position": pos,
-                    "name": h.name,
-                    "color_hex": h.color_hex,
-                    "finish_time_ms": h.finish_time_ms if h.finished else round(self.race_elapsed_ms, 1)
-                })
+        É o MESMO fecho para o fim natural (todos chegaram, janela pós-chegada
+        ou timeout) e para o 🏁 do painel — dois caminhos diferentes davam dois
+        pódios diferentes, e o do painel saía vazio.
+        """
+        self.status = "FINISHED"
+
+        # Garante que qualquer cavalo retardatário cruze a linha final de 3000m
+        # para que nenhum animal fique travado na pista fora da linha de
+        # chegada — e nesta ORDEM de corrida: antes todos recebiam o mesmo
+        # `finish_time_ms`, o empate caía na ordenação estável e o pódio virava
+        # a ordem do arquivo de configuração (1º RELÂMPAGO, 2º TROVÃO...),
+        # ignorando a prova inteira. Agora o retardatário mais adiantado chega
+        # primeiro, 1ms à frente do seguinte.
+        retardatarios = sorted(
+            (h for h in self.horses if not h.finished),
+            key=lambda h: h.distance,
+            reverse=True,
+        )
+        for extra, h in enumerate(retardatarios):
+            h.distance = self.track_length
+            h.finished = True
+            h.finish_time_ms = round(self.race_elapsed_ms + extra * 1.0, 1)
+
+        # Ninguém cruzou a linha antes (🏁 no meio da prova): o campeão é quem
+        # estava na frente — o menor tempo de chegada de todos.
+        if self.winner_horse_id is None and self.horses:
+            self.winner_horse_id = min(self.horses, key=lambda h: h.finish_time_ms).id
+            self._winner_crossed_time_ms = self.race_elapsed_ms
+
+        # Monta pódio final ordenado
+        # Quem terminou vem SEMPRE na frente de quem não terminou; entre os
+        # que terminaram, vale o tempo de chegada (foto-finish).
+        results_order = sorted(
+            self.horses,
+            key=lambda h: (h.finished, -h.finish_time_ms if h.finished else h.distance),
+            reverse=True
+        )
+        self.final_results = []
+        for pos, h in enumerate(results_order, start=1):
+            self.final_results.append({
+                "horse_id": h.id,
+                "final_position": pos,
+                "name": h.name,
+                "color_hex": h.color_hex,
+                "finish_time_ms": h.finish_time_ms if h.finished else round(self.race_elapsed_ms, 1)
+            })
+
+    def force_finish(self) -> None:
+        """Encerra a prova agora, no estado em que ela está (🏁 do painel)."""
+        if self.status != "RACING":
+            return
+        self._finalizar_corrida()
 
     def get_snapshot(self) -> Dict[str, Any]:
         # Ordena leaderboard corrente

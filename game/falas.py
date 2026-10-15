@@ -628,7 +628,7 @@ CURTIDAS = [
     "Olha o carinho! {nome} mandou {quantidade} curtidas de uma vez!",
     "É curtida que não acaba! Valeu, {nome}! Gratidão total!",
     "Que dedo rápido! {nome} mandou {quantidade} curtidas! Obrigado!",
-    "A tela encheu de coração! Valeu, {nome}!",
+    "A tela encheu de coração! Valeu pelas curtidas, {nome}!",
     "{nome} mandou ver nas curtidas! Muito obrigado, família!",
 
     # --- Carinhosas ---
@@ -637,7 +637,7 @@ CURTIDAS = [
     "{nome}, gratidão por cada curtida! Você é demais!",
     "Que apoio lindo, {nome}! Valeu pelas {quantidade} curtidas!",
     "Cada curtida conta! Obrigado, {nome}! Você é parte da torcida!",
-    "Obrigado por fortalecer a live, {nome}! Que carinho!",
+    "Obrigado por fortalecer a live, {nome}! Que chuva de curtidas!",
     "Isso aquece o coração! Valeu pelas curtidas, {nome}!",
     "{nome}, seu carinho chegou! Valeu pelas curtidas, família!",
 
@@ -653,7 +653,7 @@ CURTIDAS = [
 
     # --- Curtas ---
     "Valeu pelas curtidas, {nome}!",
-    "Que rajada, {nome}! Obrigado!",
+    "Que rajada de curtidas, {nome}! Obrigado!",
     "{nome} mandou {quantidade} curtidas! Valeu!",
     "Gratidão, {nome}! Chuva de curtidas!",
     "Show, {nome}! Obrigado pelas curtidas!",

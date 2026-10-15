@@ -30,6 +30,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border-color);
@@ -40,6 +42,60 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* Barra de identidade: UMA pessoa para o painel inteiro. Antes havia dois
+   campos separados ("Nome do Espectador" e "Nome do Doador") e quem testava
+   "votei no #7 e mandei presente" acabava com duas identidades — o voto saía
+   como @leonardo e o presente como @joão_silva, que é justamente o que a
+   live via na tela. */
+.identity-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: #0f172a;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.identity-bar label {
+  margin-bottom: 0;
+  font-weight: 700;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.identity-bar input {
+  width: 180px;
+  padding: 7px 10px;
+}
+
+.identity-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.identity-hint strong,
+.who-chip strong {
+  color: #38bdf8;
+}
+
+/* "Comentando como @fulano" — o nome atual repetido no cartão, porque a
+   barra de cima sai da tela quando o painel rola. */
+.who-chip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 14px;
 }
 
 .status-badge {
@@ -80,6 +136,19 @@ body {
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+/* A corrida ao vivo é o cartão que se olha durante a transmissão: em monitor
+   largo ele ocupa o dobro, para caber cavalo, prova, apoios e boost sem
+   espremer (em tela estreita volta a ser um cartão comum). */
+.card-corrida {
+  grid-column: span 2;
+}
+
+@media (max-width: 1099px) {
+  .card-corrida {
+    grid-column: span 1;
+  }
 }
 
 .card-title {

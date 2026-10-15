@@ -3,18 +3,24 @@ import json
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from config.settings import Settings
-from game.director import EventDirector
+from game.director import EventDirector, GIFT_TIERS
 from tiktok.mock_adapter import MockTikTokAdapter
 from backend.database.repository import DatabaseRepository
 from game.weather_events import WeatherType
 
 logger = logging.getLogger("server")
+
+# Turbo manual do painel: o MESMO Super Boost do Boné/Donut (power e duração
+# saem da tabela de presentes, então não têm como divergir dela). Antes o
+# endpoint tinha 1.2x por 4s cravado — na prova de 3000m (~110s) isso é um
+# piscar invisível, e os botões de turbo por cavalo nem existiam no painel.
+_BOOST_MANUAL = next(t for t in GIFT_TIERS if "cap" in t["keywords"])
 
 class CommentRequest(BaseModel):
     username: str
@@ -85,7 +91,32 @@ def create_app(
     app.state.repository = repository
     app.state.manager = manager
     app.state.is_loop_running = False
-    app.state.hud_config = {"scale": 1.0, "bottom": 24, "showTower": True, "showProgress": True}
+    # Config do HUD que o painel ajusta ao vivo. `bottom` ancora a classificação
+    # no rodapé; `top` é a altura da coluna de avisos (toasts) no canto — o
+    # mesmo 195px do CSS, para o painel abrir mostrando o que está na tela.
+    app.state.hud_config = {
+        "scale": 1.0,
+        "top": 195,
+        "bottom": 24,
+        "showTower": True,
+        "showProgress": True,
+    }
+
+    @app.middleware("http")
+    async def sem_cache_do_navegador(request: Request, call_next):
+        """Painel, HUD e API nunca saem do cache do navegador.
+
+        Sem isto o navegador guarda o JS por conta própria e o painel abre com
+        o HTML novo e o JS velho: o cartão "Corrida ao Vivo" fica eternamente
+        em "aguardando a largada…", os botões viram os antigos, e o streamer só
+        descobre no meio da live (foi o que aconteceu depois da reforma do
+        painel). `no-cache` não proíbe guardar — obriga a revalidar: o ETag do
+        StaticFiles responde 304 quando o arquivo não mudou, então o custo é um
+        request por arquivo, e depois de qualquer edição o painel já abre novo.
+        """
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
     # Diretório estático
     static_dir = Path(__file__).resolve().parent / "static"
@@ -205,9 +236,25 @@ def create_app(
         return {"status": "ok", "race_number": director.race_number}
 
     @app.post("/api/test/boost_horse")
-    async def boost_horse(horse_id: int = 1, power: float = 1.2, duration: float = 4.0):
-        director.engine.apply_boost(horse_id, "ADMIN_BOOST", power, duration)
-        return {"status": "ok", "horse_id": horse_id}
+    async def boost_horse(
+        horse_id: int = 1,
+        power: float = _BOOST_MANUAL["power"],
+        duration: float = _BOOST_MANUAL["duration"],
+    ):
+        aplicado = director.engine.apply_boost(horse_id, "ADMIN_BOOST", power, duration)
+        if not aplicado:
+            raise HTTPException(status_code=404, detail="Cavalo não encontrado")
+
+        nome = next(
+            (h.name for h in director.config.horses if h.id == horse_id), f"#{horse_id}"
+        )
+        return {
+            "status": "ok",
+            "horse_id": horse_id,
+            "horse_name": nome,
+            "power": power,
+            "duration": duration,
+        }
 
     @app.post("/api/test/hud_config")
     async def update_hud_config(config: Dict[str, Any]):

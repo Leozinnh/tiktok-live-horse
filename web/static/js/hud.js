@@ -66,6 +66,12 @@ class BroadcastHUD {
         this.leaderboardEl.style.bottom = `${config.bottom}px`;
       }
     }
+    // Altura da coluna de avisos (toasts do canto superior direito). O painel
+    // tinha o controle "Posição Vertical" desde sempre, mas o HUD ignorava o
+    // `top`: mexia no número e nada saía do lugar na tela do OBS.
+    if (this.notificationContainer && config.top !== undefined) {
+      this.notificationContainer.style.top = `${config.top}px`;
+    }
     const progressContainer = document.getElementById("trackProgressContainer");
     if (progressContainer && config.showProgress !== undefined) {
       this.hideProgressSetting = !config.showProgress;
