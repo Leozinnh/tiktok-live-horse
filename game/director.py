@@ -4,9 +4,10 @@ import logging
 import random
 import time
 from enum import Enum
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Iterable, List, Optional
 from config.settings import Settings
 from game.engine import RaceEngine
+from game.horses import TORCIDA_EXTRA_CAP
 from game.narrador import Narrador
 from backend.database.repository import DatabaseRepository
 
@@ -74,11 +75,60 @@ LIKE_EXTRA_SPEED = 0.2  # m/s por rajada (fixo: quem cresce é a soma, com teto)
 TORCIDA_EXTRA_SPEED = 0.4
 TORCIDA_DURATION_SECONDS = 2.0
 
+# Quantos nomes de gente a voz cita de uma vez. Três é o teto do que se
+# escuta numa frase de locução sem virar lista de chamada.
+NOMES_POR_FALA = 3
+
+# ---------------------------------------------------------------------------
+# O BÔNUS FIEL: quem fica até o pódio leva XP em dobro.
+#
+# O que é "ficar": a pessoa deu SINAL DE VIDA com a prova na pista ou já
+# decidida (comentou o número para empurrar, mandou presente, curtiu, entrou,
+# seguiu ou votou no pódio). O voto sozinho não conta — ele acontece dois
+# minutos antes, na abertura do ciclo, e todo mundo que votou tem igual.
+# É presença, não sobrevivência: a marca é rearmada a cada corrida.
+#
+# E não pune ninguém: o XP de sempre continua valendo para todo mundo que
+# votou, e o fiel leva o dobro. "Quem saiu no meio ganha metade" é a mesma
+# conta vista do outro lado, não um corte no XP de quem só passou.
+BONUS_FIEL_MULTIPLICADOR = 2.0
+FASES_DE_PRESENCA = (DirectorState.RACING, DirectorState.PODIUM)
+
 # A virada do tempo no meio da prova: com essa chance, a corrida sorteia na
 # largada um ponto do trajeto (entre 35% e 70% da pista) em que o clima vira
 # — com aviso da voz e do telão. O visual acompanha (scene.js).
 CLIMA_VIRADA_CHANCE = 0.35
 CLIMA_VIRADA_ENTRE = (0.35, 0.70)
+
+# O empurrão de quem se dá bem com o tempo NOVO, no instante da virada.
+#
+# A tabela do clima é pequena de propósito (uns poucos % de velocidade) e está
+# certa no agregado: numa corrida inteira de chuva, os donos do clima já vencem
+# ~80% das vezes. Só que ela é invisível no INSTANTE — a 28 m/s, 1% são 0,28
+# m/s, enquanto dois cavalos na mesma volta diferem por METROS por segundo. A
+# voz anunciava "o tempo virou!" e a pista não mexia.
+#
+# Então a virada vira ACONTECIMENTO: quem o tempo novo favorece leva um impulso
+# curto e ganha o emblema do clima flutuando na garupa (o mesmo lugar onde o
+# presente aparece). São ~10m numa pista de 3000m: dá para VER o cavalo tirando
+# diferença, sem o tempo entregar a corrida.
+IMPULSO_DA_VIRADA = 1.06
+IMPULSO_DA_VIRADA_SEGUNDOS = 7.0
+
+
+def _sem_repetir(nomes: Iterable[str]) -> List[str]:
+    """Os nomes na ordem em que apareceram, sem repetir e sem vazios.
+
+    A mesma pessoa chega por dois caminhos (votou e depois empurrou no chat) e
+    o nome de exibição pode repetir entre usuários diferentes: falar ou contar
+    "Rafael e Rafael" seria bug visível na tela e na voz.
+    """
+    vistos, unicos = set(), []
+    for nome in nomes:
+        if nome and nome not in vistos:
+            vistos.add(nome)
+            unicos.append(nome)
+    return unicos
 
 # Locução ao vivo: os marcos de distância do líder (metros) que disparam cada
 # chamada e a margem de chegada (ms) que faz a corrida ganhar a exclamação da
@@ -93,11 +143,18 @@ MARCOS_LOCUCAO = (
     (300.0, "placar"),
     (450.0, "placar"),
     (600.0, "disputa"),
+    # A chamada da torcida e o lembrete do XP dobrado entram nos vãos entre
+    # um placar e outro: os marcos de posição continuam marcando o ritmo, e
+    # estes dois trazem o que o público FAZ na live (empurrar o cavalo e
+    # ficar até o pódio) para o meio da prova — que é justamente quando a
+    # atenção escapa.
+    (675.0, "torcida"),
     (750.0, "placar"),
     (900.0, "placar"),
     (1050.0, "disputa"),
     (1200.0, "placar"),
     (1350.0, "placar"),
+    (1425.0, "fidelidade"),
     (1500.0, "disputa"),
     (1650.0, "placar"),
     (1800.0, "placar"),
@@ -153,6 +210,20 @@ class EventDirector:
         # Não é voto e não mexe em XP/banco: serve só para o presente de quem
         # já disse por quem torce cair no MESMO cavalo. Zera a cada corrida.
         self.torcida_por_viewer: Dict[str, int] = {}
+        # Mapa: horse_id -> quantas pessoas JÁ empurraram o cavalo no chat
+        # nesta corrida. É o placar da arquibancada (o HUD mostra a barra
+        # por cavalo); não é voto e não vale XP.
+        self.torcida_por_cavalo: Dict[int, int] = {h.id: 0 for h in self.config.horses}
+        # Quem já contou no placar da arquibancada nesta corrida (uma vez cada).
+        self._quem_empurrou: set[str] = set()
+        # Mapa: username normalizado -> display_name de quem deu sinal de vida
+        # com a prova na pista ou já decidida. É o que decide o Bônus Fiel
+        # (ver FASES_DE_PRESENCA) — e a fonte dos nomes que a voz cita.
+        self._presentes: Dict[str, str] = {}
+        # Os nomes JÁ citados pela voz nesta corrida: a locução cita gente
+        # DIFERENTE a cada placar (são nove placares por prova — repetir os
+        # mesmos três seria pior do que não citar ninguém).
+        self._citados: set[str] = set()
         # Mapa: username (normalizado) -> voto digitado no FIM da corrida
         # anterior (pódio, XP, ranking), à espera da votação nova. Não entra em
         # `horse_supporters` na hora porque esse mapa é zerado quando o ciclo
@@ -242,15 +313,36 @@ class EventDirector:
         return f"{votos} voto(s), favorito #{hid} {self._nome_cavalo(hid)} ({len(sups)})"
 
     def get_current_choices_summary(self) -> Dict[int, Dict[str, Any]]:
+        """A cartela da votação: cada cavalo, seus apoiadores e o CLIMA.
+
+        A etiqueta do clima é a informação de aposta da rodada. O sorteio
+        acontece antes de a votação abrir (`_sortear_clima_da_corrida`), então
+        quem escolhe já sabe em que tempo a prova vai ser — e aqui vê QUAL
+        cavalo se dá bem nele. O número mostrado é o MESMO desvio que entra na
+        velocidade (ver `WeatherSystem.vantagem`), não uma chance de vitória
+        inventada: a chegada real é decidida em centésimos e nenhum palpite
+        honesto sai de uma diferença de 2%.
+        """
+        clima = self.engine.weather_system
+        apelido = clima.apelido_do_clima()
         summary = {}
         for h in self.config.horses:
             supporters = self.horse_supporters.get(h.id, [])
+            vantagem = clima.vantagem(h.personality) * 100.0
+            if apelido and vantagem > 0:
+                etiqueta = f"⭐ favorito {apelido}"
+            elif apelido and vantagem < 0:
+                etiqueta = f"⚠️ sofre {apelido}"
+            else:
+                etiqueta = ""
             summary[h.id] = {
                 "horse_id": h.id,
                 "horse_name": h.name,
                 "color_hex": h.color_hex,
                 "supporters_count": len(supporters),
-                "recent_supporters": [s["display_name"] for s in supporters[-5:]]
+                "recent_supporters": [s["display_name"] for s in supporters[-5:]],
+                "clima_tag": etiqueta,
+                "clima_vantagem": round(vantagem, 1),
             }
         return summary
 
@@ -265,6 +357,10 @@ class EventDirector:
         """
         if horse_id not in [h.id for h in self.config.horses]:
             return False
+
+        # Digitar o número com a prova rolando (ou no pódio) é o sinal de vida
+        # mais barato da live — e o que separa quem ficou de quem só votou.
+        self._marcar_presenca(tiktok_username, display_name)
 
         if self.state == DirectorState.RACING:
             self._empurrao_da_torcida(tiktok_username, display_name, horse_id)
@@ -366,6 +462,109 @@ class EventDirector:
         logger.info(f"🏇 {len(self._pre_votos)} voto(s) do fim da corrida anterior já contando.")
         self._pre_votos.clear()
 
+    def _marcar_presenca(self, tiktok_username: str, display_name: str = "") -> None:
+        """Anota que a pessoa está na live AGORA — só na hora em que isso vale.
+
+        Só marca com a prova na pista ou já decidida (FASES_DE_PRESENCA): é
+        exatamente o recorte do Bônus Fiel — quem votou e FICOU. Fora dessa
+        janela a marca nem é feita, então quem só chegou, votou e sumiu antes
+        da largada não entra. O mapa zera a cada corrida.
+        """
+        chave = (tiktok_username or "").strip().lower()
+        if not chave or self.state not in FASES_DE_PRESENCA:
+            return
+        self._presentes.setdefault(chave, display_name or tiktok_username)
+
+    def _pistas_de_torcida(self) -> Dict[int, List[str]]:
+        """Quem torce por quem — e só quem está na live agora.
+
+        Dois caminhos levam a torcer: o VOTO (escolheu o cavalo na votação) e
+        o EMPURRÃO (digitou o número com a prova rolando). Os dois valem, mas
+        só conta quem deu sinal de vida depois da largada: citar o nome de
+        quem votou e fechou a live é chamar no vácuo.
+
+        Tudo vira um mapa `horse_id -> [nomes]` numa passada só. É o que
+        `_torcida_do_momento` e `_torcida_para_o_hud` consultam — o payload do
+        HUD é gerado várias vezes por segundo e refazer a varredura inteira uma
+        vez por cavalo (8x) não escala numa live cheia.
+        """
+        lado: Dict[int, List[str]] = {}
+        for horse_id, apoiadores in self.horse_supporters.items():
+            nomes = [
+                s["display_name"]
+                for s in apoiadores
+                if (s.get("tiktok_username") or "") in self._presentes
+            ]
+            if nomes:
+                lado.setdefault(horse_id, []).extend(nomes)
+        for chave, horse_id in self.torcida_por_viewer.items():
+            if chave in self._presentes:
+                lado.setdefault(horse_id, []).append(self._presentes[chave])
+        return lado
+
+    def _nomes_para_citar(self, candidatos: List[str]) -> List[str]:
+        """Os nomes da vez, sem repetir quem a voz já citou nesta corrida.
+
+        São NOVE placares por prova: sem esta rodagem, o locutor chamaria os
+        mesmos três nomes a corrida inteira e a citação virava paisagem.
+        Quando o pessoal acaba, a lista reabre — insistir em quem já apareceu
+        é melhor do que nunca mais falar de ninguém.
+        """
+        if not candidatos:
+            return []
+        novos = [n for n in candidatos if n not in self._citados]
+        sorteio = random.Random()
+        sorteio.shuffle(novos)
+        escolhidos = novos[:NOMES_POR_FALA]
+        if len(escolhidos) < NOMES_POR_FALA:
+            self._citados.clear()
+            restantes = sorted(set(candidatos) - set(escolhidos))
+            sorteio.shuffle(restantes)
+            escolhidos += restantes[: NOMES_POR_FALA - len(escolhidos)]
+        self._citados.update(escolhidos)
+        return escolhidos
+
+    def _torcida_do_momento(self) -> tuple[List[str], Optional[int]]:
+        """Quem a voz cita neste marco e por qual cavalo — ou ([], None).
+
+        A vez é do cavalo com mais gente do lado (e, no empate, de quem mais
+        recebeu empurrão no chat): é o "olha a torcida" da transmissão, e tem
+        que apontar para onde o barulho está de verdade.
+        """
+        pistas = self._pistas_de_torcida()
+        ranking = []
+        for h in self.config.horses:
+            lado = _sem_repetir(pistas.get(h.id, ()))
+            if lado:
+                ranking.append((len(lado), self.torcida_por_cavalo.get(h.id, 0), h.id, lado))
+        if not ranking:
+            return [], None
+        _, _, horse_id, lado = max(ranking, key=lambda t: (t[0], t[1]))
+        return self._nomes_para_citar(lado), horse_id
+
+    def _torcida_para_o_hud(self) -> Dict[int, Dict[str, Any]]:
+        """A arquibancada por cavalo, para a barra do HUD.
+
+        `extra` é a velocidade que a torcida está somando de verdade naquele
+        cavalo (m/s, no mesmo teto da física): a barra não mostra "quantos
+        comentários", mostra "o quanto isso está empurrando o cavalo" — o
+        número que corre na pista.
+        """
+        pistas = self._pistas_de_torcida()
+        dados = {}
+        for h in self.engine.horses:
+            extra = min(
+                TORCIDA_EXTRA_CAP,
+                sum(b.power for b in h.active_boosts if b.additive),
+            )
+            dados[h.id] = {
+                "torcedores": self.torcida_por_cavalo.get(h.id, 0),
+                "extra": round(extra, 2),
+                "pct": round(100.0 * extra / TORCIDA_EXTRA_CAP),
+                "nomes": _sem_repetir(pistas.get(h.id, ()))[:NOMES_POR_FALA],
+            }
+        return dados
+
     def _empurrao_da_torcida(self, tiktok_username: str, display_name: str, horse_id: int) -> None:
         """O empurrãozinho de quem digita o número com a corrida rolando.
 
@@ -385,6 +584,13 @@ class EventDirector:
         # nada (senão todo anônimo cairia no mesmo cavalo).
         if tiktok_username:
             self.torcida_por_viewer[tiktok_username.strip().lower()] = horse_id
+        # O placar da arquibancada (a barra do HUD) conta PESSOA, não
+        # comentário: quem digita "7" dez vezes não vale por dez, senão a barra
+        # vira medidor de spam e o número deixa de dizer quanta gente torce.
+        chave = (tiktok_username or "").strip().lower() or f"@{nome.strip().lower()}"
+        if chave not in self._quem_empurrou:
+            self._quem_empurrou.add(chave)
+            self.torcida_por_cavalo[horse_id] = self.torcida_por_cavalo.get(horse_id, 0) + 1
         self.engine.apply_boost(
             horse_id=horse_id,
             boost_name="TORCIDA NO CHAT",
@@ -414,8 +620,8 @@ class EventDirector:
     ) -> None:
         viewer = await self.repository.get_or_create_viewer(tiktok_username, display_name)
         self.viewers_cache[viewer["tiktok_username"]] = viewer
-        
-        # Determina cavalo do espectador (ou um SORTEADO se não escolheu)
+        self._marcar_presenca(tiktok_username, viewer["display_name"])
+
         chosen_horse_id = None
         for hid, sups in self.horse_supporters.items():
             if any(s["tiktok_username"] == viewer["tiktok_username"] for s in sups):
@@ -509,6 +715,7 @@ class EventDirector:
         de viewer para cada chegada encheria o ranking de gente sem XP.
         """
         nome_visivel = display_name or tiktok_username or "espectador"
+        self._marcar_presenca(tiktok_username, display_name)
         logger.info("👤 %s (@%s) entrou na LIVE!", nome_visivel, tiktok_username or "")
         if self.narrador is not None:
             self.narrador.anunciar_entrada(display_name, fallback=tiktok_username)
@@ -516,6 +723,7 @@ class EventDirector:
     async def handle_viewer_follow(self, tiktok_username: str, display_name: str) -> None:
         """Quem seguiu ganha agradecimento na voz e notificação na tela."""
         nome = display_name or tiktok_username or "novo seguidor"
+        self._marcar_presenca(tiktok_username, display_name)
         logger.info("➕ %s (@%s) começou a seguir a LIVE!", nome, tiktok_username or "")
         self._adicionar_notificacao({
             "type": "FOLLOW",
@@ -560,6 +768,7 @@ class EventDirector:
         if count < LIKE_BURST_MIN:
             return
 
+        self._marcar_presenca(tiktok_username, display_name)
         chosen_horse_id = None
         if tiktok_username:
             for hid, sups in self.horse_supporters.items():
@@ -712,9 +921,32 @@ class EventDirector:
             elif tipo == "disputa":
                 self.narrador.anunciar_disputa(lider.name, segundo.name)
             elif tipo == "placar":
-                self.narrador.anunciar_placar(
-                    lider.name, segundo.name, terceiro.name
+                # O placar cita GENTE quando há gente do lado de um cavalo:
+                # ninguém sai de uma live depois de ouvir o próprio nome.
+                # Sem ninguém para citar, sai o placar de sempre.
+                nomes, cavalo_id = self._torcida_do_momento()
+                if nomes and cavalo_id is not None:
+                    self.narrador.anunciar_placar(
+                        lider.name,
+                        segundo.name,
+                        terceiro.name,
+                        nomes,
+                        self._nome_cavalo(cavalo_id),
+                    )
+                else:
+                    self.narrador.anunciar_placar(
+                        lider.name, segundo.name, terceiro.name
+                    )
+            elif tipo == "torcida":
+                # A chamada para mexer na prova: com nomes, agradece a quem já
+                # está empurrando; sem nomes, ensina que dá para empurrar (é
+                # assim que quem chegou depois descobre a mecânica).
+                nomes, cavalo_id = self._torcida_do_momento()
+                self.narrador.anunciar_torcida(
+                    nomes, self._nome_cavalo(cavalo_id) if cavalo_id else lider.name
                 )
+            elif tipo == "fidelidade":
+                self.narrador.anunciar_fidelidade()
             else:
                 self.narrador.anunciar_reta_final(lider.name, segundo.name)
 
@@ -751,7 +983,13 @@ class EventDirector:
         weather.pick_random_weather()
         rotulo = weather.rotulo()
         nomes = self._favoritos_do_clima()
-        logger.info(f"🌦️ O tempo virou na corrida #{self.race_number}: {rotulo}.")
+        # A pista reage NA HORA: quem se dá bem com o tempo novo dispara (e o
+        # telão diz quem foi). Sem isso a virada era só um aviso na voz.
+        ganharam = self._impulsionar_favoritos_do_clima()
+        logger.info(
+            f"🌦️ O tempo virou na corrida #{self.race_number}: {rotulo}."
+            + (f" Ganharam a pista: {', '.join(ganharam)}." if ganharam else "")
+        )
         if self.narrador is not None:
             self.narrador.anunciar_virada_do_clima(rotulo, nomes)
         self._adicionar_notificacao({
@@ -761,6 +999,42 @@ class EventDirector:
             "horse_id": None,
             "badge": weather.emoji(),
         })
+        if ganharam:
+            self._adicionar_notificacao({
+                "type": "WEATHER_GAIN",
+                "text": f"{' e '.join(ganharam)} ganharam a pista com o tempo novo!",
+                "horse_id": None,
+                "badge": weather.emoji(),
+            })
+
+    def _impulsionar_favoritos_do_clima(self) -> List[str]:
+        """O empurrão da virada em quem o tempo novo favorece (pelo nome).
+
+        Só quem GANHA leva o impulso visível — é o cavalo acelerando com o
+        emblema do clima na garupa que se vê na pista. Quem perde fica com o
+        efeito constante da tabela, que é onde ele sofre: um "tropeço" com
+        duração precisaria de um efeito negativo próprio, e o cavalo sairia
+        com o halo de turbo justo quando está perdendo velocidade — o
+        contrário do que está acontecendo.
+        """
+        tempo = self.engine.weather_system
+        apelido = tempo.apelido_do_clima()
+        ganharam = []
+        for h in self.engine.horses:
+            if h.finished or tempo.vantagem(h.personality) <= 0:
+                continue
+            self.engine.apply_boost(
+                horse_id=h.id,
+                boost_name=f"TEMPO A FAVOR ({apelido.upper()})",
+                power=IMPULSO_DA_VIRADA,
+                duration_seconds=IMPULSO_DA_VIRADA_SEGUNDOS,
+                is_legendary=False,
+                legendary_kind=None,
+                gift_emoji=tempo.emoji(),
+                donor_name="O TEMPO VIROU",
+            )
+            ganharam.append(h.name)
+        return ganharam
 
     def _foto_finish_apertada(self) -> bool:
         """A chegada foi decidida no detalhe (menos de MARGEM_FOTO_FINISH_MS)?
@@ -787,6 +1061,12 @@ class EventDirector:
         # A torcida é da corrida que acabou: no ciclo novo ninguém torceu
         # ainda, e um presente dado antes de torcer volta a ser sorteado.
         self.torcida_por_viewer = {}
+        self.torcida_por_cavalo = {h.id: 0 for h in self.config.horses}
+        self._quem_empurrou = set()
+        # A presença também: a marca do Bônus Fiel vale para UMA corrida — na
+        # próxima, quem não aparecer de novo não é mais fiel.
+        self._presentes = {}
+        self._citados = set()
         # Quem votou no pódio/XP/ranking já entra como apoiador da corrida nova.
         self._aplicar_pre_votos()
         self.state = DirectorState.VOTING
@@ -916,19 +1196,39 @@ class EventDirector:
                 winner_id = self.engine.winner_horse_id or 1
                 top_3_ids = [r["horse_id"] for r in self.podium_data]
                 if self.current_db_race_id:
+                    # O Bônus Fiel entra AQUI, no fecho da corrida: quem deu
+                    # sinal de vida com a prova na pista ou já decidida leva o
+                    # XP de sempre EM DOBRO (nada é tirado de ninguém).
                     self.last_race_rewards = await self.repository.distribute_race_xp(
                         race_id=self.current_db_race_id,
                         winner_horse_id=winner_id,
                         top_3_horse_ids=top_3_ids,
                         xp_participation=self.config.xp.participation,
                         xp_win=self.config.xp.win,
-                        xp_top3=self.config.xp.top_3
+                        xp_top3=self.config.xp.top_3,
+                        fieis=set(self._presentes),
+                        multiplicador_fiel=BONUS_FIEL_MULTIPLICADOR
                     )
                     subiram = [r["display_name"] for r in self.last_race_rewards if r.get("level_up")]
+                    fieis = [r["display_name"] for r in self.last_race_rewards if r.get("fiel")]
                     logger.info(
                         f"⭐ XP distribuído para {len(self.last_race_rewards)} torcedor(es)"
                         + (f" — subiram de nível: {', '.join(subiram)}" if subiram else "")
                     )
+                    if fieis:
+                        logger.info(
+                            f"🏅 {len(fieis)} fiel(is) até o pódio levaram XP "
+                            f"x{BONUS_FIEL_MULTIPLICADOR:.0f}: {', '.join(fieis)}"
+                        )
+                        self._adicionar_notificacao({
+                            "type": "FAITHFUL",
+                            "text": f"Ficou até o pódio? XP dobrado para "
+                                    f"{len(fieis)} apoiador(es)!",
+                            "horse_id": None,
+                            "badge": "🏅",
+                        })
+                        if self.narrador is not None:
+                            self.narrador.anunciar_xp_dobrado()
 
         elif self.state == DirectorState.XP_REWARDS:
             if self.state_timer >= self.config.xp_duration_seconds:
@@ -946,8 +1246,13 @@ class EventDirector:
                 self.race_number += 1
                 self.engine.reset()
                 self.horse_supporters = {h.id: [] for h in self.config.horses}
-                # A torcida é da corrida que acabou (ver `reset_to_new_race`).
+                # A torcida e a presença são da corrida que acabou (ver
+                # `reset_to_new_race` — o reset daqui tem que ser o mesmo).
                 self.torcida_por_viewer = {}
+                self.torcida_por_cavalo = {h.id: 0 for h in self.config.horses}
+                self._quem_empurrou = set()
+                self._presentes = {}
+                self._citados = set()
                 # Quem votou no pódio/XP/ranking já entra como apoiador da
                 # corrida nova — senão o comentário do fim da corrida some.
                 self._aplicar_pre_votos()
@@ -977,6 +1282,7 @@ class EventDirector:
             "remaining_seconds": round(remaining_time, 1),
             "engine": engine_snap,
             "voting_summary": self.get_current_choices_summary(),
+            "torcida": self._torcida_para_o_hud(),
             "notifications": recent_notifications,
             "podium": self.podium_data,
             "rewards": self.last_race_rewards[:6],

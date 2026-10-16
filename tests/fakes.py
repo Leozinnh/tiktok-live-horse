@@ -36,8 +36,17 @@ class FakeNarrador:
     def anunciar_abertura(self, lider, segundo):
         self.chamadas.append(("abertura", lider, segundo))
 
-    def anunciar_placar(self, lider, segundo, terceiro):
-        self.chamadas.append(("placar", lider, segundo, terceiro))
+    def anunciar_placar(self, lider, segundo, terceiro, nomes=None, cavalo=""):
+        self.chamadas.append(("placar", lider, segundo, terceiro, nomes, cavalo))
+
+    def anunciar_torcida(self, nomes, cavalo):
+        self.chamadas.append(("torcida", nomes, cavalo))
+
+    def anunciar_fidelidade(self):
+        self.chamadas.append(("fidelidade",))
+
+    def anunciar_xp_dobrado(self):
+        self.chamadas.append(("xp_dobrado",))
 
     def anunciar_disputa(self, lider, segundo):
         self.chamadas.append(("disputa", lider, segundo))

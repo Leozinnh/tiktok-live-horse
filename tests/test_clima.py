@@ -100,6 +100,136 @@ def test_favoritos_do_clima():
     assert sistema.favoritos() == []
 
 
+def test_vantagem_do_clima_e_a_conta_que_corre_na_pista():
+    """A leitura de aposta da grade é o MESMO número que entra na velocidade.
+
+    Mostrar "favorito na chuva" e a corrida correr outra coisa seria mentir
+    para quem aposta. A única diferença é o vento: o empurrão global dele vale
+    para todo mundo igual e não é vantagem de ninguém.
+    """
+    from game.weather_events import WeatherSystem, WeatherType
+
+    sistema = WeatherSystem()
+    for clima in WeatherType:
+        sistema.set_weather(clima, intensity=0.7)
+        for personalidade in ("COLD_TACTICIAN", "JUGGERNAUT", "PACER", "DRAFTER"):
+            vantagem = sistema.vantagem(personalidade)
+            esperado = sistema.get_weather_multiplier(personalidade) - 1.0
+            if clima == WeatherType.WIND:
+                esperado -= sistema.wind_speed * 0.03
+            assert vantagem == pytest.approx(esperado), f"{clima} {personalidade}"
+
+    # Sem clima com vocação, ninguém é favorito nem sofre.
+    sistema.set_weather(WeatherType.CLEAR)
+    assert all(sistema.vantagem(p) == 0.0 for p in ("COLD_TACTICIAN", "PACER"))
+    assert sistema.apelido_do_clima() == ""
+
+
+def test_apelido_do_clima_so_onde_ha_vocacao():
+    from game.weather_events import WeatherSystem, WeatherType
+
+    sistema = WeatherSystem()
+    sistema.set_weather(WeatherType.RAIN)
+    assert sistema.apelido_do_clima() == "na chuva"
+    sistema.set_weather(WeatherType.STORM)
+    assert sistema.apelido_do_clima() == "na tempestade"
+    sistema.set_weather(WeatherType.WIND)
+    assert sistema.apelido_do_clima() == "no vento"
+    sistema.set_weather(WeatherType.SUNSET)
+    assert sistema.apelido_do_clima() == ""
+
+
+@pytest.mark.asyncio
+async def test_grade_de_votacao_mostra_a_leitura_do_clima(tmp_path):
+    """Quem vai apostar sabe, ANTES de votar, quem o tempo da prova favorece."""
+    from game.weather_events import WeatherType
+
+    voz = FakeNarrador()
+    config, director = await _director_pronto(tmp_path, "odds.db", voz)
+    director.engine.weather_system.set_weather(WeatherType.RAIN, intensity=0.5)
+
+    resumo = director.get_current_choices_summary()
+    por_personalidade = {h.personality: resumo[h.id] for h in config.horses}
+
+    titã = por_personalidade["JUGGERNAUT"]
+    assert titã["clima_tag"] == "⭐ favorito na chuva"
+    assert titã["clima_vantagem"] > 0
+    nevasca = por_personalidade["COLD_TACTICIAN"]
+    assert nevasca["clima_tag"] == "⭐ favorito na chuva"
+    # Quem o clima castiga também é dito — é isso que dá assunto no chat.
+    assert por_personalidade["PACER"]["clima_tag"] == "⚠️ sofre na chuva"
+    assert por_personalidade["PACER"]["clima_vantagem"] < 0
+
+
+@pytest.mark.asyncio
+async def test_sem_vocacao_a_grade_nao_mostra_etiqueta(tmp_path):
+    """Céu limpo não favorece ninguém: a grade fica limpa (nada de "neutro")."""
+    from game.weather_events import WeatherType
+
+    config, director = await _director_pronto(tmp_path, "sem_odds.db")
+    director.engine.weather_system.set_weather(WeatherType.CLEAR)
+
+    resumo = director.get_current_choices_summary()
+    assert all(not r["clima_tag"] for r in resumo.values())
+    assert all(r["clima_vantagem"] == 0.0 for r in resumo.values())
+
+
+# ---------------------------------------------------------------------------
+# A virada do tempo mexendo na pista
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_a_virada_empurra_quem_se_da_bem_com_o_tempo_novo(tmp_path, monkeypatch):
+    """O aviso da virada não pode ser só voz: a pista tem que reagir.
+
+    A tabela do clima vale poucos % — invisível no instante (a 28 m/s, 1% é
+    0,28 m/s). Na virada, quem o tempo NOVO favorece leva um impulso de
+    verdade, com o emblema do clima na garupa: é o que a live vê.
+    """
+    from game.director import IMPULSO_DA_VIRADA
+    from game.weather_events import WeatherType
+
+    voz = FakeNarrador()
+    _, director = await _director_pronto(tmp_path, "impulso.db", voz, track=3000.0)
+
+    await director.tick(0.25)
+    await director.tick(0.15)
+    # O tempo novo é SORTEADO; aqui ele é cravado na chuva para o teste saber
+    # de antemão quem tem que sair na frente (clima sem vocação não empurra
+    # ninguém — e aí não haveria o que conferir).
+    monkeypatch.setattr(
+        director.engine.weather_system,
+        "pick_random_weather",
+        lambda: director.engine.weather_system.set_weather(WeatherType.RAIN, 0.5)
+        or WeatherType.RAIN,
+    )
+    director._virada_clima_em = 1200.0
+    for _ in range(60):
+        await director.tick(1.0)
+        if any(c[0] == "virada_clima" for c in voz.chamadas):
+            break
+
+    assert any(c[0] == "virada_clima" for c in voz.chamadas), "a virada não aconteceu"
+
+    # Os favoritos do tempo novo estão empurrados; os outros, não.
+    tempo = director.engine.weather_system
+    favoritos = tempo.favoritos()
+    assert favoritos, "o teste forçou um clima com vocação"
+    for h in director.engine.horses:
+        impulso = next(
+            (b for b in h.active_boosts if b.name.startswith("TEMPO A FAVOR")), None
+        )
+        if h.personality in favoritos and not h.finished:
+            assert impulso is not None, f"{h.name} devia ter levado o impulso da virada"
+            assert impulso.power == IMPULSO_DA_VIRADA
+            # O emblema do clima na garupa é o que se vê na pista.
+            assert impulso.gift_emoji == tempo.emoji()
+        else:
+            assert impulso is None, f"{h.name} não ganha impulso neste tempo"
+
+    assert any(n["type"] == "WEATHER_GAIN" for n in director.notifications_queue)
+
+
 # ---------------------------------------------------------------------------
 # A voz do clima
 # ---------------------------------------------------------------------------

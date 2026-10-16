@@ -1,5 +1,5 @@
 import aiosqlite
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from backend.database.connection import DatabaseConnection
 from backend.progression import calculate_level
 
@@ -113,8 +113,23 @@ class DatabaseRepository:
         top_3_horse_ids: List[int],
         xp_participation: int = 20,
         xp_win: int = 150,
-        xp_top3: int = 50
+        xp_top3: int = 50,
+        fieis: Optional[Set[str]] = None,
+        multiplicador_fiel: float = 2.0
     ) -> List[Dict[str, Any]]:
+        """Fecha a corrida no banco: XP para quem votou, DOBRADO para quem ficou.
+
+        O Bônus Fiel (ver `game/director.py`) NÃO tira nada de ninguém: o XP
+        de sempre continua valendo para quem votou e saiu, e quem estava na
+        live até o pódio leva o dobro. A conta de "metade" do texto da live é
+        essa mesma, medida do outro lado: o fiel ganha 2x, então o ausente
+        ganhou metade DELE — sem virar castigo para quem só passou.
+
+        `fieis` são os usernames do TikTok já normalizados (`strip().lower()`,
+        o mesmo da coluna `tiktok_username`); vazio/None = corrida sem
+        ninguém fiel (todo mundo leva o XP de sempre).
+        """
+        fieis = fieis or set()
         updated_viewers = []
         async with self.connection.get_connection() as db:
             db.row_factory = aiosqlite.Row
@@ -142,7 +157,11 @@ class DatabaseRepository:
                     earned_xp += xp_win
                 elif top3:
                     earned_xp += xp_top3
-                    
+
+                fiel = row["tiktok_username"] in fieis
+                if fiel:
+                    earned_xp = int(round(earned_xp * multiplicador_fiel))
+
                 new_xp = old_xp + earned_xp
                 new_level = calculate_level(new_xp)
                 new_races = row["races_count"] + 1
@@ -166,7 +185,8 @@ class DatabaseRepository:
                     "level": new_level,
                     "level_up": new_level > row["level"],
                     "wins_count": new_wins,
-                    "won": won
+                    "won": won,
+                    "fiel": fiel
                 })
                 
             await db.commit()

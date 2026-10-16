@@ -67,6 +67,12 @@ class BroadcastHUD {
     this.notificationContainer = document.getElementById("notification-container");
     this.centerModal = document.getElementById("center-modal");
     this.leaderboardEl = document.getElementById("hudLeaderboard");
+    this.torcidaCallEl = document.getElementById("hudTorcidaCall");
+    this.torcidaVerbEl = document.getElementById("hudTorcidaVerb");
+    this.torcidaNumEl = document.getElementById("hudTorcidaNum");
+    this.torcidaTextEl = document.getElementById("hudTorcidaText");
+    // Modo da chamada da torcida já escrito na tela (só reescreve quando vira).
+    this.torcidaModo = null;
 
     // Controle da cartela de votação: qual fase está montada no DOM e qual
     // número da contagem já foi exibido (evita remontar/piscar a cada update).
@@ -161,6 +167,9 @@ class BroadcastHUD {
 
     // 4. Leaderboard Inferior (Durante a Corrida)
     this.renderBottomLeaderboard(state, stateData);
+
+    // 5. Chamada da torcida (a prova rolando é onde o público pode agir)
+    this.renderTorcidaCall(state, stateData);
 
     this.lastState = state;
   }
@@ -439,6 +448,7 @@ class BroadcastHUD {
               <div class="user">
                 <span>👤</span>
                 <span>${r.display_name} (Lv. ${r.level})</span>
+                ${r.fiel ? '<span class="faithful-badge">🏅 FIEL 2x</span>' : ""}
                 ${r.level_up ? '<span style="color: #fbbf24; font-size: 13px;">⭐ LEVEL UP!</span>' : ""}
               </div>
               <div class="xp-gain">+${r.earned_xp} XP</div>
@@ -507,22 +517,33 @@ class BroadcastHUD {
       let cardsHtml = "";
       horses.forEach((h) => {
         const textColor = this.getContrastColor(h.color_hex);
+        // A leitura do clima vem do servidor (mesmo desvio que entra na
+        // velocidade do cavalo): é a informação de aposta da rodada.
+        const tag = (h.clima_tag || "").trim();
+        const classeTag = tag.indexOf("⭐") === 0 ? "favorito" : "sofre";
+        const pct = (typeof h.clima_vantagem === "number" && h.clima_vantagem !== 0)
+          ? ` ${h.clima_vantagem > 0 ? "+" : ""}${h.clima_vantagem.toFixed(1).replace(".", ",")}%`
+          : "";
         cardsHtml += `
           <div class="horse-vote-card" style="border-color: ${h.color_hex};">
             <div class="num-badge" style="background: ${h.color_hex}; color: ${textColor};">#${h.horse_id}</div>
             <div class="info">
               <div class="name">${h.horse_name}</div>
               <div class="supporters" data-horse="${h.horse_id}">👥 ${h.supporters_count} apoiadores</div>
+              ${tag ? `<div class="clima-tag ${classeTag}">${escaparHtml(tag + pct)}</div>` : ""}
             </div>
           </div>
         `;
       });
 
+      // O motivo de FICAR tem que estar na tela onde o público vota — não só
+      // na voz, no meio da prova.
       const header = state === "COUNTDOWN"
         ? `<h2>VOTAÇÃO ENCERRADA!</h2>
            <p>Últimos números dos apoiadores — a prova começa em instantes!</p>`
         : `<h2>ESCOLHA SEU CAVALO!</h2>
-           <p>Comente o número (1 a 8) ou o nome do cavalo no chat da LIVE!</p>`;
+           <p>Comente o número (1 a 8) ou o nome do cavalo no chat da LIVE!</p>
+           <span class="voting-hint">🏅 Fica até o pódio = XP DOBRADO!</span>`;
 
       this.centerModal.innerHTML = `
         <div class="voting-overlay">
@@ -590,11 +611,22 @@ class BroadcastHUD {
     const horses = (stateData.engine && stateData.engine.horses) || [];
     const trackLength = (stateData.engine && stateData.engine.track_length) || 3000;
 
+    // A torcida de cada cavalo vem do servidor: quem já digitou o número no
+    // chat, quantos m/s isso vale e quanto falta para o teto. A barra é
+    // relativa ao cavalo mais empurrado — assim a corrida tem um "enquanto
+    // isso, no chat" visível, e não um número solto.
+    const torcida = stateData.torcida || {};
+    const maiorTorcida = Object.values(torcida)
+      .reduce((maior, t) => Math.max(maior, t.torcedores || 0), 0);
+
     // 1. Atualiza Torre Lateral Esquerda (Compacta estilo F1 - não tampa os cavalos)
     let rowsHtml = "";
     leaderboard.forEach((h) => {
       const isP1 = (h.position === 1);
       const textColor = this.getContrastColor(h.color_hex);
+      const t = torcida[h.horse_id] || torcida[String(h.horse_id)];
+      const apoiadores = (t && t.torcedores) || 0;
+      const pct = maiorTorcida > 0 ? (apoiadores / maiorTorcida) * 100 : 0;
       rowsHtml += `
         <div class="tower-row ${isP1 ? 'p1' : ''}" style="border-left-color: ${h.color_hex};">
           <div class="left">
@@ -603,9 +635,11 @@ class BroadcastHUD {
             <span class="tower-name">${h.name}</span>
           </div>
           <div class="right">
+            ${apoiadores > 0 ? `<span class="tower-fire" title="${escaparHtml(apoiadores + " empurrando")}">🔥${apoiadores}</span>` : ''}
             ${h.boost_active ? '<span class="tower-turbo-icon">⚡</span>' : ''}
             <span class="tower-dist">${Math.round(h.distance)}m</span>
           </div>
+          ${apoiadores > 0 ? `<div class="tower-torcida"><i style="width: ${pct.toFixed(1)}%"></i></div>` : ''}
         </div>
       `;
     });
@@ -634,6 +668,49 @@ class BroadcastHUD {
       });
       progressBar.innerHTML = dotsHtml;
     }
+  }
+
+  renderTorcidaCall(state, stateData) {
+    if (!this.torcidaCallEl) return;
+
+    // A mecânica de empurrar o cavalo digitando o número existe desde sempre
+    // e ninguém sabia. O convite só faz sentido com a prova rolando: é o
+    // único momento em que digitar muda o resultado.
+    if (state !== "RACING") {
+      this.torcidaCallEl.style.display = "none";
+      this.torcidaModo = null;
+      return;
+    }
+
+    const leaderboard = (stateData.engine && stateData.engine.leaderboard) || [];
+    const ultimo = leaderboard.reduce(
+      (pior, h) => (!pior || h.position > pior.position ? h : pior), null
+    );
+
+    // Duas chamadas alternando a cada 14s: uma aponta o cavalo que precisa de
+    // empurrão, a outra ensina a regra para quem acabou de entrar na live.
+    // Sem alternar, o convite vira paisagem e ninguém lê.
+    const ciclo = Math.floor((stateData.state_timer || 0) / 14);
+    const generico = !ultimo || ciclo % 2 === 1;
+    const modo = generico ? "generico" : `#${ultimo.horse_id}`;
+
+    // Só reescreve o DOM quando a chamada realmente muda: o CSS anima a
+    // entrada, e mexer no texto a cada frame faria o bloco tremer.
+    if (modo === this.torcidaModo) return;
+    this.torcidaModo = modo;
+
+    if (generico) {
+      this.torcidaVerbEl.textContent = "COMENTA O";
+      this.torcidaNumEl.style.display = "none";
+      this.torcidaTextEl.textContent = "NÚMERO DO TEU CAVALO!";
+    } else {
+      this.torcidaVerbEl.textContent = "DIGITE";
+      this.torcidaNumEl.textContent = ultimo.number ?? ultimo.horse_id;
+      this.torcidaNumEl.style.display = "";
+      this.torcidaTextEl.textContent = `PRA EMPURRAR ${String(ultimo.name).toUpperCase()}!`;
+    }
+
+    this.torcidaCallEl.style.display = "flex";
   }
 }
 

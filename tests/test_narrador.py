@@ -12,8 +12,13 @@ from game.falas import (
     CORRIDA_ABERTURA,
     CORRIDA_DISPUTA,
     CORRIDA_PLACAR,
+    CORRIDA_PLACAR_TORCIDA,
+    CORRIDA_TORCIDA,
+    CORRIDA_TORCIDA_CHAMADA,
+    FIDELIDADE,
     FOTO_FINISH,
     RETA_FINAL,
+    XP_DOBRADO,
 )
 from game.narrador import DISPUTA_PADRAO, FALA_PADRAO, VOZ_PADRAO, Narrador
 
@@ -101,6 +106,18 @@ def test_frases_da_locucao_do_jogo_formatam_sem_erro():
         assert "{" not in frase.format(lider="Raio", segundo="Titã")
     for frase in CORRIDA_PLACAR:
         assert "{" not in frase.format(lider="Raio", segundo="Titã", terceiro="Nevasca")
+    for frase in CORRIDA_PLACAR_TORCIDA:
+        assert "{" not in frase.format(
+            lider="Raio", segundo="Titã", terceiro="Nevasca",
+            nomes="Ana, Leo e Rafael", cavalo="Nevasca",
+        )
+    for frase in CORRIDA_TORCIDA:
+        assert "{" not in frase.format(nomes="Ana e Leo", cavalo="Nevasca")
+    # As de recado direto (chamada, fidelidade e XP dobrado) não têm placeholder
+    # nenhum: se alguém editar uma delas e deixar um `{...}` esquecido, a fala
+    # sai muda na live.
+    for frase in (*CORRIDA_TORCIDA_CHAMADA, *FIDELIDADE, *XP_DOBRADO):
+        assert "{" not in frase.format()
     for frase in FOTO_FINISH:
         assert "{" not in frase.format(vencedor="Raio", segundo="Titã")
 
@@ -156,13 +173,16 @@ def test_descartar_locucao_tira_so_a_locucao_da_fila():
     presente = n.anunciar_presente("leo", 1, "Rose", "RAIO")
     n.anunciar_clima("chuva forte", ["NEVASCA"])
     n.anunciar_disputa("RAIO", "TITÃ")
+    n.anunciar_torcida(["Ana"], "RAIO")
+    n.anunciar_fidelidade()
     entrada = n.anunciar_entrada("leo")
     n.anunciar_reta_final("RAIO", "TITÃ")
     chegada = n.anunciar_foto_finish("RAIO", "TITÃ")
     vencedor = n.anunciar_vencedor(1, "RAIO")
 
-    # Abertura, placar, clima, disputa e reta final: cinco falas da prova.
-    assert n.descartar_locucao() == 5
+    # Abertura, placar, clima, disputa, torcida, fidelidade e reta final:
+    # sete falas da prova (as que descrevem uma corrida que já acabou).
+    assert n.descartar_locucao() == 7
 
     assert [texto for texto, _ in n._fila.queue] == [
         presente,
@@ -212,7 +232,7 @@ async def test_director_descarta_a_locucao_quando_a_corrida_e_decidida(tmp_path)
     assert tipos.index("vencedor") > descarte
 
     # E nenhuma locução da prova entra na fila depois do descarte.
-    locucao = {"abertura", "placar", "disputa", "reta_final"}
+    locucao = {"abertura", "placar", "disputa", "reta_final", "torcida", "fidelidade"}
     assert not locucao.intersection(tipos[descarte + 1:])
 
 

@@ -50,14 +50,19 @@ from game.falas import (
     CORRIDA_ABERTURA,
     CORRIDA_DISPUTA,
     CORRIDA_PLACAR,
+    CORRIDA_PLACAR_TORCIDA,
+    CORRIDA_TORCIDA,
+    CORRIDA_TORCIDA_CHAMADA,
     CURTIDAS,
     FALAS,
+    FIDELIDADE,
     FOTO_FINISH,
     LARGADA,
     RETA_FINAL,
     SEGUIDOR,
     VENCEDOR,
     VOTACAO_ABERTA,
+    XP_DOBRADO,
 )
 
 logger = logging.getLogger(__name__)
@@ -94,12 +99,19 @@ VENCEDOR_PADRAO = VENCEDOR[0]
 ABERTURA_PADRAO = CORRIDA_ABERTURA[0]
 DISPUTA_PADRAO = CORRIDA_DISPUTA[0]
 PLACAR_PADRAO = CORRIDA_PLACAR[0]
+PLACAR_TORCIDA_PADRAO = CORRIDA_PLACAR_TORCIDA[0]
 RETA_FINAL_PADRAO = RETA_FINAL[0]
 FOTO_FINISH_PADRAO = FOTO_FINISH[0]
 
 # O clima também tem plano B: a primeira frase de verdade de cada lista.
 CLIMA_PADRAO = CLIMA[0]
 CLIMA_VIRADA_PADRAO = CLIMA_VIRADA[0]
+
+# A torcida com nome e o Bônus Fiel: mesmo plano B, mesma âncora.
+TORCIDA_PADRAO = CORRIDA_TORCIDA[0]
+TORCIDA_CHAMADA_PADRAO = CORRIDA_TORCIDA_CHAMADA[0]
+FIDELIDADE_PADRAO = FIDELIDADE[0]
+XP_DOBRADO_PADRAO = XP_DOBRADO[0]
 
 # A marca da LOCUÇÃO DA CORRIDA na fila — a abertura, os placares, a disputa,
 # a reta final, o clima e a virada do tempo. Quando a prova termina, o que
@@ -209,8 +221,11 @@ class Narrador:
         # do config (`tts.falas`, `tts.boas_vindas`, `tts.votacao`,
         # `tts.largada`, `tts.vencedor`, `tts.corrida_abertura`,
         # `tts.corrida_disputa`, `tts.reta_final`, `tts.foto_finish`,
-        # `tts.clima`, `tts.clima_virada`) substituem as listas inteiras para
-        # quem quiser improvisar sem mexer no código.
+        # `tts.clima`, `tts.clima_virada`, `tts.corrida_torcida`,
+        # `tts.corrida_torcida_chamada`, `tts.corrida_placar_torcida`,
+        # `tts.fidelidade`, `tts.xp_dobrado`)
+        # substituem as listas inteiras para quem quiser improvisar sem mexer
+        # no código.
         self.falas = _frases_do_config(cfg.falas, FALAS)
         self.boas_vindas = _frases_do_config(cfg.boas_vindas, BOAS_VINDAS)
         self.votacao = _frases_do_config(cfg.votacao, VOTACAO_ABERTA)
@@ -219,10 +234,19 @@ class Narrador:
         self.corrida_abertura = _frases_do_config(cfg.corrida_abertura, CORRIDA_ABERTURA)
         self.corrida_disputa = _frases_do_config(cfg.corrida_disputa, CORRIDA_DISPUTA)
         self.corrida_placar = _frases_do_config(cfg.corrida_placar, CORRIDA_PLACAR)
+        self.corrida_placar_torcida = _frases_do_config(
+            cfg.corrida_placar_torcida, CORRIDA_PLACAR_TORCIDA
+        )
         self.reta_final = _frases_do_config(cfg.reta_final, RETA_FINAL)
         self.foto_finish = _frases_do_config(cfg.foto_finish, FOTO_FINISH)
         self.clima = _frases_do_config(cfg.clima, CLIMA)
         self.clima_virada = _frases_do_config(cfg.clima_virada, CLIMA_VIRADA)
+        self.corrida_torcida = _frases_do_config(cfg.corrida_torcida, CORRIDA_TORCIDA)
+        self.corrida_torcida_chamada = _frases_do_config(
+            cfg.corrida_torcida_chamada, CORRIDA_TORCIDA_CHAMADA
+        )
+        self.fidelidade = _frases_do_config(cfg.fidelidade, FIDELIDADE)
+        self.xp_dobrado = _frases_do_config(cfg.xp_dobrado, XP_DOBRADO)
         self.seguidor = SEGUIDOR
         self.curtidas = CURTIDAS
 
@@ -491,12 +515,39 @@ class Narrador:
             "Locução de disputa",
         )
 
-    def texto_do_placar(self, lider: str, segundo: str, terceiro: str) -> str:
+    def texto_do_placar(
+        self,
+        lider: str,
+        segundo: str,
+        terceiro: str,
+        nomes: list[str] | None = None,
+        cavalo: str = "",
+    ) -> str:
         """A chamada de POSIÇÕES: o trio da frente, no estilo do turfe.
 
         É a fala que preenche os vãos entre um marco e outro — sem ela, a
         corrida tinha buracos de ~10s de silêncio no meio da prova.
+
+        Com `nomes` (gente que está empurrando o `cavalo`), o placar sai da
+        lista que CITA a torcida: é o lugar natural para o nome de quem está
+        na live, porque é onde a voz já está falando da corrida. Sem nomes,
+        sai da lista de sempre — o placar não pode virar convite a torcer de
+        300 em 300 metros.
         """
+        chamada = self._nomes_para_fala(nomes or [])
+        if chamada:
+            return self._sorteada(
+                self.corrida_placar_torcida,
+                PLACAR_TORCIDA_PADRAO,
+                {
+                    "lider": self._nome_falado(lider),
+                    "segundo": self._nome_falado(segundo),
+                    "terceiro": self._nome_falado(terceiro),
+                    "nomes": chamada,
+                    "cavalo": self._nome_falado(cavalo),
+                },
+                "Locução de placar com torcida",
+            )
         return self._sorteada(
             self.corrida_placar,
             PLACAR_PADRAO,
@@ -533,6 +584,70 @@ class Narrador:
                 "segundo": self._nome_falado(segundo),
             },
             "Locução de foto-finish",
+        )
+
+    # ------------------------------------------------------------------
+    # A torcida com nome (o meio da corrida) e o Bônus Fiel
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _nome_de_gente(nome: str) -> str:
+        """Nome de PESSOA como a voz lê: sem emoji, sem arroba, sem símbolo.
+
+        Ao contrário do nome de cavalo (`_nome_falado`), aqui não se mexe na
+        caixa: apelido de TikTok é escrito pelo dono ("Leozinnh", "caioba338")
+        e `capitalize()` só serviria para estragar o que ele escolheu. Nome
+        que sobra vazio (só emojis) volta VAZIO de propósito — citar
+        "espectador" numa frase que promete um nome soa pior que não citar.
+        """
+        import re
+
+        limpo = re.sub(r"[^a-zA-Z0-9À-ÿ\s]", "", (nome or "").strip().lstrip("@"))
+        return re.sub(r"\s+", " ", limpo).strip()
+
+    def _nomes_para_fala(self, nomes: list[str]) -> str:
+        """Os nomes prontos para a frase: "Rafael", "Rafael e Ana", "R, A e Léo"."""
+        falados = [self._nome_de_gente(n) for n in nomes]
+        falados = [n for n in falados if n]
+        if not falados:
+            return ""
+        if len(falados) == 1:
+            return falados[0]
+        return ", ".join(falados[:-1]) + f" e {falados[-1]}"
+
+    def texto_da_torcida(self, nomes: list[str], cavalo: str) -> str:
+        """A voz chamando a torcida PELO NOME, no meio da prova.
+
+        Sem ninguém para citar, a frase não é uma versão quebrada da mesma
+        chamada: vira o convite para agir ("comenta o número do teu cavalo").
+        É assim que quem chegou depois descobre que dá para empurrar cavalo
+        pelo chat — a mecânica existia e ninguém sabia.
+        """
+        chamada = self._nomes_para_fala(nomes)
+        if not chamada:
+            return self._sorteada(
+                self.corrida_torcida_chamada,
+                TORCIDA_CHAMADA_PADRAO,
+                {},
+                "Locução de torcida (chamada)",
+            )
+        return self._sorteada(
+            self.corrida_torcida,
+            TORCIDA_PADRAO,
+            {"nomes": chamada, "cavalo": self._nome_falado(cavalo)},
+            "Locução de torcida",
+        )
+
+    def texto_da_fidelidade(self) -> str:
+        """O lembrete do meio da prova: quem fica até o pódio leva XP dobrado."""
+        return self._sorteada(
+            self.fidelidade, FIDELIDADE_PADRAO, {}, "Locução de fidelidade"
+        )
+
+    def texto_do_xp_dobrado(self) -> str:
+        """O agradecimento na tela de XP a quem ficou até o pódio."""
+        return self._sorteada(
+            self.xp_dobrado, XP_DOBRADO_PADRAO, {}, "Anúncio de XP dobrado"
         )
 
     # ------------------------------------------------------------------
@@ -711,14 +826,27 @@ class Narrador:
             categoria=CORRIDA,
         )
 
-    def anunciar_placar(self, lider: str, segundo: str, terceiro: str) -> str | None:
-        """Enfileira a chamada de posições (o trio da frente)."""
+    def anunciar_placar(
+        self,
+        lider: str,
+        segundo: str,
+        terceiro: str,
+        nomes: list[str] | None = None,
+        cavalo: str = "",
+    ) -> str | None:
+        """Enfileira a chamada de posições (o trio da frente).
+
+        `nomes`/`cavalo` são opcionais: quando vêm, o placar cita quem está
+        empurrando aquele cavalo no chat (ver `texto_do_placar`).
+        """
         if not self.ativo:
             return None
 
+        chamada = self._nomes_para_fala(nomes or [])
+        quem = f" — torcida: {chamada} no {cavalo}" if chamada else ""
         return self._enfileirar(
-            self.texto_do_placar(lider, segundo, terceiro),
-            f"o placar ({lider}, {segundo}, {terceiro})",
+            self.texto_do_placar(lider, segundo, terceiro, nomes, cavalo),
+            f"o placar ({lider}, {segundo}, {terceiro}){quem}",
             categoria=CORRIDA,
         )
 
@@ -753,6 +881,42 @@ class Narrador:
             self.texto_da_virada_do_clima(clima, nomes),
             f"a virada do clima ({clima})",
             categoria=CORRIDA,
+        )
+
+    def anunciar_torcida(self, nomes: list[str], cavalo: str) -> str | None:
+        """Enfileira a chamada da torcida — com nomes, ou o convite a torcer.
+
+        `nomes` vazio não é erro: é o caso de quem chegou depois (ou de um
+        chat que ainda não descobriu que dá para empurrar cavalo comentando).
+        """
+        if not self.ativo:
+            return None
+
+        chamada = self._nomes_para_fala(nomes)
+        return self._enfileirar(
+            self.texto_da_torcida(nomes, cavalo),
+            f"a torcida ({chamada or 'chamada pra empurrar'})",
+            categoria=CORRIDA,
+        )
+
+    def anunciar_fidelidade(self) -> str | None:
+        """Enfileira o lembrete de XP dobrado (meio da prova)."""
+        if not self.ativo:
+            return None
+
+        return self._enfileirar(
+            self.texto_da_fidelidade(),
+            "o lembrete de XP dobrado",
+            categoria=CORRIDA,
+        )
+
+    def anunciar_xp_dobrado(self) -> str | None:
+        """Enfileira o agradecimento a quem ficou até o pódio (tela de XP)."""
+        if not self.ativo:
+            return None
+
+        return self._enfileirar(
+            self.texto_do_xp_dobrado(), "o XP dobrado dos fiéis"
         )
 
     def anunciar_foto_finish(self, vencedor: str, segundo: str) -> str | None:

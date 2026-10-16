@@ -61,10 +61,15 @@ class TtsConfig(BaseModel):
     corrida_abertura: Optional[List[str]] = None
     corrida_disputa: Optional[List[str]] = None
     corrida_placar: Optional[List[str]] = None
+    corrida_placar_torcida: Optional[List[str]] = None
     reta_final: Optional[List[str]] = None
     foto_finish: Optional[List[str]] = None
     clima: Optional[List[str]] = None
     clima_virada: Optional[List[str]] = None
+    corrida_torcida: Optional[List[str]] = None
+    corrida_torcida_chamada: Optional[List[str]] = None
+    fidelidade: Optional[List[str]] = None
+    xp_dobrado: Optional[List[str]] = None
 
 class Settings(BaseModel):
     race_duration_seconds: float = 120.0

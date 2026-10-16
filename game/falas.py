@@ -21,9 +21,22 @@ Os valores de cada lista:
 - `CORRIDA_PLACAR`: `{lider}`, `{segundo}` e `{terceiro}` — a chamada de
   POSIÇÕES (o "placar" do locutor de turfe), que preenche os vãos entre um
   marco e outro: a corrida fica narrada do começo ao fim, sem buracos.
+- `CORRIDA_PLACAR_TORCIDA`: o MESMO placar, mas com o nome de quem está
+  empurrando: soma `{nomes}` e `{cavalo}` aos três de cima. Só entra quando
+  há nomes para citar (sem gente, vale o `CORRIDA_PLACAR`, que não promete
+  nome nenhum).
 - `FOTO_FINISH`: `{vencedor}` e `{segundo}` — só entra no ar quando a
   chegada foi decidida por menos de 50ms (ver `MARGEM_FOTO_FINISH_MS` no
   director); em corrida decidida com folga, a exclamação não faria sentido.
+- `CORRIDA_TORCIDA` (a voz chama gente pelo nome): `{nomes}` (uma, duas ou
+  três pessoas já formatadas — "Rafael, Ana e Léo") e `{cavalo}`. Os verbos
+  vão de propósito no GERÚNDIO ("empurrando", "torcendo"): funciona igual no
+  singular e no plural, e a frase não quebra quando só um nome entra.
+- `CORRIDA_TORCIDA_CHAMADA` (sem nomes, quando não há ninguém para citar):
+  é a chamada para agir — digitar o número do cavalo com a prova rolando.
+- `FIDELIDADE` (no meio da prova): o lembrete de que quem fica até o pódio
+  leva XP em dobro. É o que segura o espectador na live depois do voto.
+- `XP_DOBRADO` (na tela de recompensas): o agradecimento a quem ficou.
 - `CLIMA` e `CLIMA_VIRADA`: `{clima}` (o rótulo já com a força — "chuva
   forte") e `{quem}` (a cláusula de quem o clima favorece, pronta para
   encostar no fim da frase: vem VAZIA quando o clima não favorece ninguém
@@ -36,7 +49,9 @@ corrida cada frase tem poucos segundos de janela antes do próximo marco.
 Quem quiser trocar as frases sem mexer no código aponta `tts.falas`,
 `tts.boas_vindas`, `tts.votacao`, `tts.largada`, `tts.vencedor`,
 `tts.corrida_abertura`, `tts.corrida_disputa`, `tts.corrida_placar`,
-`tts.reta_final`, `tts.foto_finish`, `tts.clima` e `tts.clima_virada` no
+`tts.corrida_placar_torcida`, `tts.reta_final`, `tts.foto_finish`,
+`tts.clima`, `tts.clima_virada`, `tts.corrida_torcida`,
+`tts.corrida_torcida_chamada`, `tts.fidelidade` e `tts.xp_dobrado` no
 `config.json` para as próprias listas; as daqui são o padrão do jogo.
 """
 
@@ -444,6 +459,32 @@ CORRIDA_PLACAR = [
     "Seguimos com {lider} na frente! {segundo} e {terceiro} perseguindo!",
 ]
 
+# O placar CITANDO GENTE: a mesma chamada de posições, com o nome de quem está
+# empurrando o cavalo. Ninguém sai de uma live depois de ouvir o próprio nome —
+# e o placar é o momento em que a voz fala de CORRIDA, então é aqui que o nome
+# do chat cabe sem virar aviso de chegada.
+#
+# `{cavalo}` é o cavalo da torcida (não necessariamente o líder) e `{nomes}` vem
+# pronto para a fala: um, dois ou três nomes ("Rafael", "Rafael e Ana",
+# "Rafael, Ana e Léo"). Usadas só quando HÁ nomes: sem gente para citar, o
+# placar sai da lista comum (CORRIDA_PLACAR) — nada de frase com buraco.
+CORRIDA_PLACAR_TORCIDA = [
+    "Placar! {lider} na frente, {segundo} em segundo e {terceiro} no trio! E olha a torcida: {nomes} com o {cavalo}!",
+    "Olha as posições! {lider} puxa, {segundo} persegue — e {nomes} empurrando o {cavalo} pela arquibancada!",
+    "{lider} lidera, {segundo} vem colado! Enquanto isso, {nomes} no grito pelo {cavalo}!",
+    "No placar: {lider}, {segundo} e {terceiro}! E {nomes} fazendo barulho pelo {cavalo}!",
+    "Trio da frente: {lider}, {segundo} e {terceiro}! A torcida do {cavalo} tá junto: {nomes}!",
+    "{lider} na ponta, mas {segundo} não desgruda! E {nomes} empurrando o {cavalo} no chat!",
+    "Atualizando! {lider} primeiro, {segundo} segundo, {terceiro} terceiro! {nomes} com o {cavalo}!",
+    "Que briga! {lider} e {segundo} separados por nada! E olha quem torce pelo {cavalo}: {nomes}!",
+    "{lider} segura a ponta, {segundo} aperta! Do outro lado, {nomes} acreditando no {cavalo}!",
+    "Posições! {lider} na frente, {segundo} na caça, {terceiro} na espreita! E {nomes} com o {cavalo}!",
+    "Nada definido! {lider}, {segundo} e {terceiro}! A família {nomes} tá com o {cavalo}!",
+    "Placar da prova: {lider} na frente! E {nomes} empurrando o {cavalo} sem parar!",
+    "{lider} na liderança, {segundo} colado! Enquanto {nomes} grita pelo {cavalo}!",
+    "Conferindo a pista: {lider}, {segundo} e {terceiro}! Valeu, {nomes}, pelo apoio ao {cavalo}!",
+]
+
 RETA_FINAL = [
     # --- Originais ---
     "Reta final! {lider} na frente e {segundo} vem voando!",
@@ -526,6 +567,86 @@ FOTO_FINISH = [
     "Decidido na foto! {vencedor} ganhou e {segundo} chegou logo depois!",
     "Os juízes confirmam! {vencedor} bateu o {segundo} por um nariz!",
     "Resultado por foto! {vencedor} campeão, {segundo} vice colado!",
+]
+
+# ---------------------------------------------------------------------------
+# A torcida com NOME: a voz chama gente pelo nome no meio da prova.
+#
+# A corrida inteira citava só cavalo — e ninguém sai de uma live onde acabou
+# de ouvir o próprio nome. `{nomes}` chega pronto (uma, duas ou três pessoas:
+# "Rafael", "Rafael e Ana", "Rafael, Ana e Léo") e `{cavalo}` é o cavalo do
+# quadro naquele momento. Os verbos vão no GERÚNDIO de propósito: vale para
+# um e para três nomes sem quebrar a concordância.
+# ---------------------------------------------------------------------------
+
+CORRIDA_TORCIDA = [
+    # --- Originais ---
+    "Olha a torcida! {nomes} empurrando o {cavalo}!",
+    "{nomes} na arquibancada torcendo pelo {cavalo}!",
+    "A galera tá junto! {nomes} vibrando com o {cavalo}!",
+    "{nomes} no grito pelo {cavalo}! A pista tá quente!",
+    "Torcida em peso! {nomes} acreditando no {cavalo}!",
+
+    # --- Chamando o nome ---
+    "Quem tá com o {cavalo}? {nomes}! Isso aí, família!",
+    "Olha quem torce pelo {cavalo}: {nomes}! Valeu, família!",
+    "É o {cavalo} e a torcida dele! {nomes} com tudo!",
+    "{nomes} junto com o {cavalo}! Bora, família!",
+
+    # --- Puxando o chat ---
+    "{nomes} empurrando o {cavalo}! Comenta o número e vem também!",
+    "{nomes} com o {cavalo}! Cada comentário empurra mais!",
+    "Arquibancada ligada! {nomes} na torcida pelo {cavalo}!",
+]
+
+# Sem ninguém para citar (ninguém torceu no chat ainda), a voz não fica muda:
+# ela ensina a mecânica. É esta frase que apresenta a torcida do meio da
+# corrida para quem acabou de chegar.
+CORRIDA_TORCIDA_CHAMADA = [
+    "Comenta o número do teu cavalo e empurra ele na pista!",
+    "Digita o número do teu cavalo no chat e dá um turbo na corrida!",
+    "Cada comentário empurra o teu cavalo! Digita o número dele agora!",
+    "Tá torcendo? Comenta o número do teu cavalo e empurra ele de verdade!",
+    "O chat mexe na corrida! Comenta o número do teu cavalo!",
+    "Bora empurrar! Digita o número do teu cavalo nos comentários!",
+    "Quem tá na live empurra o cavalo! Digita o número dele!",
+    "Curte e comenta: cada empurrão no chat acelera o teu cavalo!",
+]
+
+# ---------------------------------------------------------------------------
+# O Bônus Fiel: quem votou e FICOU até o pódio leva o XP em dobro.
+#
+# FIDELIDADE é o lembrete no meio da prova — é aqui que a retenção acontece:
+# o espectador já votou, o prêmio dele só sai no fim, e ele precisa saber
+# disso ANTES de sair. XP_DOBRADO é o agradecimento na tela de recompensas.
+# ---------------------------------------------------------------------------
+
+FIDELIDADE = [
+    # --- Originais ---
+    "Fica até o pódio, família! Quem assiste até o fim leva XP em dobro!",
+    "Atenção, torcida: quem ficar até o pódio ganha XP dobrado!",
+    "Não sai agora! Quem vê o pódio até o fim leva o XP em dobro!",
+    "XP em dobro pra quem fica até o pódio! Segura aí, família!",
+
+    # --- Empolgadas ---
+    "Tá quase! Quem ficar até o pódio leva o XP dobrado!",
+    "A corrida decide, e quem fica até o pódio leva XP em dobro!",
+    "Segura o dedo, família! Só quem fica até o pódio leva o XP dobrado!",
+    "Não desliga! O XP dobrado só cai pra quem assiste até o pódio!",
+]
+
+XP_DOBRADO = [
+    # --- Originais ---
+    "Quem ficou até o pódio levou XP dobrado! Valeu, família!",
+    "XP em dobro pra quem assistiu até o fim! Parabéns, torcida!",
+    "É isso, família! Quem ficou até o pódio levou o XP em dobro!",
+    "Gratidão a quem ficou até o fim: o XP dobrado já tá na conta de vocês!",
+
+    # --- Chamando para a próxima ---
+    "Quem ficou até o pódio leva XP dobrado! Fica pra próxima também!",
+    "Olha o XP dobrado na tela de quem ficou até o fim! Valeu, torcida!",
+    "Quem fica, ganha: o XP dobrado caiu pra quem assistiu até o pódio!",
+    "Boa, família! XP dobrado entregue pra quem ficou até o pódio!",
 ]
 
 # ---------------------------------------------------------------------------

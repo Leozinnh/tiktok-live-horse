@@ -461,12 +461,15 @@ html, body {
   justify-content: space-between;
   background: rgba(30, 41, 59, 0.70);
   border-radius: 8px;
-  padding: 5px 10px;
+  /* O espaço extra embaixo é da barra de torcida (posicionada no rodapé da
+     linha): 5px a mais não muda a torre, mas cabia o medidor. */
+  padding: 5px 10px 8px 10px;
   font-size: 13px;
   font-weight: 800;
   border-left: 4px solid #3b82f6;
   transition: all 0.2s ease;
   min-width: 0;
+  position: relative;
 }
 
 .tower-row.p1 {
@@ -532,6 +535,90 @@ html, body {
 .tower-turbo-icon {
   font-size: 12px;
   animation: pulse 0.8s infinite;
+}
+
+/* A BARRA DE TORCIDA POR CAVALO (o medidor da arquibancada)
+   A largura NÃO é "quantos comentários": é a velocidade que a torcida está
+   somando de verdade naquele cavalo, no mesmo teto da física (0,9 m/s). Quem
+   empurra o lanterna vê a barra dele subir — e o número que corre na pista
+   mexe junto. */
+.tower-torcida {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.10);
+  overflow: hidden;
+}
+
+.tower-torcida i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.75);
+}
+
+.tower-fire {
+  font-size: 11px;
+  font-weight: 800;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 3b. A CHAMADA DA TORCIDA — "DIGITE 7 PRA EMPURRAR A NEVASCA!"
+   Fica acima da torre de classificação: é o convite para AGIR, no meio da
+   prova, apontando para o cavalo que a arquibancada pode salvar. */
+.torcida-call {
+  position: absolute;
+  left: 50%;
+  bottom: 215px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.96), rgba(245, 158, 11, 0.96));
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 14px;
+  padding: 7px 18px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+  animation: torcidaPulse 1.6s ease-in-out infinite;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.torcida-call-verb {
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+.torcida-call-num {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.2;
+  color: #0f172a;
+  background: #fbbf24;
+  border-radius: 10px;
+  padding: 0 12px;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+
+.torcida-call-text {
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+}
+
+@keyframes torcidaPulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.045); }
 }
 
 /* 4. FILA DE NOTIFICAÇÕES (CANTO SUPERIOR DIREITO) */
@@ -744,6 +831,61 @@ html, body {
   color: #e2e8f0;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
   margin-top: 2px;
+}
+
+/* A LEITURA DO CLIMA NA GRADE — a informação de aposta da rodada.
+   O sorteio do tempo acontece antes de a votação abrir, então quem escolhe
+   já sabe em que tempo a prova vai ser. A etiqueta diz o que AQUELE cavalo
+   ganha ou perde com ele (o número é o mesmo que entra na velocidade). */
+.horse-vote-card .clima-tag {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.horse-vote-card .clima-tag.favorito {
+  color: #052e16;
+  background: linear-gradient(90deg, #86efac, #fde047);
+  box-shadow: 0 0 10px -2px rgba(134, 239, 172, 0.9);
+}
+
+.horse-vote-card .clima-tag.sofre {
+  color: #fef2f2;
+  background: rgba(127, 29, 29, 0.85);
+  border: 1px solid rgba(248, 113, 113, 0.7);
+}
+
+/* O lembrete do XP dobrado na cartela de votação: o motivo de FICAR
+   assistindo tem que estar na tela onde o público vota — não só na voz. */
+.voting-hint {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #052e16;
+  background: linear-gradient(90deg, #86efac, #fbbf24);
+  border-radius: 8px;
+  padding: 3px 12px;
+  box-shadow: 0 0 14px -3px rgba(251, 191, 36, 0.85);
+}
+
+/* BÔNUS FIEL na tela de recompensas: quem ficou até o pódio. */
+.faithful-badge {
+  font-size: 11px;
+  font-weight: 900;
+  color: #052e16;
+  background: linear-gradient(90deg, #86efac, #fde047);
+  border-radius: 6px;
+  padding: 1px 7px;
+  margin-left: 6px;
 }
 
 /* OVERLAY CONTAGEM REGRESSIVA */

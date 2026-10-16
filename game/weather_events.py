@@ -44,6 +44,18 @@ VANTAGEM_CLIMA: Dict[WeatherType, Dict[str, float]] = {
 # (wind_speed, -0.8 a +0.8) empurra TODO mundo — a favor ou contra.
 VENTO_POR_UNIDADE = 0.03
 
+# A "leitura de aposta" do clima: como se diz, na grade de votação, o que
+# cada tempo faz com cada cavalo. Só os climas COM vocação entram — sol, pôr
+# do sol e noite não favorecem nem prejudicam ninguém, e neles a grade não
+# mostra etiqueta nenhuma (melhor nada do que um "neutro" em todo cavalo).
+#
+# O texto é curto de propósito: ele vive embaixo do nome, num cartão de ~86px.
+APELIDOS_DO_CLIMA: Dict[WeatherType, str] = {
+    WeatherType.RAIN: "na chuva",
+    WeatherType.STORM: "na tempestade",
+    WeatherType.WIND: "no vento",
+}
+
 # O que a voz fala: o locutor não diz "RAIN", diz "chuva forte".
 ROTULOS: Dict[WeatherType, str] = {
     WeatherType.CLEAR: "céu limpo",
@@ -139,6 +151,24 @@ class WeatherSystem:
         """As personalidades que ESTE clima favorece (só desvio positivo)."""
         vantagens = VANTAGEM_CLIMA.get(self.current_weather, {})
         return [p for p, desvio in vantagens.items() if desvio > 0]
+
+    def vantagem(self, horse_personality: str) -> float:
+        """O quanto o clima mexe no cavalo: +2% de graça, -0,7% de castigo, 0.
+
+        É a MESMA conta que entra na velocidade (`get_weather_multiplier`),
+        sem o empurrão global do vento — vento a favor empurra todo mundo
+        igual e não é vantagem de ninguém. É este número que a grade de
+        votação mostra: a informação tem que ser a que corre na pista, não
+        uma estimativa de vitória inventada (a margem de chegada real é de
+        centésimos; a única coisa honesta a dizer é "este clima ajuda este
+        cavalo, e ajuda nisto").
+        """
+        vantagens = VANTAGEM_CLIMA.get(self.current_weather, {})
+        return vantagens.get(horse_personality, vantagens.get("_outros", 0.0)) * self._forca()
+
+    def apelido_do_clima(self) -> str:
+        """Como a grade de votação se refere a este tempo: "na chuva"."""
+        return APELIDOS_DO_CLIMA.get(self.current_weather, "")
 
     def emoji(self) -> str:
         """O emoji do clima, para o telão."""
