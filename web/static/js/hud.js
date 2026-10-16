@@ -525,13 +525,13 @@ class BroadcastHUD {
           ? ` ${h.clima_vantagem > 0 ? "+" : ""}${h.clima_vantagem.toFixed(1).replace(".", ",")}%`
           : "";
         cardsHtml += `
-          <div class="horse-vote-card" style="border-color: ${h.color_hex};">
+          <div class="horse-vote-card ${tag ? "tem-clima" : ""}" style="border-color: ${h.color_hex};">
             <div class="num-badge" style="background: ${h.color_hex}; color: ${textColor};">#${h.horse_id}</div>
             <div class="info">
               <div class="name">${h.horse_name}</div>
               <div class="supporters" data-horse="${h.horse_id}">👥 ${h.supporters_count} apoiadores</div>
-              ${tag ? `<div class="clima-tag ${classeTag}">${escaparHtml(tag + pct)}</div>` : ""}
             </div>
+            ${tag ? `<div class="clima-tag ${classeTag}">${escaparHtml(tag + pct)}</div>` : ""}
           </div>
         `;
       });
@@ -700,9 +700,13 @@ class BroadcastHUD {
     this.torcidaModo = modo;
 
     if (generico) {
-      this.torcidaVerbEl.textContent = "COMENTA O";
-      this.torcidaNumEl.style.display = "none";
-      this.torcidaTextEl.textContent = "NÚMERO DO TEU CAVALO!";
+      // Chama pelo que se digita: "DIGITE 1-8 PRA EMPURRAR!" diz a ação e o
+      // formato na mesma linha. A frase longa ("comenta o número do teu
+      // cavalo") virava uma tarja de 33 caracteres no meio do quadro.
+      this.torcidaVerbEl.textContent = "DIGITE";
+      this.torcidaNumEl.textContent = "1-8";
+      this.torcidaNumEl.style.display = "";
+      this.torcidaTextEl.textContent = "PRA EMPURRAR!";
     } else {
       this.torcidaVerbEl.textContent = "DIGITE";
       this.torcidaNumEl.textContent = ultimo.number ?? ultimo.horse_id;

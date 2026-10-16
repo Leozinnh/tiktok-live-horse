@@ -129,6 +129,22 @@ def test_config_do_jogo_traz_a_secao_tts():
     assert VOZ_PADRAO in config.tts.vozes
 
 
+def test_a_voz_sai_com_folga_de_volume():
+    """O volume da síntese é a folga que impede a chiada no pico.
+
+    A Francisca (feminina, padrão) com uma exclamação no fim da frase é o
+    caso que estourava: o mp3 saía no teto e a reprodução em volume máximo
+    não tinha para onde ir. A síntese agora escreve o arquivo já com folga.
+    """
+    from game.narrador import VOLUME_PADRAO
+
+    assert _narrador().volume == VOLUME_PADRAO
+    assert VOLUME_PADRAO.startswith("-"), "folga de volume é um valor negativo"
+
+    # E dá para trocar pelo config, sem tocar em código.
+    assert _narrador(volume="-25%").volume == "-25%"
+
+
 # ---------------------------------------------------------------------------
 # A fila
 # ---------------------------------------------------------------------------

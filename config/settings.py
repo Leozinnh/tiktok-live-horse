@@ -52,6 +52,11 @@ class TtsConfig(BaseModel):
     vozes: List[str] = Field(default_factory=list)
     rate: str = ""
     pitch: str = ""
+    # Volume da SÍNTESE (não da reprodução): o edge-tts escreve o mp3 já com
+    # esse ajuste, então ele é a folga que impede o pico de estourar. A voz
+    # feminina com "!" (a Francisca, a padrão) é a mais aguda do rodízio e
+    # chiada ao bater no teto — daí o padrão negativo.
+    volume: str = ""
     anunciar_entrada: bool = True
     falas: Optional[List[str]] = None
     boas_vindas: Optional[List[str]] = None

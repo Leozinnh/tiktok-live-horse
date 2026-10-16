@@ -25,9 +25,11 @@ Anotações do que fazer no projeto. Ordem = impacto primeiro.
 - Efeito: o cara sente que tá pilotando, não só apostando.
 - Mexe em: `web/static/js/hud.js`, `game/falas.py`
 - **Feito:** `#hudTorcidaCall` (texto grande, alterna a cada 14s entre o cavalo que precisa de
-  empurrão e a regra "comenta o número do teu cavalo") + barra âmbar/vermelha por cavalo na
-  torre de posições com contador `🔥N`. O servidor manda `state.torcida` com torcedores, extra
-  em m/s e % do teto. Cada pessoa conta UMA vez, mesmo spammando o número.
+  empurrão (`DIGITE 7 PRA EMPURRAR A NEVASCA!` / genérica `DIGITE 1-8 PRA EMPURRAR!`) + barra
+  âmbar/vermelha por cavalo na torre de posições com contador `🔥N`. O servidor manda
+  `state.torcida` com torcedores, extra em m/s e % **do cavalo mais empurrado da pista** (o teto
+  `TORCIDA_EXTRA_CAP` foi removido depois, a pedido: quem limita é a duração de cada empurrão).
+  Cada pessoa conta UMA vez, mesmo spammando o número.
 
 ### 3. Narrador fala nome de GENTE, não só de cavalo ✅ FEITO
 - Ninguém sai quando ouve o próprio nome.
@@ -102,4 +104,4 @@ Anotações do que fazer no projeto. Ordem = impacto primeiro.
 
 ---
 
-*Criado em 2026-10-16. Estado da base: 105 testes passando.*
+*Criado em 2026-10-16. Estado da base: 106 testes passando.*

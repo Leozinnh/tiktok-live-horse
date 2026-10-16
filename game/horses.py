@@ -30,9 +30,15 @@ class ActiveBoost:
 # A torcida leve (curtida e comentário) soma VELOCIDADE DIRETA em m/s — não
 # multiplica. Com boost multiplicativo, rajadas a cada ~2s no mesmo cavalo
 # sobrepunham boosts de 3s e empilhavam 1.04 × 1.04 × … — o cavalo voava na
-# pista. Somando, o teto segura: por mais que o chat curta e comente, o extra
-# nunca passa de +0.9 m/s.
-TORCIDA_EXTRA_CAP = 0.9
+# pista. Somando, o empurrão é linear e legível: cada pessoa vale o mesmo.
+#
+# Aqui existia um teto fixo de +0.9 m/s na soma. Ele foi REMOVIDO a pedido:
+# numa live cheia a arquibancada batia no teto em segundos e todo empurrão
+# seguinte virava voto perdido — quem estava empurrando não via diferença.
+# O limite do empurrão agora é a DURAÇÃO dele: cada curtida vale 1,5s e cada
+# comentário 2s (TORCIDA_DURATION_SECONDS, em director.py), então o extra em
+# regime é ~0,8 × (empurrões por segundo) m/s e cai sozinho quando o chat
+# para. Numa live muito grande a soma não tem mais freio — ver MELHORIAS.md.
 
 class HorseState:
     def __init__(self, config: HorseConfig, lane: int = 1):
@@ -219,8 +225,7 @@ class HorseState:
                     boost_mult *= b.power
                 remaining_boosts.append(b)
         self.active_boosts = remaining_boosts
-        extra_speed = min(TORCIDA_EXTRA_CAP, extra_speed)
-        
+
         # 2. Bônus de torcida coletiva (máx +5%)
         cheer_bonus = min(0.05, (self.cheer_count * 0.002))
         

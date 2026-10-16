@@ -94,7 +94,7 @@ tiktok_live_cavalo/
 │       └── test.html            # Interface de controle do streamer no navegador (/test)
 ├── tools/
 │   └── smoke_audio.py           # Teste de ouvido da voz, sem abrir live
-├── tests/                       # 105 testes automatizados (pytest) com 100% de aprovação
+├── tests/                       # 106 testes automatizados (pytest) com 100% de aprovação
 ├── main.py                      # Ponto de entrada do sistema (`python main.py`)
 ├── requirements.txt             # Dependências Python (fastapi, uvicorn, aiosqlite, etc.)
 ├── README.md                    # Guia rápido de inicialização
@@ -127,6 +127,7 @@ Para calibrar o ritmo da transmissão sem encostar em código Python, edite `con
     ],
     "rate": "+8%",                      // Velocidade da fala (edge-tts)
     "pitch": "+3Hz",                    // Tom da fala (edge-tts)
+    "volume": "-10%",                   // Volume da SÍNTESE (folga anti-chiado, ver abaixo)
     "anunciar_entrada": true,           // Oi falado para quem entra na live
     // Listas de frases próprias (opcionais): ausente/vazia = as do jogo
     // (game/falas.py); preenchida, substitui a lista inteira. Chaves:
@@ -289,17 +290,17 @@ Para **adicionar um presente novo**, basta inserir uma linha em `GIFT_TIERS` (se
 
 ### 5.2.1 Curtidas em Rajada (Boost de Torcida)
 Quando alguém manda **5 ou mais curtidas de uma vez** (`LIKE_BURST_MIN`), o cavalo que a pessoa apoia — ou o **último colocado da pista**, quando o TikTok não informa o autor (sorteio só quando não há posição formada) — recebe um boost `GALERA CURTIU` de **`+0.2 m/s`** por **1,5s**.
-O empurrão **soma velocidade direta** em vez de multiplicar: era `1.04x`, e rajadas a cada ~2s no mesmo cavalo empilhavam `1.04 × 1.04 × …` até o cavalo voar. A soma de toda a torcida leve (curtida + comentário) fica travada no teto **`TORCIDA_EXTRA_CAP = 0.9 m/s`** (`game/horses.py`).
+O empurrão **soma velocidade direta** em vez de multiplicar: era `1.04x`, e rajadas a cada ~2s no mesmo cavalo empilhavam `1.04 × 1.04 × …` até o cavalo voar. **A soma não tem teto** (o `TORCIDA_EXTRA_CAP = 0.9 m/s` que existia em `game/horses.py` foi removido a pedido): o freio é a **duração** de cada empurrão — 1,5s de curtida e 2s de torcida no chat. Numa live parada, o teto prático é ~`0,8 m/s × empurrões por segundo`; numa live muito grande, quem manda o ritmo é o chat.
 Curtida é gratuita e infinita: o empurrão é de propósito **bem leve**, não rende XP e não grava nada no banco, para nunca competir com os presentes.
 
 ### 5.2.2 Torcida no Chat (número digitado com a corrida rolando)
-Quando alguém digita o **número de um cavalo durante a corrida** (fase `RACING`), o cavalo leva um empurrão de torcida `TORCIDA NO CHAT` (**`+0.4 m/s`** por 2s — `TORCIDA_EXTRA_SPEED`/`TORCIDA_DURATION_SECONDS` em `game/director.py`, somando no mesmo teto de `+0.9 m/s` da curtida) e o telão anuncia *"{nome} torce pelo {cavalo}!"*.
+Quando alguém digita o **número de um cavalo durante a corrida** (fase `RACING`), o cavalo leva um empurrão de torcida `TORCIDA NO CHAT` (**`+0.4 m/s`** por 2s — `TORCIDA_EXTRA_SPEED`/`TORCIDA_DURATION_SECONDS` em `game/director.py`, somando junto com a curtida na mesma velocidade extra, que **não tem teto**) e o telão anuncia *"{nome} torce pelo {cavalo}!"*.
 É um carinho, não um voto: não vale na apuração, não mexe na lista de apoiadores do cavalo, não rende XP — o chat pode incentivar a cada mensagem sem virar bagunça na fila da narração. A voz só entra na torcida nos marcos fixos (675m e nos placares), nunca a cada mensagem.
 
 **A torcida ficou visível** (antes a mecânica existia e ninguém sabia):
-* **Chamada grande no meio da tela** (`#hudTorcidaCall`, `renderTorcidaCall` em `web/static/js/hud.js`): `DIGITE 7 PRA EMPURRAR A NEVASCA!`, apontando sempre o **lanterna** — quem precisa de empurrão. Alterna a cada 14s de prova com a chamada genérica *"COMENTA O NÚMERO DO TEU CAVALO!"* (sem número), para quem acabou de entrar na live aprender a regra. Só reescreve o DOM quando a chamada muda (o CSS anima a entrada; mexer no texto a cada frame faria o bloco tremer).
+* **Chamada grande no meio da tela** (`#hudTorcidaCall`, `renderTorcidaCall` em `web/static/js/hud.js`): `DIGITE 7 PRA EMPURRAR A NEVASCA!`, apontando sempre o **lanterna** — quem precisa de empurrão. Alterna a cada 14s de prova com a chamada genérica `DIGITE 1-8 PRA EMPURRAR!` (a ação e o formato na mesma linha, no lugar da frase longa *"comenta o número do teu cavalo"*, que virava uma tarja de 33 caracteres no meio do quadro), para quem acabou de entrar na live aprender a regra. Só reescreve o DOM quando a chamada muda (o CSS anima a entrada; mexer no texto a cada frame faria o bloco tremer). A tarja é **centralizada por margem automática** (e não por `left: 50%` + `translateX(-50%)`, que disputava o `transform` com o pulso) e o tamanho encolhe junto com a tela (`clamp(11px, 1.5vw, 16px)` no texto).
 * **Barra de torcida por cavalo na torre de posições**: `.tower-torcida` (barra âmbar→vermelha relativa ao cavalo mais empurrado) + contador `🔥N` em `.tower-fire`. Sem torcida no cavalo, a barra e o contador simplesmente não aparecem.
-* **Fonte do dado:** `director.get_state_payload()["torcida"]`, montado por `_torcida_para_o_hud()`: `{horse_id: {torcedores, extra, pct, nomes}}`, onde `extra` é o empurrão aditivo somado **travado no teto** `TORCIDA_EXTRA_CAP`. O contador de pessoas (`torcida_por_cavalo`) conta cada pessoa **uma vez** por corrida (`_quem_empurrou`, chave = username normalizado ou `@nome` de quem comenta anônimo) — spam do mesmo número não infla a barra.
+* **Fonte do dado:** `director.get_state_payload()["torcida"]`, montado por `_torcida_para_o_hud()`: `{horse_id: {torcedores, extra, pct, nomes}}`, onde `extra` é o empurrão aditivo somado (sem teto) e `pct` é **relativo ao cavalo mais empurrado da pista** — não a um teto fixo —, então a barra mais cheia é sempre a de quem está recebendo mais torcida agora. O contador de pessoas (`torcida_por_cavalo`) conta cada pessoa **uma vez** por corrida (`_quem_empurrou`, chave = username normalizado ou `@nome` de quem comenta anônimo) — spam do mesmo número não infla a barra.
 
 ### 5.2.3 Voto no Fim da Corrida (pódio, XP e ranking)
 O número digitado com o **pódio, o XP ou o ranking** na tela é **voto para a PRÓXIMA corrida** (fases `PODIUM`, `XP_REWARDS` e `LEADERBOARD`, constante `FASES_DE_PRE_VOTO` em `game/director.py`). Antes o comentário era descartado e o espectador via a escolha não contabilizar — bem no trecho em que a live fica parada olhando o resultado, o que é justamente quando o chat digita.
@@ -565,7 +566,7 @@ A interface do usuário foi desenhada no padrão das transmissões da **Fórmula
 ### Os modais centrais (votação, contagem, pódio, XP):
 
 * **Cartela de votação:** grade 4×2 com o número, o nome e os **apoiadores ao vivo** de cada cavalo. Ela **fica na tela também durante a contagem regressiva** (o cabeçalho vira "VOTAÇÃO ENCERRADA!") — o número do countdown flutua **por cima** da cena, em vez de substituir o painel. Antes, a virada para a contagem trocava o modal inteiro e a cartela sumia de uma vez, bem na hora em que o público quer conferir os números finais.
-* **A leitura do clima em cada card:** `⭐ favorito na chuva +1,2%` (verde/amarelo) ou `⚠️ sofre na chuva -0,7%` (vermelho escuro), montada a partir de `clima_tag`/`clima_vantagem` que o servidor manda em `get_current_choices_summary()`. O número é o **mesmo** que entra na velocidade (`WeatherSystem.vantagem()`), não uma estimativa de tela — mostrar "favorito" e a corrida correr outra coisa seria mentir para quem aposta. Céu limpo não favorece ninguém e não mostra etiqueta (nada de "neutro" poluindo a grade).
+* **A leitura do clima em cada card:** `⭐ favorito na chuva +1,2%` (verde/amarelo) ou `⚠️ sofre na chuva -0,7%` (vermelho escuro), montada a partir de `clima_tag`/`clima_vantagem` que o servidor manda em `get_current_choices_summary()`. O número é o **mesmo** que entra na velocidade (`WeatherSystem.vantagem()`), não uma estimativa de tela — mostrar "favorito" e a corrida correr outra coisa seria mentir para quem aposta. Céu limpo não favorece ninguém e não mostra etiqueta (nada de "neutro" poluindo a grade). **A etiqueta é uma tarja absoluta no rodapé do card** (`.clima-tag`, com `padding-bottom` extra no `.horse-vote-card.tem-clima`), e não um bloco no fluxo: no fluxo ela (a) esticava *todos* os cards da linha até a altura do mais alto e (b) com `white-space: nowrap` inflava a largura mínima da coluna do grid — `1fr` é `minmax(auto, 1fr)` e **não encolhe abaixo do min-content**, então os cards estouravam o painel em tela estreita. Fora do fluxo, nenhum dos dois acontece.
 * **🏅 Fica até o pódio = XP DOBRADO:** o motivo de FICAR tem que estar na tela onde o público vota, não só na voz no meio da prova — o lembrete fica no cabeçalho da cartela.
 * **A chamada da torcida:** com a prova rolando, `#hudTorcidaCall` fica no meio da tela com `DIGITE 7 PRA EMPURRAR A NEVASCA!` (detalhes na seção 5.2.2). Nas outras fases ela some — digitar número só muda algo em `RACING`.
 * **Atualização sem piscar:** a cartela é montada uma vez por fase e só o texto dos contadores muda a cada voto (sem remontar o DOM). Remontar a cada update reiniciava a animação de entrada — o painel piscava a cada voto novo no chat.
@@ -647,7 +648,7 @@ Cada subida de nível gera uma notificação animada na tela com estrela dourada
 
 ## 13. Testes Automatizados e Garantia de Qualidade
 
-O projeto possui **105 testes automatizados** cobrindo todos os módulos vitais. Para executar:
+O projeto possui **106 testes automatizados** cobrindo todos os módulos vitais. Para executar:
 
 ```bash
 python -m pytest -v
@@ -663,7 +664,7 @@ Os testes verificam:
 * **Retenção (`tests/test_retensao.py`)**: o Bônus Fiel vale por corrida e só para quem estava presente COM a prova rolando (o voto da votação não marca presença — senão a live inteira seria fiel); o voto do pódio vai para a votação seguinte com o XP dobrado; a torcida do chat conta cada pessoa UMA vez e alimenta o HUD; o placar cita quem está empurrando, sem repetir nome na mesma corrida, e **sai sem nome nenhum** quando não há torcida (a voz não inventa).
 * Máquina de estados do `EventDirector` (VOTING $\to$ COUNTDOWN $\to$ RACING $\to$ PODIUM $\to$ XP $\to$ LEADERBOARD).
 * Parser semântico de comandos do TikTok (números, nomes, presentes e comandos de torcida).
-* Torcida no chat: número digitado com a corrida rolando soma `+0.4 m/s` no cavalo (e nada acontece fora da corrida); curtida de quem não escolheu cavalo vai para o **último colocado** (nunca o líder; sorteio só sem posição formada) e a torcida leve (curtida + comentário) soma travada no teto de `+0.9 m/s`; presente de quem não escolheu cai em **cavalo sorteado**.
+* Torcida no chat: número digitado com a corrida rolando soma `+0.4 m/s` no cavalo (e nada acontece fora da corrida); curtida de quem não escolheu cavalo vai para o **último colocado** (nunca o líder; sorteio só sem posição formada) e a torcida leve (curtida + comentário) soma direto, sem teto; presente de quem não escolheu cai em **cavalo sorteado**.
 * Endpoints REST do servidor FastAPI e sincronização WebSocket.
 * Voz da live: frases e fila do Narrador com gerador/tocador injetados (sem internet e sem placa de som), incluindo o descarte da fala mais antiga com a fila cheia e o **descarte da locução de corrida quando a chegada decide** (vencedor e foto-finish nunca são descartados).
 * **Anúncio Imediato na Chegada (Zero Atraso):** assim que o primeiro cavalo cruza a marca de 3000m, a voz dispara o anúncio do campeão na hora (sem aguardar o timeout pós-chegada da física), cortando falas de meio de prova pendentes via `interromper_locucao()`.
@@ -705,6 +706,12 @@ Usuários do TikTok frequentemente possuem emojis em seus nomes de exibição (e
 * **Filtro Fonético de Nomes (`_limpar_nome_para_fala`):** Remove todos os emojis, símbolos e caracteres pictográficos, mantendo exclusivamente letras (com acentos), números e espaços (`caioba🇧🇷✋🏽😛🤚🏽` $\to$ `caioba`).
 * **Fallback Inteligente:** Se o nome de exibição do usuário for composto exclusivamente por emojis (ex.: `🔥💎👑`), o sistema utiliza automaticamente o seu `@username` limpo (ex.: `pedro_gamer` $\to$ `pedrogamer`), evitando saudações vazias ou genéricas.
 * **Filtro Geral de Síntese:** No método `_normalizar_para_fala`, qualquer resquício de emoji ou símbolo que chegue ao texto final é eliminado antes de chamar o `edge-tts`, garantindo uma locução 100% natural e humana.
+
+### 14.4 Folga de Volume na Síntese (o chiado da voz feminina com "!")
+O `rate` (`+8%`) e o `pitch` (`+3Hz`) já empurram a voz para cima, e a **Francisca** (a padrão, feminina) é a mais aguda do rodízio. Numa frase que termina em **exclamação** — e a locução da corrida é cheia delas —, o pico do mp3 batia no teto da amostra e o que saía do alto-falante era uma **chiada forte**, não a palavra.
+* **`tts.volume` (padrão `VOLUME_PADRAO = "-10%"` em `game/narrador.py`)** é passado ao `edge_tts.Communicate(..., volume=...)`: é o volume da **síntese**, não da reprodução — o mp3 já é escrito com a folga, então o pico não estoura antes de o arquivo existir.
+* A reprodução continua em **100%** (`setaudio ... volume to 1000` no MCI). São dois ajustes separados de propósito: o do MCI controla o ducking e o fade-out da chegada; o da síntese controla o teto do arquivo.
+* **Regular de ouvido:** `tts.rate`, `tts.pitch` e `tts.volume` no `config.json`, escutando com `python tools/smoke_audio.py`. Volume **menos negativo** (`-5%`, `0%`) deixa a voz mais alta e mais perto do chiado de volta.
 
 ### A locução ao vivo (o locutor da corrida)
 

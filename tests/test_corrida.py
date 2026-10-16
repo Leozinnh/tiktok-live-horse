@@ -280,20 +280,24 @@ def test_chuva_ajuda_mas_nao_entrega_a_corrida():
     assert len(vitorias) >= 3, f"na chuva só {len(vitorias)} cavalos venceram — clima decidiu sozinho"
 
 
-def test_torcida_leve_soma_velocidade_direta_com_teto():
+def test_torcida_leve_soma_velocidade_direta_sem_teto():
     """Curtida e comentário somam VELOCIDADE DIRETA (m/s), não multiplicam.
 
     Bug que este teste trava: o empurrão de curtida era um boost multiplicativo
     de 1.04x. Rajadas de 15 curtidas chegando a cada ~2s no MESMO cavalo
     sobrepunham boosts de 3s e empilhavam 1.04 × 1.04 × … — o cavalo voava na
-    pista. Agora o extra é somado em m/s e travado em TORCIDA_EXTRA_CAP (0.9).
+    pista. Agora o extra é somado em m/s, e SÓ.
+
+    O teto de +0.9 m/s que existia aqui foi removido: numa live cheia a
+    arquibancada batia nele em segundos e todo empurrão seguinte virava voto
+    perdido. O freio passou a ser a DURAÇÃO do boost (1,5s na curtida, 2s no
+    comentário) — o teste abaixo é justamente o que garante que a soma não
+    volta a ser truncada em silêncio.
 
     O espelho é exato de propósito: os dois cavalos recebem os MESMOS sorteios
     por tick (random.seed antes de cada update) e o NEVASCA tem fator de
     personalidade constante 1.00 — a única diferença entre eles é o boost.
     """
-    from game.horses import TORCIDA_EXTRA_CAP
-
     config = load_config()
     hc = next(c for c in config.horses if c.personality == "COLD_TACTICIAN")
     dt = 1.0 / 60.0
@@ -314,10 +318,19 @@ def test_torcida_leve_soma_velocidade_direta_com_teto():
     tres_rajadas = corre_4s([0.2, 0.2, 0.2])
     assert tres_rajadas - base == pytest.approx(0.6, abs=0.02)
 
-    # Vinte rajadas (4.0 m/s de extra bruto): o teto segura em +0.9 m/s
+    # Vinte rajadas: 20 × 0.2 = +4.0 m/s. Sem teto, a soma inteira entra.
     vinte_rajadas = corre_4s([0.2] * 20)
-    assert vinte_rajadas - base == pytest.approx(TORCIDA_EXTRA_CAP, abs=0.02)
+    assert vinte_rajadas - base == pytest.approx(4.0, abs=0.05)
 
-    # Curtida + comentários misturados também somam — e também respeitam o teto
+    # Curtida + comentários misturados: 0.2 + 0.4 + 0.4 = +1.0 m/s, sem corte
     misturado = corre_4s([0.2, 0.4, 0.4])
-    assert misturado - base == pytest.approx(TORCIDA_EXTRA_CAP, abs=0.02)
+    assert misturado - base == pytest.approx(1.0, abs=0.02)
+
+    # E a torcida EXPIRA: passados os 2s do comentário, o extra sai da conta.
+    random.seed(99)
+    h = HorseState(hc, lane=1)
+    h.add_boost("TORCIDA NO CHAT", 0.4, 2.0, additive=True)
+    for i in range(180):  # 3s: o boost de 2s já morreu
+        random.seed(1000 + i)
+        h.update_physics(dt, 3000.0, 1, 1.0, int(i * dt * 1000))
+    assert not h.active_boosts, "o empurrão da torcida não expirou"

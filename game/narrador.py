@@ -77,6 +77,12 @@ VOZ_PADRAO = "pt-BR-FranciscaNeural"
 #   "pt-BR-ThalitaMultilingualNeural" (feminina, multilíngue).
 RATE_PADRAO = "+8%"
 PITCH_PADRAO = "+3Hz"
+# A folga de volume da síntese. O `rate` e o `pitch` acima já empurram a voz
+# para cima, e a Francisca (padrão, feminina) é a mais aguda do rodízio: com
+# uma exclamação no fim da frase, o pico do mp3 bate no teto e o que se ouve
+# é uma chiada forte. -10% é a folga que tira o pico do limite sem a voz
+# soar baixa (o volume da reprodução continua em 1000).
+VOLUME_PADRAO = "-10%"
 
 # O `{quantidade}` vira "5x " (com espaço) quando há mais de um, e vazio
 # quando é um só: "1x Rose" não existe na língua falada — é "mandou Rose"
@@ -207,6 +213,7 @@ class Narrador:
         self.voz = str(cfg.voz or VOZ_PADRAO)
         self.rate = str(cfg.rate or RATE_PADRAO)
         self.pitch = str(cfg.pitch or PITCH_PADRAO)
+        self.volume = str(cfg.volume or VOLUME_PADRAO)
         # O oi de quem chegou tem chave própria: em live cheia, dá pra calar
         # só a chegada e deixar a voz para os momentos da corrida.
         self.entrada_ativa = bool(cfg.anunciar_entrada)
@@ -1122,7 +1129,11 @@ class Narrador:
 
         async def salvar(voz_nome: str) -> None:
             voz = edge_tts.Communicate(
-                text=texto_fonetico, voice=voz_nome, rate=self.rate, pitch=self.pitch
+                text=texto_fonetico,
+                voice=voz_nome,
+                rate=self.rate,
+                pitch=self.pitch,
+                volume=self.volume,
             )
             await voz.save(caminho)
 

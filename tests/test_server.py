@@ -279,7 +279,7 @@ def test_like_burst_gives_light_boost(test_app):
     assert like_boosts[0]["emoji"] == "❤️"
 
     # Rajada maior não empurra mais forte: o extra por rajada é fixo — quem
-    # cresce é a SOMA, travada no teto do TORCIDA_EXTRA_CAP (0.9 m/s).
+    # cresce é a SOMA (sem teto, ver horses.py).
     client.post("/api/test/inject_like", json={
         "username": "torcedor", "display_name": "Torcedor", "count": 30})
     potencias = sorted(b["power"] for b in _like_boosts(client))

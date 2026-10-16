@@ -16,6 +16,7 @@
     ],
     "rate": "+8%",
     "pitch": "+3Hz",
+    "volume": "-10%",
     "anunciar_entrada": true
   },
   "xp": {
@@ -36,8 +37,8 @@
       "secondary_color_hex": "#FEF3C7",
       "personality": "FRONT_RUNNER",
       "base_speed": 28.06,
-      "acceleration": 8.9,
-      "stamina": 8.0,
+      "acceleration": 8.6,
+      "stamina": 7.8,
       "luck": 6.0,
       "aggressiveness": 7.3,
       "description": "Larga em velocidade máxima, mas perde fôlego no final."

@@ -7,7 +7,6 @@ from enum import Enum
 from typing import Dict, Any, Iterable, List, Optional
 from config.settings import Settings
 from game.engine import RaceEngine
-from game.horses import TORCIDA_EXTRA_CAP
 from game.narrador import Narrador
 from backend.database.repository import DatabaseRepository
 
@@ -63,15 +62,17 @@ GIFT_POWER_CAP = 1.8
 # Curtida é gratuita e infinita: não pode competir com presente.
 # O empurrão SOMA velocidade direta (m/s) — não multiplica: era um boost de
 # 1.04x, e rajadas a cada ~2s no mesmo cavalo empilhavam 1.04 × 1.04 × … até
-# o cavalo voar. Agora a soma é travada pelo TORCIDA_EXTRA_CAP (horses.py).
+# o cavalo voar. A soma não tem mais teto (ver horses.py): quem limita é a
+# DURAÇÃO do empurrão.
 LIKE_BURST_MIN = 5
 LIKE_DURATION_SECONDS = 1.5
-LIKE_EXTRA_SPEED = 0.2  # m/s por rajada (fixo: quem cresce é a soma, com teto)
+LIKE_EXTRA_SPEED = 0.2  # m/s por rajada (fixo: quem cresce é a SOMA)
 
 # O número digitado com a corrida ROLANDO é torcida: um empurrãozinho leve e
 # curto no cavalo citado, só para o público sentir que o comentário mexeu na
 # prova. Bem leve de propósito: quem quer decidir a corrida manda presente.
-# Também SOMA velocidade direta (m/s) e entra no mesmo teto da curtida.
+# Também SOMA velocidade direta (m/s). O tempo de vida é o freio: o extra em
+# regime é ~0,8 × (empurrões por segundo) m/s.
 TORCIDA_EXTRA_SPEED = 0.4
 TORCIDA_DURATION_SECONDS = 2.0
 
@@ -546,21 +547,25 @@ class EventDirector:
         """A arquibancada por cavalo, para a barra do HUD.
 
         `extra` é a velocidade que a torcida está somando de verdade naquele
-        cavalo (m/s, no mesmo teto da física): a barra não mostra "quantos
-        comentários", mostra "o quanto isso está empurrando o cavalo" — o
-        número que corre na pista.
+        cavalo (m/s): a barra não mostra "quantos comentários", mostra "o
+        quanto isso está empurrando o cavalo" — o número que corre na pista.
         """
         pistas = self._pistas_de_torcida()
+        extras = {
+            h.id: sum(b.power for b in h.active_boosts if b.additive)
+            for h in self.engine.horses
+        }
+        # `pct` é relativo a quem está sendo mais empurrado agora. Antes era a
+        # fração de um teto fixo, e sem teto (ver horses.py) a única régua que
+        # ainda significa algo é a do próprio pelotão.
+        maior = max(extras.values(), default=0.0)
         dados = {}
         for h in self.engine.horses:
-            extra = min(
-                TORCIDA_EXTRA_CAP,
-                sum(b.power for b in h.active_boosts if b.additive),
-            )
+            extra = extras[h.id]
             dados[h.id] = {
                 "torcedores": self.torcida_por_cavalo.get(h.id, 0),
                 "extra": round(extra, 2),
-                "pct": round(100.0 * extra / TORCIDA_EXTRA_CAP),
+                "pct": round(100.0 * extra / maior) if maior > 0 else 0,
                 "nomes": _sem_repetir(pistas.get(h.id, ()))[:NOMES_POR_FALA],
             }
         return dados
